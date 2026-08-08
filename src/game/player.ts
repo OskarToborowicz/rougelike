@@ -46,6 +46,14 @@ export class Player implements Actor {
   castAmmo = 3;
   castReload = 0;
   callGauge = 0;
+  /**
+   * Fired on each footfall. Steps are the one cue deliberately kept off the
+   * wire: they are continuous rather than an event, so every client generates
+   * its own from the rig it is already animating.
+   */
+  onStep?: (x: number, z: number, speed: number) => void;
+  /** Set on the frame Second Wind fires, so the World can sell the moment. */
+  usedSecondWind = false;
   deathCd = 0;
   /** Revive progress while a partner stands on this player's corpse (co-op). */
   reviveProgress = 0;
@@ -69,7 +77,10 @@ export class Player implements Actor {
     public cls: ClassId = "warrior",
   ) {
     this.def = CLASSES[cls];
-    this.maxHp = this.hp = this.def.maxHp;
+    // Permanent upgrades are already folded into the BoonSet handed in, so the
+    // starting body is the class plus whatever was bought between runs.
+    this.maxHp = this.hp = this.def.maxHp + boons.metaMaxHp;
+    this.callGauge = Math.min(1, boons.metaStartCall);
     this.speed = this.def.speed;
     this.build(tint);
   }
@@ -268,33 +279,52 @@ export class Player implements Actor {
       return;
     }
 
-    if (this.def.weapon === "bow") {
-      // Bow held across the body, limbs curving forward.
-      const grip = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.045, 0.045, 0.34, 6),
+    if (this.def.weapon === "crossbow") {
+      // Crossbow: a stock pointing down the aim line with a short steel prod
+      // across it. The hard T is what separates it from the sword at this
+      // camera distance — a bow's curve reads round, this reads square.
+      const group = new THREE.Group();
+      const stock = new THREE.Mesh(
+        new THREE.BoxGeometry(0.13, 0.11, 0.95),
         wood,
       );
-      grip.position.set(0.5, 0, 0.42);
-      grip.castShadow = true;
-      const group = new THREE.Group();
-      group.add(grip);
+      stock.position.set(0.5, 0, 0.5);
+      stock.castShadow = true;
+      group.add(stock);
+
+      // The prod, angled slightly forward at the tips like a steel bow.
       for (const s of [-1, 1]) {
         const limb = new THREE.Mesh(
-          new THREE.TorusGeometry(0.52, 0.035, 6, 14, 1.25),
-          wood,
+          new THREE.BoxGeometry(0.42, 0.05, 0.07),
+          steel,
         );
-        limb.position.set(0.5, s * 0.17, 0.42);
-        limb.rotation.set(Math.PI / 2, 0, s > 0 ? 0.62 : -0.62 + Math.PI);
+        limb.position.set(0.5 + s * 0.21, 0.02, 0.82);
+        limb.rotation.set(0, s * 0.22, s * 0.1);
         limb.castShadow = true;
         group.add(limb);
       }
+
+      // String drawn back to the catch, plus the loaded bolt riding the groove.
       const string = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.012, 0.012, 1.5, 4),
+        new THREE.BoxGeometry(0.84, 0.02, 0.02),
         glow,
       );
-      string.position.set(0.5, 0, 0.3);
+      string.position.set(0.5, 0.05, 0.44);
       group.add(string);
-      this.weapon = grip;
+      const bolt = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.022, 0.022, 0.62, 5),
+        glow,
+      );
+      bolt.rotation.x = Math.PI / 2;
+      bolt.position.set(0.5, 0.09, 0.66);
+      group.add(bolt);
+
+      // Trigger guard hanging under the stock, so the underside isn't a slab.
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, 0.1), trim);
+      guard.position.set(0.5, -0.11, 0.28);
+      group.add(guard);
+
+      this.weapon = stock;
       this.weaponPivot.add(group);
       return;
     }
@@ -327,6 +357,17 @@ export class Player implements Actor {
     this.iframes = 0.45;
     this.flash = 1;
     this.stagger = 0.18;
+
+    // Second Wind: the blow lands and hurts, but it does not finish you. Spent
+    // here rather than on revive so it reads as surviving, not resurrecting.
+    if (this.hp <= 0 && this.boons.secondWind > 0) {
+      this.boons.secondWind--;
+      this.hp = this.maxHp * 0.35;
+      this.iframes = 1.6;
+      this.usedSecondWind = true;
+      return true;
+    }
+
     if (this.hp <= 0) {
       this.dead = true;
       this.state = "down";
@@ -373,9 +414,16 @@ export class Player implements Actor {
 
     // Run bob — small, but it's the difference between sliding and walking.
     const speed = Math.hypot(this.vel.x, this.vel.z);
+    const bobWas = this.bob;
     this.bob += dt * (6 + speed * 1.4);
     this.mesh.position.y =
       Math.abs(Math.sin(this.bob)) * (speed > 0.5 ? 0.09 : 0.02);
+
+    // A footfall is the bottom of the bob, not a timer — so steps stay locked to
+    // the legs at every speed, and stop dead the moment the player does.
+    if (speed > 1.2 && Math.floor(bobWas / Math.PI) !== Math.floor(this.bob / Math.PI)) {
+      this.onStep?.(this.pos.x, this.pos.z, speed);
+    }
 
     this.animateWeapon(dt);
     this.bodyMat.emissive.setRGB(
@@ -392,8 +440,8 @@ export class Player implements Actor {
     const rest =
       this.def.weapon === "sword"
         ? -0.5
-        : this.def.weapon === "bow"
-          ? -0.2
+        : this.def.weapon === "crossbow"
+          ? -0.05
           : -0.05;
     let targetY = rest;
     let targetX = this.def.weapon === "staff" ? 0 : 0.1;
@@ -413,12 +461,22 @@ export class Player implements Actor {
         return;
       }
 
-      if (this.def.weapon === "bow") {
-        // Draw back through the wind-up, snap forward on release.
-        const draw = clamp(this.stateT / a.wind, 0, 1);
-        const released = this.stateT >= a.wind;
-        this.weaponPivot.rotation.y = released ? 0.12 : -0.2 - draw * 0.35;
-        this.weaponPivot.rotation.x = released ? -0.06 : draw * 0.12;
+      if (this.def.weapon === "crossbow") {
+        // Level it on the wind-up, kick on release, then crank it down through
+        // the recover — the reload is most of the animation, and seeing it is
+        // how the player learns the shot has a cost.
+        const aim = clamp(this.stateT / a.wind, 0, 1);
+        if (this.stateT < a.wind) {
+          this.weaponPivot.rotation.y = -0.05 + aim * 0.05;
+          this.weaponPivot.rotation.x = 0.1 - aim * 0.1;
+          return;
+        }
+        const after = (this.stateT - a.wind) / (a.active + a.recover);
+        // Sharp kick up, then a slow crank back to level as the string resets.
+        const kick = Math.exp(-after * 9);
+        const reload = Math.sin(clamp(after, 0, 1) * Math.PI);
+        this.weaponPivot.rotation.x = -0.34 * kick + 0.42 * reload;
+        this.weaponPivot.rotation.y = -0.28 * reload;
         return;
       }
 

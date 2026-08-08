@@ -11,7 +11,7 @@ export type Role = 'offline' | 'host' | 'guest';
 
 export interface NetHandlers {
   onRole?: (role: Role, id: number, room: string) => void;
-  onJoin?: (id: number, name: string, cls: string) => void;
+  onJoin?: (id: number, name: string, cls: string, meta?: string) => void;
   onLeave?: (id: number) => void;
   /** Host side: a guest answered their boon offer. */
   onPick?: (id: number, boonId: string) => void;
@@ -34,7 +34,7 @@ export class Net {
   /** Latest input received from each guest, consumed by the host each tick. */
   readonly remoteFrames = new Map<number, Frame>();
   /** Guests present, in join order — drives seat assignment on the host. */
-  readonly peers: { id: number; name: string; cls: string }[] = [];
+  readonly peers: { id: number; name: string; cls: string; meta?: string }[] = [];
 
   /** Assigned after construction, once the boon round has somewhere to deliver to. */
   onPickHandler: ((netId: number, boonId: string) => void) | null = null;
@@ -44,14 +44,14 @@ export class Net {
 
   constructor(private handlers: NetHandlers = {}) {}
 
-  connect(url: string, room: string, name: string, cls: string) {
+  connect(url: string, room: string, name: string, cls: string, meta = '') {
     this.disconnect();
     const ws = new WebSocket(url);
     this.ws = ws;
 
     ws.onopen = () => {
       this.connected = true;
-      ws.send(JSON.stringify({ t: 'hello', room, name, cls }));
+      ws.send(JSON.stringify({ t: 'hello', room, name, cls, meta }));
     };
 
     ws.onmessage = (ev) => {
@@ -81,8 +81,8 @@ export class Net {
         this.handlers.onRole?.(msg.role, msg.id, msg.room);
         break;
       case 'join':
-        this.peers.push({ id: msg.id, name: msg.name, cls: msg.cls });
-        this.handlers.onJoin?.(msg.id, msg.name, msg.cls);
+        this.peers.push({ id: msg.id, name: msg.name, cls: msg.cls, meta: msg.meta });
+        this.handlers.onJoin?.(msg.id, msg.name, msg.cls, msg.meta);
         break;
       case 'pick':
         this.onPickHandler?.(msg.id, msg.boonId);

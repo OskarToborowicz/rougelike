@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import type { Player } from '../game/player';
 import type { Enemy } from '../game/enemy';
-import type { Boon, God } from '../game/boons';
 import { GODS } from '../game/boons';
 import type { DamageEvent } from '../game/world';
 import { clamp } from '../core/math';
@@ -41,6 +40,8 @@ export class Hud {
   private seats: SeatUi[] = [];
   private roomWave = el('div', 'wave', '');
   private roomDepth = el('div', 'depth', '');
+  /** Obols banked so far this run. Hidden until the first one drops. */
+  private purse = el('div', 'purse', '');
   private choice = el('div');
   private banner = el('div');
   private hurt = el('div');
@@ -61,7 +62,7 @@ export class Hud {
 
     const info = el('div');
     info.id = 'roominfo';
-    info.append(this.roomDepth, this.roomWave);
+    info.append(this.roomDepth, this.roomWave, this.purse);
     this.root.appendChild(info);
 
     this.boss.id = 'boss';
@@ -84,7 +85,7 @@ export class Hud {
     const hint = el(
       'div',
       '',
-      'WASD move · LMB attack · RMB special · Q cast · SPACE dash · pad 2 joins as player two'
+      'WASD move · LMB attack · RMB special · Q cast · F call · SPACE dash · pad 2 joins as player two'
     );
     hint.id = 'hint';
     this.root.appendChild(hint);
@@ -132,9 +133,18 @@ export class Hud {
     return this.seats.some((s) => s.seat === seat);
   }
 
-  update(players: Player[], depth: number, waveLabel: string, region = 'Tartarus') {
+  update(
+    players: Player[],
+    depth: number,
+    waveLabel: string,
+    region = 'Tartarus',
+    runObols = 0
+  ) {
     this.roomDepth.textContent = `${region} · Chamber ${depth}`;
     this.roomWave.textContent = waveLabel;
+    // Stays blank until the first obol drops, so a brand new player is never
+    // shown a counter for a system they have not met yet.
+    this.purse.textContent = runObols > 0 ? `${runObols} ⛁` : '';
 
     let worst = 1;
     players.forEach((p) => {
@@ -158,6 +168,9 @@ export class Hud {
       );
 
       s.call.style.transform = `scaleX(${p.callGauge})`;
+      // A full bar has to announce itself, or the player never learns the key
+      // exists. The pulse stops the moment it's spent.
+      s.call.parentElement?.classList.toggle('ready', p.callGauge >= 1);
 
       if (s.lastBoonCount !== p.boons.taken.length) {
         s.lastBoonCount = p.boons.taken.length;
@@ -265,15 +278,5 @@ export class Hud {
       this.choice.classList.add('show');
       addEventListener('keydown', onKey);
     });
-  }
-
-  /** Boon selection. Resolves with the chosen boon; mouse or number keys. */
-  offerBoons(god: God, boons: Boon[], seatName: string): Promise<Boon> {
-    return this.offerCards(
-      god,
-      GODS[god].css,
-      `A boon for ${seatName}`,
-      boons.map((b) => ({ ...b, kicker: b.god, accent: GODS[b.god].css }))
-    ).then((c) => boons.find((b) => b.id === c.id)!);
   }
 }

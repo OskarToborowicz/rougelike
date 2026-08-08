@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { World } from "../game/world";
 import { Player, PLAYER_TINTS, type PlayerState } from "../game/player";
-import { Enemy, type EnemyKind, type EnemyState } from "../game/enemy";
+import { Enemy, STATUS_KINDS, type EnemyKind, type EnemyState } from "../game/enemy";
 import { BoonSet } from "../game/boons";
 import { CLASS_ORDER } from "../game/classes";
 import type { FxBus } from "../render/fxbus";
@@ -81,6 +81,7 @@ export function buildSnapshot(
     e.dead ? 1 : 0,
     e.enraged ? 1 : 0,
     r(e.flash),
+    e.statusBits,
   ]);
 
   const projectiles: WireProjectile[] = world.projectiles.map((pr, i) => [
@@ -211,6 +212,9 @@ export class RemoteView {
           CLASS_ORDER[clsIdx] ?? "warrior",
         );
         p.pos.set(x, 0, z);
+        // Replicated shades still walk on this client's rig, so they get their
+        // footsteps from it rather than from the host's packets.
+        p.onStep = (sx, sz, speed) => this.fx.sfx('step', sx, sz, clamp(speed / 8, 0.4, 1.2));
         this.players.set(id, p);
         this.scene.add(p.mesh);
       }
@@ -239,7 +243,7 @@ export class RemoteView {
 
     const seenE = new Set<number>();
     for (const w of snap.enemies) {
-      const [id, kindIdx, x, z, facing, hp, maxHp, st, dead, enraged, flash] =
+      const [id, kindIdx, x, z, facing, hp, maxHp, st, dead, enraged, flash, statusBits] =
         w;
       seenE.add(id);
       let e = this.enemies.get(id);
@@ -261,6 +265,12 @@ export class RemoteView {
       e.dead = !!dead;
       e.enraged = !!enraged;
       e.flash = flash;
+      // Statuses are host-authoritative, so the guest holds no timers of its
+      // own — it just re-stamps a lifetime slightly longer than the packet
+      // interval. The next snapshot either renews it or lets it lapse.
+      STATUS_KINDS.forEach((k, i) => {
+        e!.status[k] = (statusBits ?? 0) & (1 << i) ? 0.2 : 0;
+      });
     }
     for (const [id, e] of this.enemies) {
       if (seenE.has(id)) continue;

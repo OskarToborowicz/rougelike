@@ -2,7 +2,14 @@ import * as THREE from 'three';
 import { Player, DASH } from './player';
 import type { AttackShape } from './classes';
 import { stepMovement } from './locomotion';
-import { BOSS_PATTERNS, Enemy, type BossPattern, type EnemyKind } from './enemy';
+import {
+  BOSS_PATTERNS,
+  Enemy,
+  STATUS_COLOR,
+  type BossPattern,
+  type EnemyKind,
+  type StatusKind,
+} from './enemy';
 import { separate, type Actor } from './actor';
 import { arenaRadius, makeGlowTexture } from '../render/arena';
 import type { FxBus } from '../render/fxbus';
@@ -36,6 +43,11 @@ function makeBolt(core: number, radius: number, glow: string, coreTint = 0xfffff
   return mesh;
 }
 
+/** Squared XZ distance. Squared because every use here is a comparison. */
+function dist2(a: THREE.Vector3, b: THREE.Vector3) {
+  return (a.x - b.x) ** 2 + (a.z - b.z) ** 2;
+}
+
 /** Blend a colour toward white, for hot cores that keep their hue. */
 function lighten(hex: number, t: number) {
   const c = new THREE.Color(hex);
@@ -60,11 +72,19 @@ export interface Projectile {
   owner?: Player;
   /** Splash radius on impact. Absent means a single-target hit. */
   burst?: number;
-  /** Arrows point where they fly; orbs and shots tumble. */
+  /** Bolts point where they fly; orbs and shots tumble. */
   spin?: boolean;
   /** Seconds until this bolt is allowed to drop another trail particle. */
   trailT?: number;
+  /** Which of the owner's slots fired this, so the right status is applied. */
+  slot?: DamageSlot;
 }
+
+/**
+ * Which button produced a hit. Boons promise per-slot effects, so damage has to
+ * remember where it came from all the way to the point it lands.
+ */
+export type DamageSlot = 'attack' | 'special' | 'cast' | 'dash';
 
 export interface DamageEvent {
   x: number;
@@ -85,6 +105,11 @@ export class World {
   projectiles: Projectile[] = [];
   damageEvents: DamageEvent[] = [];
   roomCleared = false;
+  /**
+   * Called the frame a foe dies. The World knows what died; it deliberately does
+   * not know what a currency is, so the payout lives with the run instead.
+   */
+  onKill?: (e: Enemy) => void;
   private nextId = 1;
   /** Frozen frames on a heavy connect — the single biggest source of "weight". */
   private hitstop = 0;
@@ -109,6 +134,7 @@ export class World {
     // *not* red — red belongs exclusively to "an attack is about to land".
     this.fx.ring(x, z, 0x9a5cff, 1.6, 0.55);
     this.fx.bloodBurst(x, z, '#a86cff', 0.6);
+    this.fx.sfx('spawn', x, z);
     return e;
   }
 
@@ -138,6 +164,7 @@ export class World {
     for (const p of this.players) this.updatePlayer(p, dt, frames.get(p.id) ?? null);
     for (const e of this.enemies) this.updateEnemy(e, dt);
     this.updateProjectiles(dt);
+    this.tickStatuses(dt);
     this.resolveCollisions();
 
     for (const p of this.players) p.tick(dt, frames.get(p.id) ?? null);
@@ -170,6 +197,7 @@ export class World {
         p.iframes = 1.2;
         p.reviveProgress = 0;
         this.fx.ring(p.pos.x, p.pos.z, 0xffd27f, 2.2, 0.6);
+        this.fx.sfx('revive', p.pos.x, p.pos.z);
         this.fx.shake(0.2);
       }
       return;
@@ -218,7 +246,9 @@ export class World {
 
     // --- intent --------------------------------------------------------
     if (f && !p.isBusy) {
-      if (f.pressed.has('dash') && p.dashCd <= 0) {
+      if (f.pressed.has('call') && p.callGauge >= 1) {
+        this.fireCall(p);
+      } else if (f.pressed.has('dash') && p.dashCd <= 0) {
         // Dash goes where you're moving if you're moving, else where you aim.
         if (f.moveX || f.moveY) p.facing = Math.atan2(f.moveX, f.moveY);
         p.state = 'dash';
@@ -226,6 +256,7 @@ export class World {
         p.dashCd = DASH.cooldown;
         p.iframes = Math.max(p.iframes, DASH.iframes);
         this.fx.ring(p.pos.x, p.pos.z, 0x6fd0ff, 1.1, 0.22);
+        this.fx.sfx('dash', p.pos.x, p.pos.z);
       } else if (f.pressed.has('attack')) {
         p.state = 'attack';
         p.stateT = 0;
@@ -242,6 +273,7 @@ export class World {
         p.castAmmo--;
         if (p.castReload <= 0) p.castReload = 1.1;
         this.fireCast(p);
+        this.fx.sfx('cast', p.pos.x, p.pos.z);
       }
     }
 
@@ -286,21 +318,22 @@ export class World {
   private throwAttack(p: Player, a: AttackShape, heavy: boolean) {
     if (heavy && p.def.special.kind === 'volley') return this.fireVolley(p, a);
     if (heavy && p.def.special.kind === 'nova') return this.fireNova(p, a);
-    if (!heavy && p.def.attack === 'arrow') return this.fireArrow(p, a, 0);
+    if (!heavy && p.def.attack === 'bolt') return this.fireBolt(p, a, 0);
     if (!heavy && p.def.attack === 'orb') return this.fireOrb(p, a);
     return this.resolveSwing(p, a, heavy);
   }
 
   /**
-   * The archer's arrow: fast, thin, and it pierces. Reach is long enough to cross
-   * the arena, so the class's whole game is holding a clean line.
+   * The marksman's crossbow bolt: flatter and faster than an arrow, and it
+   * pierces two bodies. Reach crosses the arena, so the class's whole game is
+   * holding a clean line long enough to be worth the reload.
    */
-  private fireArrow(p: Player, a: AttackShape, spread: number) {
+  private fireBolt(p: Player, a: AttackShape, spread: number) {
     const angle = p.facing + spread;
-    const speed = 34;
-    // Stretched along its flight path so it reads as an arrow, not a pellet.
+    const speed = 46;
+    // Short and stubby next to an arrow — a bolt, thrown hard.
     const mesh = makeBolt(p.def.accent, 0.14, '#c8ff9a', 0xdcffc0);
-    mesh.scale.set(0.7, 0.7, 3.4);
+    mesh.scale.set(0.8, 0.8, 2.4);
     mesh.rotation.y = angle;
     mesh.position.set(p.pos.x, 1.05, p.pos.z);
     this.scene.add(mesh);
@@ -318,6 +351,7 @@ export class World {
       trail: '#9ee06a',
       owner: p,
       spin: false,
+      slot: p.usingSpecial ? 'special' : 'attack',
     });
     this.fx.hitSpark(
       p.pos.x + Math.sin(angle) * 1.1,
@@ -327,12 +361,13 @@ export class World {
       '#d8ffb0',
       0.35
     );
+    this.fx.sfx('bolt', p.pos.x, p.pos.z);
     this.fx.shake(0.06);
   }
 
-  /** Special: five arrows in a fan. Rewards a clustered pack, wastes shots on one target. */
+  /** Special: five bolts in a fan. Rewards a clustered pack, wastes shots on one target. */
   private fireVolley(p: Player, a: AttackShape) {
-    for (let i = -2; i <= 2; i++) this.fireArrow(p, a, i * (a.arc / 4));
+    for (let i = -2; i <= 2; i++) this.fireBolt(p, a, i * (a.arc / 4));
     this.fx.shake(0.16);
   }
 
@@ -357,7 +392,9 @@ export class World {
       owner: p,
       /** Splash on impact — the mage's damage comes from grouping, not accuracy. */
       burst: 2.4,
+      slot: 'attack',
     });
+    this.fx.sfx('orb', p.pos.x, p.pos.z);
     this.fx.shake(0.08);
   }
 
@@ -370,9 +407,10 @@ export class World {
       const dz = e.pos.z - p.pos.z;
       const d = Math.hypot(dx, dz);
       if (d > a.reach + e.radius) continue;
-      this.damage(e, a.dmg * p.boons.specialMul, p, dx / (d || 1), dz / (d || 1), a.push);
+      this.damage(e, a.dmg * p.boons.specialMul, p, dx / (d || 1), dz / (d || 1), a.push, 'special');
       connected++;
     }
+    this.fx.sfx('swingHeavy', p.pos.x, p.pos.z);
     this.fx.ring(p.pos.x, p.pos.z, p.def.accent, a.reach, 0.45);
     this.fx.slash(p.pos.x, p.pos.z, p.facing, Math.PI * 2, a.reach, p.def.accent, 0.3);
     this.fx.bloodBurst(p.pos.x, p.pos.z, '#b07cff', 1.4);
@@ -392,7 +430,15 @@ export class World {
       if (dist > a.reach + e.radius) continue;
       const to = Math.atan2(dx, dz);
       if (Math.abs(angleDelta(p.facing, to)) > a.arc / 2) continue;
-      this.damage(e, a.dmg * mul, p, dx / (dist || 1), dz / (dist || 1), a.push);
+      this.damage(
+        e,
+        a.dmg * mul,
+        p,
+        dx / (dist || 1),
+        dz / (dist || 1),
+        a.push,
+        heavy ? 'special' : 'attack'
+      );
       connected++;
     }
 
@@ -401,6 +447,7 @@ export class World {
 
     // The arc fires on every swing, hit or miss — the attack has to exist in the
     // world before it has consequences.
+    this.fx.sfx(heavy ? 'swingHeavy' : 'swing', p.pos.x, p.pos.z);
     this.fx.slash(
       p.pos.x,
       p.pos.z,
@@ -431,7 +478,15 @@ export class World {
       if (d > e.radius + p.radius + 0.3) continue;
       if (e.iframes > 0) continue;
       e.iframes = 0.4;
-      this.damage(e, p.boons.dashDamage, p, dx / (d || 1), dz / (d || 1), p.boons.dashKnockback);
+      this.damage(
+        e,
+        p.boons.dashDamage,
+        p,
+        dx / (d || 1),
+        dz / (d || 1),
+        p.boons.dashKnockback,
+        'dash'
+      );
       this.fx.shake(0.18);
     }
   }
@@ -456,8 +511,57 @@ export class World {
       hit: new Set(),
       color,
       trail: '#ff8fc8',
+      slot: 'cast',
     });
     this.fx.shake(0.1);
+  }
+
+  /**
+   * The Call: what the gauge under the health bar has been filling toward.
+   *
+   * It is a panic button first and damage second — you spend a full bar because
+   * you are surrounded, so it clears space, grants a moment of safety, and heals
+   * a little. It also applies every status your boons grant at once, which is
+   * the one moment a build's gods all speak together.
+   */
+  private fireCall(p: Player) {
+    p.callGauge = 0;
+    p.state = 'cast';
+    p.stateT = 0;
+    p.iframes = Math.max(p.iframes, 1.0);
+    p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.15);
+
+    const radius = 8.0;
+    const color = p.def.accent;
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      const dx = e.pos.x - p.pos.x;
+      const dz = e.pos.z - p.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > radius + e.radius) continue;
+      const nx = dx / (d || 1);
+      const nz = dz / (d || 1);
+      const hit = 70 * p.boons.attackMul;
+      this.damage(e, hit, p, nx, nz, 26);
+      // Every god you've taken speaks at once. Applied after the damage so a
+      // foe the Call already killed doesn't bank a Doom that can never pay out.
+      if (!e.dead) {
+        for (const s of [
+          p.boons.statusOnAttack,
+          p.boons.statusOnSpecial,
+          p.boons.statusOnCast,
+        ]) {
+          if (s) this.afflict(e, s, hit, p);
+        }
+      }
+    }
+
+    this.fx.sfx('call', p.pos.x, p.pos.z);
+    this.fx.ring(p.pos.x, p.pos.z, color, radius, 0.7);
+    this.fx.ring(p.pos.x, p.pos.z, 0xffffff, radius * 0.55, 0.45);
+    this.fx.bloodBurst(p.pos.x, p.pos.z, '#ffe9b0', 2.2);
+    this.fx.shake(1.1);
+    this.freeze(0.16);
   }
 
   // ---------------------------------------------------------------- enemies
@@ -574,7 +678,7 @@ export class World {
         this.fx.dashTrail(e.pos.x, e.pos.z, '#ffd166');
         for (const p of this.livePlayers) {
           if (Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z) > e.radius + p.radius + 0.5) continue;
-          if (this.hitPlayer(p, e.a.contact, e.chargeX, e.chargeZ, 13)) this.fx.shake(0.6);
+          if (this.hitPlayer(p, e.a.contact, e.chargeX, e.chargeZ, 13, e)) this.fx.shake(0.6);
         }
         if (e.stateT > windup + 0.42) this.endPattern(e, haste);
       }
@@ -594,7 +698,7 @@ export class World {
             if (d > reach + p.radius) continue;
             const to = Math.atan2(p.pos.x - e.pos.x, p.pos.z - e.pos.z);
             if (Math.abs(angleDelta(e.facing, to)) > 0.9) continue;
-            this.hitPlayer(p, e.a.contact * 0.6, (p.pos.x - e.pos.x) / d, (p.pos.z - e.pos.z) / d, 9);
+            this.hitPlayer(p, e.a.contact * 0.6, (p.pos.x - e.pos.x) / d, (p.pos.z - e.pos.z) / d, 9, e);
           }
           e.patternTimer = 0.16;
           this.fx.shake(0.18);
@@ -627,7 +731,7 @@ export class World {
         this.fx.shake(0.7);
         for (const p of this.livePlayers) {
           if (Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z) > 5.2 + p.radius) continue;
-          this.hitPlayer(p, e.a.contact, (p.pos.x - e.pos.x) / dist, (p.pos.z - e.pos.z) / dist, 11);
+          this.hitPlayer(p, e.a.contact, (p.pos.x - e.pos.x) / dist, (p.pos.z - e.pos.z) / dist, 11, e);
         }
       }
       if (e.stateT > windup + 0.7) this.endPattern(e, haste);
@@ -662,7 +766,7 @@ export class World {
       this.fx.dashTrail(e.pos.x, e.pos.z, '#ff2a55');
       for (const p of this.livePlayers) {
         if (Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z) > e.radius + p.radius + 0.35) continue;
-        if (this.hitPlayer(p, e.a.contact, e.chargeX, e.chargeZ, 16)) this.fx.shake(0.8);
+        if (this.hitPlayer(p, e.a.contact, e.chargeX, e.chargeZ, 16, e)) this.fx.shake(0.8);
       }
       const atWall = Math.hypot(e.pos.x, e.pos.z) > arenaRadius() - e.radius - 1.0;
       if (atWall || e.stateT > windup + 0.75) {
@@ -725,7 +829,9 @@ export class World {
       pos: mesh.position.clone(),
       vel: new THREE.Vector3(nx * speed, 0, nz * speed),
       radius,
-      damage,
+      // Weak has to bite on a boss too, or the status is dead weight in exactly
+      // the fights where you spent a boon slot on it.
+      damage: damage * this.weakMul(e),
       team: 'enemy',
       life: 3.0,
       pierce: 0,
@@ -746,7 +852,7 @@ export class World {
       if (d > radius + e.radius) continue;
       // Falls off toward the edge so a clipped enemy is not a full hit.
       const falloff = 1 - Math.min(1, d / (radius + e.radius)) * 0.5;
-      this.damage(e, pr.damage * 0.6 * falloff, pr.owner, dx / (d || 1), dz / (d || 1), 9);
+      this.damage(e, pr.damage * 0.6 * falloff, pr.owner, dx / (d || 1), dz / (d || 1), 9, pr.slot);
     }
     this.fx.ring(pr.pos.x, pr.pos.z, pr.color, radius, 0.34);
     this.fx.bloodBurst(pr.pos.x, pr.pos.z, '#b07cff', 1.0);
@@ -754,13 +860,24 @@ export class World {
   }
 
   /** Shared player-damage path, so knockback and feedback are identical everywhere. */
-  private hitPlayer(p: Player, amount: number, nx: number, nz: number, push: number) {
-    if (!p.hurt(amount)) return false;
+  private hitPlayer(
+    p: Player,
+    amount: number,
+    nx: number,
+    nz: number,
+    push: number,
+    /** The foe swinging, when there is one — Weak is read off it here. */
+    from?: Enemy
+  ) {
+    const dealt = Math.round(amount * (from ? this.weakMul(from) : 1));
+    if (!p.hurt(dealt)) return false;
+    this.sellSecondWind(p);
+    this.fx.sfx(p.dead ? 'down' : 'hurt', p.pos.x, p.pos.z);
     this.fx.bloodBurst(p.pos.x, p.pos.z, '#ff4d5e', 0.8);
     this.damageEvents.push({
       x: p.pos.x,
       z: p.pos.z,
-      amount,
+      amount: dealt,
       crit: false,
       color: '#ff6a6a',
     });
@@ -823,6 +940,7 @@ export class World {
         e.strikeDone = false;
         if (e.kind !== 'lobber') {
           this.fx.ring(e.pos.x, e.pos.z, 0xff5a4a, e.a.attackRange * 0.9, e.a.tell);
+          this.fx.sfx(e.a.boss ? 'bossTelegraph' : 'telegraph', e.pos.x, e.pos.z);
         }
       }
     } else if (e.state === 'tell') {
@@ -865,7 +983,7 @@ export class World {
         pos: mesh.position.clone(),
         vel: new THREE.Vector3(nx * speed, 0, nz * speed),
         radius: 0.4,
-        damage: e.a.contact,
+        damage: e.a.contact * this.weakMul(e),
         team: 'enemy',
         life: 2.2,
         pierce: 0,
@@ -877,20 +995,23 @@ export class World {
     }
 
     const reach = e.a.attackRange + 0.5;
+    const contact = Math.round(e.a.contact * this.weakMul(e));
     this.fx.hitSpark(e.pos.x + nx * 1.2, e.pos.z + nz * 1.2, nx, nz, '#ff7a5a', 0.8);
     for (const p of this.livePlayers) {
       const d = Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z);
       if (d > reach + p.radius) continue;
       const to = Math.atan2(p.pos.x - e.pos.x, p.pos.z - e.pos.z);
       if (Math.abs(angleDelta(e.facing, to)) > 1.3) continue;
-      if (p.hurt(e.a.contact)) {
+      if (p.hurt(contact)) {
+        this.sellSecondWind(p);
+        this.fx.sfx(p.dead ? 'down' : 'hurt', p.pos.x, p.pos.z);
         this.fx.shake(0.4);
         this.freeze(0.06);
         this.fx.bloodBurst(p.pos.x, p.pos.z, '#ff4d5e', 0.8);
         this.damageEvents.push({
           x: p.pos.x,
           z: p.pos.z,
-          amount: e.a.contact,
+          amount: contact,
           crit: false,
           color: '#ff6a6a',
         });
@@ -931,9 +1052,11 @@ export class World {
           if (pr.team === 'player') {
             const dx = (t.pos.x - pr.pos.x) / (d || 1);
             const dz = (t.pos.z - pr.pos.z) / (d || 1);
-            this.damage(t as Enemy, pr.damage, pr.owner ?? this.players[0], dx, dz, 8);
+            this.damage(t as Enemy, pr.damage, pr.owner ?? this.players[0], dx, dz, 8, pr.slot);
             if (pr.burst) this.splash(pr, t.id);
           } else if ((t as Player).hurt(pr.damage)) {
+            this.sellSecondWind(t as Player);
+            this.fx.sfx((t as Player).dead ? 'down' : 'hurt', t.pos.x, t.pos.z);
             this.fx.shake(0.32);
             this.fx.bloodBurst(t.pos.x, t.pos.z, '#ff4d5e', 0.7);
             this.damageEvents.push({
@@ -962,7 +1085,15 @@ export class World {
 
   // ---------------------------------------------------------------- damage
 
-  damage(e: Enemy, amount: number, source: Player | undefined, nx: number, nz: number, push: number) {
+  damage(
+    e: Enemy,
+    amount: number,
+    source: Player | undefined,
+    nx: number,
+    nz: number,
+    push: number,
+    slot?: DamageSlot
+  ) {
     if (e.dead) return;
     const b = source?.boons;
     const crit = !!b && Math.random() < b.critChance;
@@ -980,16 +1111,149 @@ export class World {
       color: crit ? '#ffe066' : '#ffffff',
     });
 
+    // Weight scales with the size of the hit, so chip damage and a committed
+    // heavy don't land with the same thud.
+    if (!e.dead) {
+      this.fx.sfx(crit ? 'crit' : 'hit', e.pos.x, e.pos.z, clamp(final / 22, 0.6, 1.8));
+    }
+
     if (b && b.lifesteal > 0 && source && !source.dead) {
       source.hp = Math.min(source.maxHp, source.hp + final * b.lifesteal);
     }
     if (source) source.callGauge = Math.min(1, source.callGauge + final / 900);
 
+    // Statuses ride the hit that caused them, so a boon's promise resolves on
+    // the same frame the player sees the number pop.
+    if (b && slot && !e.dead) {
+      const status =
+        slot === 'attack'
+          ? b.statusOnAttack
+          : slot === 'special'
+            ? b.statusOnSpecial
+            : slot === 'cast'
+              ? b.statusOnCast
+              : null;
+      if (status) this.afflict(e, status, final, source);
+    }
+
     if (e.dead) {
+      // Obols drop from the kill itself, so the payout tracks what you actually
+      // fought rather than how far you happened to walk.
+      this.onKill?.(e);
+      this.fx.sfx('kill', e.pos.x, e.pos.z, e.a.scale);
       this.fx.bloodBurst(e.pos.x, e.pos.z, '#b3264a', e.a.scale);
       this.fx.ring(e.pos.x, e.pos.z, 0xff5a7a, 1.6 * e.a.scale, 0.35);
       this.freeze(0.07);
       this.fx.shake(0.45 * e.a.scale);
+    }
+  }
+
+  /**
+   * Put a status on a foe. Each one resolves differently on purpose:
+   *
+   *   weak  — refreshes a timer, and nothing else happens until the foe swings
+   *   shock — pays out immediately, arcing to whatever else is close
+   *   doom  — banks damage on a fuse, so the reward comes from walking away
+   *
+   * `hit` is the damage that carried the status, so every status scales with the
+   * build that applied it instead of needing its own tuning table.
+   */
+  /**
+   * Second Wind fires inside Player.hurt, which has no access to effects — so
+   * the moment gets sold here, once, on the frame it happened.
+   */
+  private sellSecondWind(p: Player) {
+    if (!p.usedSecondWind) return;
+    p.usedSecondWind = false;
+    this.fx.ring(p.pos.x, p.pos.z, 0xffe9a8, 3.0, 0.8);
+    this.fx.sfx('revive', p.pos.x, p.pos.z);
+    this.fx.shake(0.7);
+    this.freeze(0.18);
+  }
+
+  /** Weak's whole effect: this foe's outgoing damage, scaled. 1 when unafflicted. */
+  private weakMul(e: Enemy) {
+    return e.status.weak > 0 ? 0.6 : 1;
+  }
+
+  private afflict(e: Enemy, status: StatusKind, hit: number, source: Player) {
+    if (status === 'weak') {
+      e.status.weak = 4.0;
+      this.fx.ring(e.pos.x, e.pos.z, STATUS_COLOR.weak, e.radius * 1.8, 0.3);
+      this.fx.sfx('weak', e.pos.x, e.pos.z);
+      return;
+    }
+
+    if (status === 'doom') {
+      // Stacks rather than refreshes: hitting a doomed foe again makes the
+      // detonation bigger, but never resets the fuse you're waiting on.
+      e.doomPayload += hit * 0.75;
+      e.doomSourceId = source.id;
+      if (e.status.doom <= 0) e.status.doom = 1.1;
+      this.fx.ring(e.pos.x, e.pos.z, STATUS_COLOR.doom, e.radius * 2.2, 0.35);
+      return;
+    }
+
+    // Shock: an immediate arc to the two nearest other foes. Gated by its own
+    // cooldown so a five-bolt volley lands one chain, not five.
+    if (e.shockCd > 0) return;
+    e.shockCd = 0.45;
+    e.status.shock = 0.5;
+    const jolt = hit * 0.4;
+    const near = this.enemies
+      .filter((o) => !o.dead && o !== e && dist2(o.pos, e.pos) < 36)
+      .sort((a, c) => dist2(a.pos, e.pos) - dist2(c.pos, e.pos))
+      .slice(0, 2);
+    for (const o of near) {
+      this.fx.slash(
+        (e.pos.x + o.pos.x) / 2,
+        (e.pos.z + o.pos.z) / 2,
+        Math.atan2(o.pos.x - e.pos.x, o.pos.z - e.pos.z),
+        0.5,
+        Math.hypot(o.pos.x - e.pos.x, o.pos.z - e.pos.z),
+        STATUS_COLOR.shock,
+        0.18
+      );
+      o.status.shock = 0.4;
+      // No slot passed: a chain must never chain again.
+      this.damage(o, jolt, source, 0, 0, 0);
+    }
+    this.fx.sfx('shock', e.pos.x, e.pos.z);
+    this.fx.hitSpark(e.pos.x, e.pos.z, 0, 1, '#fff0a8', 0.7);
+  }
+
+  /**
+   * Run every status clock. Doom is the only one that does something on expiry,
+   * and it has to happen here rather than in Enemy.tick because paying it out
+   * means dealing damage, which is the World's job.
+   */
+  private tickStatuses(dt: number) {
+    for (const e of this.enemies) {
+      if (e.dead) {
+        e.status.weak = e.status.shock = e.status.doom = 0;
+        e.doomPayload = 0;
+        e.doomSourceId = -1;
+        continue;
+      }
+      e.status.weak = Math.max(0, e.status.weak - dt);
+      e.status.shock = Math.max(0, e.status.shock - dt);
+      if (e.status.doom > 0) {
+        e.status.doom -= dt;
+        if (e.status.doom <= 0) {
+          e.status.doom = 0;
+          const payload = e.doomPayload;
+          e.doomPayload = 0;
+          if (payload > 0) {
+            this.fx.sfx('doom', e.pos.x, e.pos.z);
+            this.fx.ring(e.pos.x, e.pos.z, STATUS_COLOR.doom, e.radius * 3.2, 0.4);
+            this.fx.bloodBurst(e.pos.x, e.pos.z, '#e2384a', e.a.scale);
+            this.fx.shake(0.22);
+            const owed = this.players.find((p) => p.id === e.doomSourceId);
+            e.doomSourceId = -1;
+            this.damage(e, payload, owed, 0, 0, 0);
+          }
+        }
+      }
     }
   }
 

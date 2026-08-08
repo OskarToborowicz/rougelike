@@ -64,6 +64,9 @@ wss.on("connection", (ws) => {
       ws.room = code;
       ws.name = String(msg.name || "player").slice(0, 16);
       ws.cls = String(msg.cls || "warrior").slice(0, 12);
+      // Permanent-upgrade levels, forwarded verbatim. The relay never reads them;
+      // the host clamps every value before it can affect the simulation.
+      ws.meta = String(msg.meta || "").slice(0, 64);
 
       let room = rooms.get(code);
       if (!room) {
@@ -82,7 +85,7 @@ wss.on("connection", (ws) => {
 
       room.peers.set(ws.id, ws);
       send(ws, { t: "role", role: "guest", id: ws.id, room: code });
-      send(room.host, { t: "join", id: ws.id, name: ws.name, cls: ws.cls });
+      send(room.host, { t: "join", id: ws.id, name: ws.name, cls: ws.cls, meta: ws.meta });
       console.log(
         `[relay] ${ws.name} joined ${code} (${room.peers.size + 1} players)`,
       );

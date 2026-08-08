@@ -1,4 +1,5 @@
 import { pick, shuffle } from '../core/math';
+import type { StatusKind } from './enemy';
 
 export type God = 'Aphrodite' | 'Ares' | 'Zeus' | 'Poseidon' | 'Artemis';
 
@@ -40,8 +41,14 @@ export class BoonSet {
   critMul = 2.0;
   extraCastAmmo = 0;
   dashKnockback = 0;
-  statusOnAttack: GodStyle['status'] | null = null;
-  statusOnCast: GodStyle['status'] | null = null;
+  /**
+   * Which status each source of damage inflicts. Split per slot because the
+   * cards promise per-slot effects — one shared field made Ares's Special boon
+   * silently overwrite Zeus's Attack boon.
+   */
+  statusOnAttack: StatusKind | null = null;
+  statusOnSpecial: StatusKind | null = null;
+  statusOnCast: StatusKind | null = null;
   taken: Boon[] = [];
 
   // --- weapon modifications, granted by hammers -------------------------
@@ -56,6 +63,16 @@ export class BoonSet {
   doubleSpecial = false;
   /** Names of the hammers taken, for the HUD. */
   hammers: string[] = [];
+
+  // --- permanent upgrades, bought between runs --------------------------
+  // These live here rather than in a parallel stat system so a run's modifiers
+  // stack in exactly one place. See meta.ts.
+  /** Flat health added on top of the class's own. */
+  metaMaxHp = 0;
+  /** Fraction of the Call gauge already full when the run begins. */
+  metaStartCall = 0;
+  /** Killing blows survived per run, at 35% health. */
+  secondWind = 0;
 
   /** How many times each boon has been taken; a pom raises the level. */
   private levels = new Map<string, number>();
@@ -86,7 +103,7 @@ export const ALL_BOONS: Boon[] = [
     god: 'Zeus',
     slot: 'attack',
     name: 'Lightning Strike',
-    desc: 'Your Attack deals +40% damage and shocks.',
+    desc: 'Your Attack deals +40% damage and Shocks: a jolt arcs to nearby foes.',
     apply: (b) => {
       b.attackMul += 0.4;
       b.statusOnAttack = 'shock';
@@ -116,10 +133,10 @@ export const ALL_BOONS: Boon[] = [
     god: 'Ares',
     slot: 'special',
     name: 'Slicing Shot',
-    desc: 'Your Special deals +55% damage and inflicts Doom.',
+    desc: 'Your Special deals +55% damage and inflicts Doom: it detonates a beat later.',
     apply: (b) => {
       b.specialMul += 0.55;
-      b.statusOnAttack = 'doom';
+      b.statusOnSpecial = 'doom';
     },
   },
   {
@@ -127,7 +144,7 @@ export const ALL_BOONS: Boon[] = [
     god: 'Aphrodite',
     slot: 'cast',
     name: 'Crush Shot',
-    desc: 'Your Cast deals +60% damage and makes foes Weak.',
+    desc: 'Your Cast deals +60% damage and makes foes Weak: they hit for 40% less.',
     apply: (b) => {
       b.castMul += 0.6;
       b.statusOnCast = 'weak';

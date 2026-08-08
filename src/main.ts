@@ -5,9 +5,10 @@ import { Vfx } from "./render/vfx";
 import { FxBus } from "./render/fxbus";
 import { Input, type Frame } from "./core/input";
 import { World } from "./game/world";
+import type { Enemy } from "./game/enemy";
 import { Player, PLAYER_TINTS } from "./game/player";
 import { BoonSet, offer, randomGod, type Boon, type God } from "./game/boons";
-import type { WireOffer } from "./net/protocol";
+import type { WireCard, WireOffer } from "./net/protocol";
 import { CLASSES, type ClassId } from "./game/classes";
 import { biomeForDepth } from "./render/biome";
 import { Director } from "./game/director";
@@ -17,12 +18,22 @@ import { hammerColor, offerHammers } from "./game/hammers";
 import { GODS } from "./game/boons";
 import { shuffle } from "./core/math";
 import { Hud } from "./ui/hud";
-import { Menu } from "./ui/menu";
+import { Menu, type RunSummary } from "./ui/menu";
 import { pixelRatioFor, settings } from "./ui/settings";
 import { Net } from "./net/net";
 import { MAX_PLAYERS } from "./net/protocol";
 import { buildSnapshot, RemoteView } from "./net/sync";
 import { clamp } from "./core/math";
+import { Audio } from "./audio/audio";
+import {
+  applyMeta,
+  decodeMeta,
+  earn,
+  encodeMeta,
+  meta,
+  recordRun,
+  type MetaState,
+} from "./game/meta";
 
 const host = document.getElementById("app")!;
 const stage = new Stage(host);
@@ -30,12 +41,17 @@ const arena = new Arena(stage.scene);
 stage.root.add(arena.group);
 
 const vfx = new Vfx(stage.fx);
-const fx = new FxBus(vfx, stage);
+const audio = new Audio();
+const fx = new FxBus(vfx, stage, audio);
 const input = new Input(stage.renderer.domElement);
 const hud = new Hud();
-const menu = new Menu(document.body);
+const menu = new Menu(document.body, audio);
 const world = new World(stage.root, fx);
 const remote = new RemoteView(stage.root, fx);
+
+// Dev-only handle. Combat states that take a minute to reach by playing — a full
+// Call gauge, a specific boon's status — are one line away from the console with
+// this, and it is stripped from production builds.
 /** Pool of doors. Never more than three are shown at once. */
 const gates = [
   new Gate(stage.root),
@@ -113,14 +129,26 @@ function refreshRoster() {
 
 // ---------------------------------------------------------------- seating
 
-function addSeat(seat: number, cls: ClassId = "warrior") {
+/**
+ * `metaSource` is the upgrade state to fold in. Local seats use this machine's
+ * own; a guest's arrives in the handshake, because the host simulates every
+ * body and would otherwise silently strip what that player had bought.
+ */
+function addSeat(
+  seat: number,
+  cls: ClassId = "warrior",
+  metaSource = meta,
+) {
   const p = new Player(
     0,
     seat,
-    new BoonSet(),
+    applyMeta(new BoonSet(), metaSource),
     PLAYER_TINTS[seat % PLAYER_TINTS.length],
     cls,
   );
+  p.onStep = (x, z, speed) => audio.play("step", { x, z }, clamp(speed / 8, 0.4, 1.2));
+  // Remembered so a wipe can rebuild this seat from the right upgrades.
+  seatMeta.set(seat, metaSource);
   const a = (seat / MAX_PLAYERS) * Math.PI * 2;
   p.pos.set(Math.cos(a) * 2, 0, 3 + Math.sin(a) * 2);
   world.addPlayer(p);
@@ -133,7 +161,11 @@ function seatJoin() {
   for (const peer of net.peers) {
     if (seatOwner.has(peer.id)) continue;
     if (world.players.length >= MAX_PLAYERS) return;
-    const p = addSeat(world.players.length, (peer.cls as ClassId) ?? "warrior");
+    const p = addSeat(
+      world.players.length,
+      (peer.cls as ClassId) ?? "warrior",
+      decodeMeta(peer.meta ?? ""),
+    );
     seatOwner.set(peer.id, p.id);
     // A new arrival means the room needs to grow.
     reshapeArena();
@@ -160,6 +192,26 @@ function dropSeat(netId: number) {
 
 const director = new Director(world, () => world.players.length);
 
+/**
+ * What this run has earned so far. Obols are banked the instant they drop —
+ * these two only exist so the shore screen can show what *this* descent was
+ * worth, separately from the lifetime purse.
+ */
+let runObols = 0;
+let runKills = 0;
+
+/** Which upgrade state each seat was built from. Guests bring their own. */
+const seatMeta = new Map<number, MetaState>();
+
+/** Obols a corpse is worth. Bosses pay for the fight they actually were. */
+const bounty = (e: Enemy) =>
+  e.a.boss ? 60 + director.depth * 8 : Math.round(4 + e.a.hp / 24 + director.depth * 0.6);
+
+world.onKill = (e) => {
+  runKills++;
+  runObols += earn(bounty(e));
+};
+
 // ------------------------------------------------------------------- run
 
 function startRun() {
@@ -170,6 +222,8 @@ function startRun() {
     seatJoin();
   }
   reshapeArena();
+  audio.unlock();
+  audio.startMusic();
   hud.showBanner(director.biome.name);
 }
 
@@ -210,70 +264,165 @@ net.onPickHandler = (netId, boonId) => {
 };
 
 /**
+ * One seat's pending choice, whatever kind of choice it is.
+ *
+ * Boons, hammers and poms differ only in their heading, their colour and what
+ * picking one does — so they share this single round rather than three copies
+ * that each have to remember the remote-seat handling separately. Getting that
+ * wrong is exactly why remote players used to be handed random hammers.
+ */
+interface CardRound<T extends { id: string }> {
+  title: (p: Player) => string;
+  accent: (p: Player) => string;
+  subtitle: (p: Player) => string;
+  /** Up to three options for this seat. Empty skips the seat entirely. */
+  choices: (p: Player) => T[];
+  card: (p: Player, choice: T) => WireCard;
+  apply: (p: Player, choice: T) => void;
+  /** Colour of the ring that pops on payout. */
+  ring: number;
+}
+
+/**
  * Everyone chooses at once.
  *
- * Each seat gets its own offer; the local player sees the chooser, remote seats
- * get theirs pushed in the snapshot and answer with a pick. A guest who never
- * answers falls back to a random boon after a timeout, so one idle player can
- * never stall the run.
+ * Local seats share one screen, so they go one after another. Remote seats each
+ * have their own screen and choose in parallel: the host publishes their offer
+ * in every snapshot and waits for a pick. A seat that never answers falls back
+ * to a random option after 45s, so one idle player can never stall the run.
  */
-async function runBoonRound(god: God) {
+async function runCardRound<T extends { id: string }>(round: CardRound<T>) {
   const rolls = world.players
-    .map((p) => ({ p, god, choices: offer(p.boons, 3) }))
+    .map((p) => ({ p, choices: round.choices(p) }))
     .filter((r) => r.choices.length > 0);
   if (!rolls.length) return;
 
-  openOffers = rolls
-    .filter((r) => isRemoteSeat(r.p.id))
-    .map((r) => ({
-      pid: r.p.id,
-      god: r.god,
-      boons: r.choices.map((b) => ({
-        id: b.id,
-        god: b.god,
-        name: b.name,
-        desc: b.desc,
-      })),
-    }));
+  const remoteRolls = rolls.filter((r) => isRemoteSeat(r.p.id));
+  const localRolls = rolls.filter((r) => !isRemoteSeat(r.p.id));
 
-  const remote = rolls.filter((r) => isRemoteSeat(r.p.id));
-  const local = rolls.filter((r) => !isRemoteSeat(r.p.id));
+  openOffers = remoteRolls.map((r) => ({
+    pid: r.p.id,
+    title: round.title(r.p),
+    accent: round.accent(r.p),
+    subtitle: round.subtitle(r.p),
+    cards: r.choices.map((c) => round.card(r.p, c)),
+  }));
 
-  // Remote seats choose in parallel — they each have their own screen.
-  const remotePicks = remote.map(async (r) => {
+  const remotePicks = remoteRolls.map(async (r) => {
     const chosenId = await new Promise<string | null>((resolve) => {
       pendingPicks.set(r.p.id, resolve);
-      // 45s is long enough to read three cards and far short of stalling a run.
       setTimeout(() => resolve(null), 45000);
     });
     pendingPicks.delete(r.p.id);
     return {
       p: r.p,
-      boon:
-        r.choices.find((b) => b.id === chosenId) ??
+      choice:
+        r.choices.find((c) => c.id === chosenId) ??
         r.choices[Math.floor(Math.random() * r.choices.length)],
     };
   });
 
-  // Local seats share one screen, so they must choose one after another.
-  const localPicks: { p: Player; boon: Boon }[] = [];
-  for (const r of local) {
-    const boon = await hud.offerBoons(
-      r.god,
-      r.choices,
-      seatLabel(r.p.seat, r.p.cls),
+  const localPicks: { p: Player; choice: T }[] = [];
+  for (const r of localRolls) {
+    const picked = await hud.offerCards(
+      round.title(r.p),
+      round.accent(r.p),
+      round.subtitle(r.p),
+      r.choices.map((c) => round.card(r.p, c)),
     );
-    localPicks.push({ p: r.p, boon });
+    localPicks.push({ p: r.p, choice: r.choices.find((c) => c.id === picked.id)! });
   }
 
   const all = [...localPicks, ...(await Promise.all(remotePicks))];
   openOffers = [];
 
-  for (const { p, boon } of all) {
-    p.boons.add(boon);
+  for (const { p, choice } of all) {
+    round.apply(p, choice);
     p.castAmmo = 3 + p.boons.extraCastAmmo;
-    fx.ring(p.pos.x, p.pos.z, 0xffd27f, 2.4, 0.6);
+    fx.ring(p.pos.x, p.pos.z, round.ring, 2.4, 0.6);
+    fx.sfx("boon", p.pos.x, p.pos.z);
   }
+}
+
+const runBoonRound = (god: God) =>
+  runCardRound<Boon>({
+    title: () => god,
+    accent: () => GODS[god].css,
+    subtitle: (p) => `A boon for ${seatLabel(p.seat, p.cls)}`,
+    choices: (p) => offer(p.boons, 3),
+    card: (_p, b) => ({
+      id: b.id,
+      name: b.name,
+      desc: b.desc,
+      kicker: b.god,
+      accent: GODS[b.god].css,
+    }),
+    apply: (p, b) => p.boons.add(b),
+    ring: 0xffd27f,
+  });
+
+/** Weapon hammer: pick one of three upgrades to a slot. */
+const runHammerRound = () =>
+  runCardRound({
+    title: () => "HAMMER",
+    accent: () => "#ffb04a",
+    subtitle: (p) => `A weapon upgrade for ${seatLabel(p.seat, p.cls)}`,
+    choices: (p) => offerHammers(p.boons, p.cls, 3),
+    card: (_p, h) => ({
+      id: h.id,
+      name: h.name,
+      desc: h.desc,
+      kicker: h.slot,
+      accent: hammerColor(h),
+    }),
+    apply: (p, h) => {
+      h.apply(p.boons);
+      p.boons.hammers.push(h.id);
+    },
+    ring: 0xffb04a,
+  });
+
+/** Pom: empower a boon already held, raising its level. */
+const runPomRound = () =>
+  runCardRound<Boon>({
+    title: () => "EMPOWER",
+    accent: () => "#d6a6ff",
+    subtitle: (p) => `Strengthen a boon of ${seatLabel(p.seat, p.cls)}`,
+    choices: (p) => shuffle(p.boons.taken.slice()).slice(0, 3),
+    card: (p, b) => ({
+      id: b.id,
+      name: `${b.name}  ${"I".repeat(Math.min(5, p.boons.levelOf(b.id)))}→${"I".repeat(
+        Math.min(5, p.boons.levelOf(b.id) + 1),
+      )}`,
+      desc: b.desc,
+      kicker: b.god,
+      accent: GODS[b.god].css,
+    }),
+    apply: (p, b) => p.boons.upgrade(b),
+    ring: 0xd6a6ff,
+  });
+
+// Dev-only handle. Combat and reward states that take minutes to reach by
+// playing — a full Call gauge, a hammer round with a guest connected — are one
+// line away from the console with this. Stripped from production builds.
+if (import.meta.env.DEV) {
+  (window as any).styx = {
+    world,
+    hud,
+    fx,
+    audio,
+    settings,
+    meta,
+    remote,
+    net,
+    runBoonRound,
+    runHammerRound,
+    runPomRound,
+    seatOwner,
+    get openOffers() {
+      return openOffers;
+    },
+  };
 }
 
 /** Pay out whatever the chosen door promised. */
@@ -302,68 +451,6 @@ async function grantReward(reward: Reward) {
   await wait(900);
 }
 
-/** Weapon hammer: pick one of three upgrades to a slot. Local seats only for now. */
-async function runHammerRound() {
-  for (const p of world.players) {
-    const choices = offerHammers(p.boons, p.cls, 3);
-    if (!choices.length) continue;
-    if (isRemoteSeat(p.id)) {
-      // Remote seats take a random hammer until they have their own screen.
-      const h = choices[Math.floor(Math.random() * choices.length)];
-      h.apply(p.boons);
-      p.boons.hammers.push(h.id);
-      continue;
-    }
-    const picked = await hud.offerCards(
-      "HAMMER",
-      "#ffb04a",
-      `A weapon upgrade for ${seatLabel(p.seat, p.cls)}`,
-      choices.map((h) => ({
-        id: h.id,
-        name: h.name,
-        desc: h.desc,
-        kicker: h.slot,
-        accent: hammerColor(h),
-      })),
-    );
-    const h = choices.find((x) => x.id === picked.id)!;
-    h.apply(p.boons);
-    p.boons.hammers.push(h.id);
-    p.castAmmo = 3 + p.boons.extraCastAmmo;
-    fx.ring(p.pos.x, p.pos.z, 0xffb04a, 2.4, 0.6);
-  }
-}
-
-/** Pom: empower a boon already held, raising its level. */
-async function runPomRound() {
-  for (const p of world.players) {
-    const held = p.boons.taken;
-    if (!held.length) continue;
-    const choices = shuffle(held.slice()).slice(0, 3);
-    if (isRemoteSeat(p.id)) {
-      p.boons.upgrade(choices[Math.floor(Math.random() * choices.length)]);
-      continue;
-    }
-    const picked = await hud.offerCards(
-      "EMPOWER",
-      "#d6a6ff",
-      `Strengthen a boon of ${seatLabel(p.seat, p.cls)}`,
-      choices.map((b) => ({
-        id: b.id,
-        name: `${b.name}  ${"I".repeat(Math.min(5, p.boons.levelOf(b.id)))}→${"I".repeat(
-          Math.min(5, p.boons.levelOf(b.id) + 1),
-        )}`,
-        desc: b.desc,
-        kicker: b.god,
-        accent: GODS[b.god].css,
-      })),
-    );
-    p.boons.upgrade(held.find((b) => b.id === picked.id)!);
-    p.castAmmo = 3 + p.boons.extraCastAmmo;
-    fx.ring(p.pos.x, p.pos.z, 0xd6a6ff, 2.4, 0.6);
-  }
-}
-
 async function onChamberCleared() {
   paused = true;
   fx.ring(0, 0, 0xffd27f, 3, 0.8);
@@ -387,8 +474,15 @@ async function onChamberCleared() {
   doors.forEach((door, i) => gates[i].show(door, i, doors.length));
   hud.showBanner("Choose Your Path");
 
-  const chosen = await new Promise<Gate | null>((resolve) => {
+  /**
+   * The doors are open and the party has control, which means the party can
+   * still die here — a lobber's bolt already in the air, a wretch that spawned
+   * late. `allThrough` needs at least one living player, so without this the
+   * wait would never resolve and the run would hang on "Choose Your Path".
+   */
+  const chosen = await new Promise<Gate | null | "wiped">((resolve) => {
     const check = () => {
+      if (world.players.length && !world.livePlayers.length) return resolve("wiped");
       const taken = openGates().find((g) => g.allThrough(world.players));
       if (taken) return resolve(taken);
       if (!openGates().length) return resolve(null);
@@ -396,6 +490,14 @@ async function onChamberCleared() {
     };
     check();
   });
+
+  // Everyone died in the doorway. Bail out and let the loop's wipe handler run:
+  // no reward, no free revive, no next chamber — the run is over.
+  if (chosen === "wiped") {
+    hideGates();
+    hud.setGatePrompt(null);
+    return;
+  }
 
   const reward = chosen?.reward ?? null;
   // The door also decides what kind of fight waits on the other side.
@@ -435,9 +537,13 @@ const isRemoteSeat = (playerId: number) =>
 let shownOffer = "";
 
 /**
- * Guest side of the boon round. The host publishes open offers in the snapshot;
- * when one is addressed to this client's shade, put the same chooser on screen
- * the host uses and send the answer back.
+ * Guest side of any card round. The host publishes open offers in the snapshot;
+ * when one is addressed to this client's shade, put up the same chooser the
+ * host uses and send the answer back.
+ *
+ * Boon, hammer and pom all arrive here now — the offer carries its own heading
+ * and colour, so a guest gets a real screen for each instead of a random pick
+ * made on its behalf.
  */
 function checkGuestOffer() {
   const mine = remote.offers.find((o) => o.pid === remote.myPlayerId);
@@ -445,21 +551,40 @@ function checkGuestOffer() {
     shownOffer = "";
     return;
   }
-  const key = `${mine.pid}:${mine.boons.map((b) => b.id).join(",")}`;
+  const key = `${mine.pid}:${mine.title}:${mine.cards.map((c) => c.id).join(",")}`;
   if (key === shownOffer) return;
   shownOffer = key;
 
-  const me = remote.players.get(remote.myPlayerId);
-  const seatName = me ? seatLabel(me.seat, me.cls) : "SHADE";
   hud
-    .offerBoons(mine.god as God, mine.boons as unknown as Boon[], seatName)
+    .offerCards(mine.title, mine.accent, mine.subtitle, mine.cards)
     .then((picked) => net.sendPick(picked.id));
+}
+
+/**
+ * Put the shore up and wait for the player to leave it.
+ *
+ * The run is already over by the time this is called, so it deliberately blocks
+ * the restart: the summary is the payoff for a lost run, and skipping straight
+ * to chamber one would throw it away.
+ */
+function visitShore(summary: RunSummary) {
+  return new Promise<void>((resolve) => {
+    pauseHeld = true;
+    menu.showShrine(() => {
+      menu.hide();
+      pauseHeld = false;
+      resolve();
+    }, summary);
+  });
 }
 
 /**
  * A wipe ends the run. Boons are lost, the descent restarts at chamber one —
  * the roguelike contract. Co-op only wipes when *everyone* is down, so a single
  * death is always recoverable by a partner.
+ *
+ * What is *not* lost is the obols: the shore screen goes up before the next
+ * descent starts, so a failed run ends by making the next one stronger.
  */
 async function onWipe() {
   paused = true;
@@ -471,15 +596,34 @@ async function onWipe() {
   hud.setGatePrompt(null);
   world.projectiles.forEach((pr) => stage.root.remove(pr.mesh));
   world.projectiles.length = 0;
+
+  recordRun(director.depth);
+  // Only the machine that owns the run gets the shore. A guest's death is the
+  // host's run ending, and its own meta screen would be spending obols it did
+  // not earn here.
+  if (mode !== "guest") {
+    await visitShore({
+      depth: director.depth,
+      kills: runKills,
+      earned: runObols,
+      won: false,
+    });
+  }
+  runObols = 0;
+  runKills = 0;
+
   for (const p of world.players) {
-    p.boons = new BoonSet();
+    // Rebuild from that seat's own upgrades — in co-op the host must not hand
+    // its own purchases to a guest's shade, or take theirs away.
+    p.boons = applyMeta(new BoonSet(), seatMeta.get(p.seat) ?? meta);
+    p.maxHp = CLASSES[p.cls].maxHp + p.boons.metaMaxHp;
     p.hp = p.maxHp;
     p.dead = false;
     p.state = "idle";
     p.iframes = 1.5;
     p.reviveProgress = 0;
-    p.castAmmo = 3;
-    p.callGauge = 0;
+    p.castAmmo = 3 + p.boons.extraCastAmmo;
+    p.callGauge = Math.min(1, p.boons.metaStartCall);
     const a = (p.seat / MAX_PLAYERS) * Math.PI * 2;
     p.pos.set(Math.cos(a) * 2, 0, 3 + Math.sin(a) * 2);
     p.vel.set(0, 0, 0);
@@ -557,6 +701,12 @@ async function abandonRun() {
   pauseHeld = false;
   running = false;
   paused = true;
+  // Walking away still counts as a descent — the obols are already banked, and
+  // the deepest-chamber record should not depend on dying to earn it.
+  if (mode !== "guest") recordRun(director.depth);
+  runObols = 0;
+  runKills = 0;
+  seatMeta.clear();
   net.disconnect();
   world.clearEnemies();
   hideGates();
@@ -566,6 +716,7 @@ async function abandonRun() {
   for (const p of world.players) stage.root.remove(p.mesh);
   world.players.length = 0;
   remote.clear();
+  audio.stopMusic();
   hud.reset();
   seatOwner.clear();
   director.depth = 1;
@@ -680,9 +831,22 @@ function loop(now: number) {
       director.depth,
       director.label,
       director.biome.name,
+      runObols,
     );
 
     hud.updateBoss(world.enemies.find((e) => e.a.boss && !e.dead) ?? null);
+
+    // Tension for the drone: how much is alive, whether a boss is up, and how
+    // close the party is to going down. Bounded so a full room can't peg it.
+    const alive = world.enemies.filter((e) => !e.dead);
+    const boss = alive.some((e) => e.a.boss);
+    const hurt =
+      1 -
+      (world.livePlayers.reduce((sum, p) => sum + p.hp / p.maxHp, 0) /
+        Math.max(1, world.livePlayers.length));
+    audio.setIntensity(
+      clamp(alive.length / 8, 0, 0.55) + (boss ? 0.3 : 0) + hurt * 0.35,
+    );
 
     // Cheap no-op unless the region or the party size actually changed.
     reshapeArena();
@@ -785,6 +949,9 @@ async function boot() {
     choice.room,
     choice.name,
     choice.cls,
+    // A guest's permanent upgrades have to travel: the host builds every body,
+    // so without this a joining player silently loses everything they bought.
+    encodeMeta(),
   );
   if (choice.mode === "host") {
     mode = "host";

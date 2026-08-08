@@ -1,5 +1,15 @@
 import { makeRoomCode } from '../net/protocol';
 import { CLASSES, CLASS_ORDER, type ClassId } from '../game/classes';
+import type { Audio } from '../audio/audio';
+import { buy, canAfford, levelOf, meta, nextCost, UPGRADES } from '../game/meta';
+
+/** What a finished run is worth, shown at the top of the shore screen. */
+export interface RunSummary {
+  depth: number;
+  kills: number;
+  earned: number;
+  won: boolean;
+}
 import { DEFAULTS, saveSettings, settings } from './settings';
 
 export type MenuChoice =
@@ -26,6 +36,7 @@ const CONTROLS: [string, string][] = [
   ['Attack', 'Left mouse  ·  A'],
   ['Special', 'Right mouse  ·  X'],
   ['Cast', 'Q  ·  Y'],
+  ['Call', 'F  ·  RB — when the gauge is full'],
   ['Dash', 'Space  ·  B'],
   ['Pause', 'Escape  ·  Start'],
   ['Player two', 'Connect a second gamepad — joins instantly'],
@@ -53,10 +64,27 @@ export class Menu {
   /** Where escape returns to from the current sub-screen. */
   private backTo: (() => void) | null = null;
 
-  constructor(host: HTMLElement) {
+  constructor(host: HTMLElement, private audio?: Audio) {
     this.root.id = 'lobby';
     this.root.appendChild(this.panel);
     host.appendChild(this.root);
+
+    // The menu is where the first click of the session lands, which makes it the
+    // only place allowed to start the AudioContext. Capture phase, so audio is
+    // alive before any handler that wants to make a sound runs.
+    this.root.addEventListener(
+      'pointerdown',
+      (e) => {
+        this.audio?.unlock();
+        const t = e.target as HTMLElement;
+        if (t.closest('button')) this.audio?.play('uiClick');
+      },
+      true
+    );
+    this.root.addEventListener('pointerover', (e) => {
+      const t = e.target as HTMLElement;
+      if (t.closest('button')) this.audio?.play('uiHover');
+    });
 
     addEventListener('keydown', (e) => {
       if (e.code !== 'Escape') return;
@@ -97,14 +125,19 @@ export class Menu {
       const titleScreen = () => {
         this.backTo = null;
         const play = el('button', 'lbtn primary', 'PLAY');
+        const shrine = el('button', 'lbtn', `THE SHORE · ${meta.obols} ⛁`);
         const options = el('button', 'lbtn', 'OPTIONS');
         const controls = el('button', 'lbtn', 'CONTROLS');
         play.onclick = () => setupScreen();
+        shrine.onclick = () => this.showShrine(titleScreen);
         options.onclick = () => this.showOptions(titleScreen);
         controls.onclick = () => this.showControls(titleScreen);
         this.show([
           ...this.title('a co-op descent · up to four shades'),
           play,
+          // Only offered once there is something to spend or something spent —
+          // a first-time player has no idea what an obol is yet.
+          ...(meta.obols > 0 || meta.runs > 0 ? [shrine] : []),
           options,
           controls,
         ]);
@@ -209,12 +242,96 @@ export class Menu {
     });
   }
 
+  // --------------------------------------------------------------- shrine
+
+  /**
+   * Where obols are spent. Reachable from the title, and shown automatically
+   * after a wipe with that run's summary at the top — the moment a player most
+   * wants to see that the run they just lost was worth something.
+   */
+  showShrine(back: () => void, summary?: RunSummary) {
+    this.backTo = back;
+
+    const render = () => {
+      const rows: HTMLElement[] = [];
+
+      if (summary) {
+        const card = el('div', 'lsummary');
+        card.append(
+          el('div', 'lsumhead', summary.won ? 'THE DESCENT ENDS' : 'YOU HAVE DIED'),
+          statLine('Chamber reached', String(summary.depth)),
+          statLine('Foes felled', String(summary.kills)),
+          statLine('Obols earned', `${summary.earned} ⛁`),
+        );
+        rows.push(card);
+      }
+
+      const purse = el('div', 'lpurse', `${meta.obols} ⛁  ·  deepest ${meta.deepest}  ·  ${meta.runs} runs`);
+      rows.push(purse);
+
+      const list = el('div', 'lupgrades');
+      for (const u of UPGRADES) {
+        const lvl = levelOf(u.id);
+        const cost = nextCost(u);
+        const maxed = cost === null;
+        const afford = canAfford(u);
+
+        const item = el(
+          'button',
+          'lupgrade' + (maxed ? ' maxed' : afford ? '' : ' poor'),
+        ) as HTMLButtonElement;
+        const pips = Array.from({ length: u.maxLevel }, (_, i) =>
+          i < lvl ? '●' : '○',
+        ).join('');
+        item.append(
+          el('span', 'un', u.name),
+          el('span', 'ud', u.desc(lvl + (maxed ? 0 : 1))),
+          el('span', 'ul', pips),
+          el('span', 'uc', maxed ? 'MAX' : `${cost} ⛁`),
+        );
+        item.disabled = maxed || !afford;
+        item.onclick = () => {
+          if (!buy(u)) return;
+          this.audio?.play('boon');
+          render();
+        };
+        list.appendChild(item);
+      }
+      rows.push(list);
+
+      const done = el('button', 'lbtn primary', summary ? 'DESCEND AGAIN' : 'BACK');
+      done.onclick = back;
+      rows.push(done);
+
+      this.show([...this.title('the shore'), ...rows]);
+    };
+
+    render();
+  }
+
   // -------------------------------------------------------------- options
 
   showOptions(back: () => void) {
     this.backTo = back;
     const rows: HTMLElement[] = [];
 
+    // Volume first: it is the setting a player reaches for soonest, and the one
+    // they want to change without hunting.
+    rows.push(
+      sliderRow('Sound', settings.sfxVolume, 0, 1, 0.05, (v) => {
+        settings.sfxVolume = v;
+        this.audio?.applyVolumes();
+        this.audio?.play('uiClick');
+        saveSettings();
+      })
+    );
+    rows.push(
+      sliderRow('Music', settings.musicVolume, 0, 1, 0.05, (v) => {
+        settings.musicVolume = v;
+        this.audio?.applyVolumes();
+        saveSettings();
+      })
+    );
     rows.push(
       toggleRow('Damage numbers', settings.damageNumbers, (v) => {
         settings.damageNumbers = v;
@@ -344,6 +461,12 @@ export class Menu {
 }
 
 // --------------------------------------------------------------- widgets
+
+function statLine(label: string, value: string) {
+  const r = el('div', 'lstat');
+  r.append(el('span', '', label), el('b', '', value));
+  return r;
+}
 
 function row(label: string, input: HTMLElement) {
   const r = el('label', 'lrow');

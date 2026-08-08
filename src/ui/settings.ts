@@ -9,6 +9,10 @@ export interface Settings {
   quality: 'low' | 'medium' | 'high';
   /** Extra camera distance, for players who want more of the room in frame. */
   zoom: number;
+  /** Combat and interface sounds. 0 is silence. */
+  sfxVolume: number;
+  /** The drone bed under the run, scaled separately — many players want only this off. */
+  musicVolume: number;
   playerName: string;
   relayUrl: string;
 }
@@ -21,6 +25,8 @@ export const DEFAULTS: Settings = {
   shadows: true,
   quality: 'high',
   zoom: 1,
+  sfxVolume: 0.8,
+  musicVolume: 0.5,
   playerName: 'Shade',
   relayUrl: '',
 };

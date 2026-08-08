@@ -17,7 +17,7 @@ export interface ClassDef {
   title: string;
   blurb: string;
   /** How the basic attack resolves. */
-  attack: "melee" | "arrow" | "orb";
+  attack: "melee" | "bolt" | "orb";
   maxHp: number;
   speed: number;
   /** Combo chain for the basic attack; ranged classes use a single entry. */
@@ -27,13 +27,13 @@ export interface ClassDef {
   /** Colour of this class's weapon trails and projectiles. */
   accent: number;
   castDamage: number;
-  weapon: "sword" | "bow" | "staff";
+  weapon: "sword" | "crossbow" | "staff";
 }
 
 /**
  * Three ways to fight the same rooms.
  *
- * Warrior wants to be inside the pack, archer wants a lane, mage wants the pack
+ * Warrior wants to be inside the pack, marksman wants a lane, mage wants the pack
  * clustered. Health and speed are tuned so the safest range is also the lowest
  * damage — standing where it hurts should pay.
  */
@@ -93,37 +93,40 @@ export const CLASSES: Record<ClassId, ClassDef> = {
 
   archer: {
     id: "archer",
-    name: "ARCHER",
+    name: "MARKSMAN",
     title: "Artemis-sworn",
     blurb:
-      "Piercing shots from range. Fragile, fastest on her feet, punishes a straight line.",
-    attack: "arrow",
+      "Crossbow bolts that punch through a line. Fragile and fastest on foot, but every shot costs a reload.",
+    attack: "bolt",
     maxHp: 82,
     speed: 9.1,
+    // A crossbow trades the bow's rhythm for weight: the shot leaves almost
+    // instantly, then the long recover *is* the reload. Damage per bolt is up so
+    // the class still trades evenly at range despite firing less often.
     combo: [
       {
-        wind: 0.05,
+        wind: 0.04,
         active: 0.04,
-        recover: 0.16,
+        recover: 0.34,
         arc: 0.2,
         reach: 18,
-        dmg: 14,
-        push: 3,
+        dmg: 21,
+        push: 5,
       },
     ],
     special: {
       kind: "volley",
-      wind: 0.16,
+      wind: 0.2,
       active: 0.06,
-      recover: 0.36,
-      arc: 0.62,
+      recover: 0.52,
+      arc: 0.5,
       reach: 18,
-      dmg: 12,
-      push: 3,
+      dmg: 15,
+      push: 4,
     },
     accent: 0x9ee06a,
     castDamage: 22,
-    weapon: "bow",
+    weapon: "crossbow",
   },
 
   mage: {

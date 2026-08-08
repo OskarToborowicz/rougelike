@@ -111,6 +111,26 @@ export const ARCHETYPES: Record<EnemyKind, Archetype> = {
   },
 };
 
+/**
+ * The three statuses a god's boon can actually inflict.
+ *
+ * Each one has to be a different *kind* of effect, not a different number, or
+ * the player has no reason to prefer one god's offer over another:
+ *   weak  — the foe hits softer (defensive)
+ *   doom  — a delayed lump of damage (burst, rewards moving on)
+ *   shock — a jolt that arcs to whatever is standing nearby (crowds)
+ */
+export type StatusKind = 'weak' | 'doom' | 'shock';
+
+/** Bit per status, for the HUD tint and the wire. Order matches STATUS_KINDS. */
+export const STATUS_KINDS: StatusKind[] = ['weak', 'doom', 'shock'];
+
+export const STATUS_COLOR: Record<StatusKind, number> = {
+  weak: 0xff6f9c,
+  doom: 0xe2384a,
+  shock: 0xffe066,
+};
+
 export type EnemyState =
   | 'spawn'
   | 'chase'
@@ -154,6 +174,18 @@ export class Enemy implements Actor {
   iframes = 0;
   stagger = 0;
   flash = 0;
+
+  /**
+   * Seconds left on each status. Zero means not afflicted; the World owns what
+   * they *do*, the Enemy only owns how long they last and how they look.
+   */
+  status: Record<StatusKind, number> = { weak: 0, doom: 0, shock: 0 };
+  /** Damage banked by Doom, paid out in one lump when the timer runs out. */
+  doomPayload = 0;
+  /** Player id owed the credit (crit, lifesteal, call gauge) for that payout. */
+  doomSourceId = -1;
+  /** Shock's own cooldown, so a burst of bolts can't chain-zap every frame. */
+  shockCd = 0;
 
   state: EnemyState = 'spawn';
   stateT = 0;
@@ -468,11 +500,29 @@ export class Enemy implements Actor {
     return this.a.speed * this.jitter;
   }
 
+  /** The status that gets to own the body tint. Doom first — it's the one on a clock. */
+  get worstStatus(): StatusKind | null {
+    if (this.status.doom > 0) return 'doom';
+    if (this.status.shock > 0) return 'shock';
+    if (this.status.weak > 0) return 'weak';
+    return null;
+  }
+
+  /** Statuses as a bitmask, for the wire. */
+  get statusBits() {
+    let bits = 0;
+    STATUS_KINDS.forEach((k, i) => {
+      if (this.status[k] > 0) bits |= 1 << i;
+    });
+    return bits;
+  }
+
   tick(dt: number) {
     this.stateT += dt;
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.flash = Math.max(0, this.flash - dt * 5);
     this.stagger = Math.max(0, this.stagger - dt);
+    this.shockCd = Math.max(0, this.shockCd - dt);
 
     this.mesh.position.x = this.pos.x;
     this.mesh.position.z = this.pos.z;
@@ -498,10 +548,23 @@ export class Enemy implements Actor {
     const winding = this.state === 'tell' || (this.state === 'pattern' && !this.strikeDone);
     const tellHeat = winding ? clamp(this.stateT / this.a.tell, 0, 1) : 0;
     const heat = tellHeat * tellHeat;
+    // A third, quieter language underneath both: statuses. They pulse rather
+    // than ramp or blink, so at a glance you can tell "afflicted" from "about to
+    // hit you" without reading a number. Anything louder wins the frame.
     if (this.flash > heat) {
       this.bodyMat.emissive.setRGB(this.flash, this.flash * 0.95, this.flash * 0.9);
-    } else {
+    } else if (heat > 0.02) {
       this.bodyMat.emissive.setRGB(heat * 1.6, heat * 0.12, heat * 0.05);
+    } else {
+      const worn = this.worstStatus;
+      if (worn) {
+        // Doom counts down visibly — the pulse tightens as the payload nears.
+        const rate = worn === 'doom' ? 5 + 10 / Math.max(0.2, this.status.doom) : 6;
+        const pulse = 0.16 + 0.14 * (0.5 + 0.5 * Math.sin(this.stateT * rate));
+        this.bodyMat.emissive.setHex(STATUS_COLOR[worn]).multiplyScalar(pulse);
+      } else {
+        this.bodyMat.emissive.setRGB(0, 0, 0);
+      }
     }
     // Wingbeat: slow while stalking, hard and fast through an attack.
     if (this.wings.length) {

@@ -1,6 +1,7 @@
 import type { Vfx } from './vfx';
 import type { Stage } from './scene';
 import type { WireFx } from '../net/protocol';
+import type { Audio } from '../audio/audio';
 
 /**
  * Every visual flourish goes through here instead of straight to Vfx.
@@ -15,7 +16,20 @@ export class FxBus {
   record = false;
   private log: WireFx[] = [];
 
-  constructor(private vfx: Vfx, private stage: Stage) {}
+  constructor(private vfx: Vfx, private stage: Stage, private audio?: Audio) {}
+
+  /**
+   * Play a sound, and record it for guests.
+   *
+   * Sound rides this bus rather than being called from the World directly for
+   * the same reason the sparks do: a guest never simulates, so the only way it
+   * can hear a hit is if the host tells it one happened. Everything already
+   * flows through here, so co-op audio costs one wire event and nothing else.
+   */
+  sfx(cue: string, x = 0, z = 0, power = 1) {
+    this.audio?.play(cue, { x, z }, power);
+    if (this.record) this.log.push(['sfx', cue, r(x), r(z), r(power)]);
+  }
 
   slash(
     x: number,
@@ -84,6 +98,9 @@ export class FxBus {
           break;
         case 'shake':
           this.stage.shake(e[1]);
+          break;
+        case 'sfx':
+          this.audio?.play(e[1], { x: e[2], z: e[3] }, e[4]);
           break;
       }
     }

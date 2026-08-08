@@ -47,9 +47,10 @@ export type WirePlayer = [
   number, number, number, number, number, number, number, number
 ];
 
-/** [id, kindIdx, x, z, facing, hp, maxHp, stateIdx, dead, enraged, flash] */
+/** [id, kindIdx, x, z, facing, hp, maxHp, stateIdx, dead, enraged, flash, statusBits] */
 export type WireEnemy = [
-  number, number, number, number, number, number, number, number, number, number, number
+  number, number, number, number, number, number, number, number, number, number, number,
+  number
 ];
 
 /** [id, x, z, colour, teamIsPlayer] */
@@ -63,6 +64,8 @@ export type WireFx =
   | ['ring', number, number, number, number, number]
   | ['trail', number, number, string]
   | ['shake', number]
+  /** ['sfx', cue name, x, z, power] — the audible half of a moment. */
+  | ['sfx', string, number, number, number]
   | ['dmg', number, number, number, number, string];
 
 export interface Snapshot {
@@ -90,31 +93,44 @@ export interface Snapshot {
   paused: boolean;
 }
 
-/** A boon as it travels to a guest's chooser. */
-export interface WireBoon {
+/**
+ * One card as it travels to a guest's chooser. Deliberately the exact shape the
+ * local chooser already renders, so a remote seat and a local seat see the same
+ * screen built from the same fields rather than two parallel layouts.
+ */
+export interface WireCard {
   id: string;
-  god: string;
   name: string;
   desc: string;
+  /** Small label above the name — a god, a slot, a rarity. */
+  kicker: string;
+  accent: string;
 }
 
-/** An open boon choice the host is waiting on. */
+/**
+ * An open choice the host is waiting on. Covers boons, hammers and poms: they
+ * differ only in their heading and colour, which is why they can share a wire
+ * format at all.
+ */
 export interface WireOffer {
   /** Which player must choose. */
   pid: number;
-  god: string;
-  boons: WireBoon[];
+  /** Heading — a god's name, 'HAMMER', 'EMPOWER'. */
+  title: string;
+  accent: string;
+  subtitle: string;
+  cards: WireCard[];
 }
 
 export type ClientMessage =
-  | { t: 'hello'; room: string; name: string; cls: string }
+  | { t: 'hello'; room: string; name: string; cls: string; meta?: string }
   | { t: 'in'; f: WireFrame }
   | { t: 'pick'; boonId: string }
   | Snapshot;
 
 export type ServerMessage =
   | { t: 'role'; role: 'host' | 'guest'; id: number; room: string }
-  | { t: 'join'; id: number; name: string; cls: string }
+  | { t: 'join'; id: number; name: string; cls: string; meta?: string }
   | { t: 'leave'; id: number }
   | { t: 'in'; id: number; f: WireFrame }
   | { t: 'pick'; id: number; boonId: string }
