@@ -5,7 +5,9 @@ import { Enemy, type EnemyKind, type EnemyState } from "../game/enemy";
 import { BoonSet } from "../game/boons";
 import { CLASS_ORDER } from "../game/classes";
 import type { FxBus } from "../render/fxbus";
-import { damp } from "../core/math";
+import { clamp } from "../core/math";
+import { stepMovement } from "../game/locomotion";
+import type { Frame as FrameInput } from "../core/input";
 import type {
   Snapshot,
   WireEnemy,
@@ -42,6 +44,7 @@ export function buildSnapshot(
   fx: FxBus,
   n: number,
   owners: [number, number][],
+  acks: [number, number][],
   depth: number,
   label: string,
   paused: boolean,
@@ -63,6 +66,7 @@ export function buildSnapshot(
     r(p.iframes),
     Math.max(0, CLASS_ORDER.indexOf(p.cls)),
     p.usingSpecial ? 1 : 0,
+    r(p.speed * p.boons.moveMul),
   ]);
 
   const enemies: WireEnemy[] = world.enemies.map((e) => [
@@ -95,6 +99,7 @@ export function buildSnapshot(
     projectiles,
     fx: fx.drain(),
     owners,
+    acks,
     depth,
     label,
     paused,
@@ -110,11 +115,38 @@ export function buildSnapshot(
  * and just writes authoritative transforms into them each snapshot, easing
  * between packets so 30Hz on the wire still renders smoothly.
  */
+/** One entity's authoritative transform at a point in time. */
+interface Pose {
+  x: number;
+  z: number;
+}
+
+/** A received snapshot, stamped on arrival so no clock sync is needed. */
+interface Keyframe {
+  t: number;
+  poses: Map<number, Pose>;
+}
+
+/**
+ * How far behind the newest snapshot the guest renders other players.
+ *
+ * Rendering the instant a packet lands means every hitch in the network shows up
+ * as a stutter in the world. Holding ~110ms of buffer means there is almost
+ * always a *next* keyframe to interpolate toward, so motion stays smooth and
+ * only latency — not jitter — is visible.
+ */
+const INTERP_MS = 110;
+
 export class RemoteView {
   players = new Map<number, Player>();
   enemies = new Map<number, Enemy>();
   private bolts = new Map<number, THREE.Mesh>();
-  private targets = new Map<number, { x: number; z: number }>();
+  private history: Keyframe[] = [];
+  /** Inputs this client has predicted but the host has not confirmed. */
+  private pending: { seq: number; frame: FrameInput; dt: number }[] = [];
+  /** Authoritative pose of the local shade, from the newest snapshot. */
+  private localAuth: Pose | null = null;
+  private lastAck = 0;
   private lastTick = -1;
   depth = 1;
   label = "";
@@ -145,6 +177,9 @@ export class RemoteView {
 
     this.offers = snap.offers ?? [];
 
+    /** Authoritative poses carried by this snapshot, keyed by entity id. */
+    const poses = new Map<number, Pose>();
+
     const seenP = new Set<number>();
     for (const w of snap.players) {
       const [
@@ -163,6 +198,7 @@ export class RemoteView {
         iframes,
         clsIdx,
         spec,
+        moveSpeed,
       ] = w;
       seenP.add(id);
       let p = this.players.get(id);
@@ -179,8 +215,10 @@ export class RemoteView {
         this.scene.add(p.mesh);
       }
       p.usingSpecial = !!spec;
-      this.targets.set(id, { x, z });
-      p.facing = facing;
+      poses.set(id, { x, z });
+      // The local shade's facing is predicted, not replicated — it follows the
+      // mouse with zero latency and the host agrees a moment later anyway.
+      if (id !== this.myPlayerId) p.facing = facing;
       p.hp = hp;
       p.maxHp = maxHp;
       p.state = PLAYER_STATES[st] ?? "idle";
@@ -189,12 +227,14 @@ export class RemoteView {
       p.callGauge = call;
       p.reviveProgress = revive;
       p.iframes = iframes;
+      // Folded into `speed` with moveMul left at 1, so the predictor uses the
+      // host's effective figure without needing to know the boons behind it.
+      if (moveSpeed) p.speed = moveSpeed;
     }
     for (const [id, p] of this.players) {
       if (seenP.has(id)) continue;
       this.scene.remove(p.mesh);
       this.players.delete(id);
-      this.targets.delete(id);
     }
 
     const seenE = new Set<number>();
@@ -210,7 +250,7 @@ export class RemoteView {
         this.enemies.set(id, e);
         this.scene.add(e.mesh);
       }
-      this.targets.set(-id, { x, z });
+      poses.set(-id, { x, z });
       e.facing = facing;
       e.hp = hp;
       e.maxHp = maxHp;
@@ -226,11 +266,92 @@ export class RemoteView {
       if (seenE.has(id)) continue;
       this.scene.remove(e.mesh);
       this.enemies.delete(id);
-      this.targets.delete(-id);
     }
+
+    // Buffer the authoritative poses; `update` renders slightly in the past and
+    // interpolates between the two keyframes straddling that moment.
+    this.history.push({ t: performance.now(), poses });
+    while (this.history.length > 24) this.history.shift();
+
+    this.localAuth = poses.get(this.myPlayerId) ?? null;
+    this.lastAck = snap.acks?.find(([netId]) => netId === myNetId)?.[1] ?? this.lastAck;
+    this.reconcile();
 
     this.syncBolts(snap.projectiles);
     this.fx.replay(snap.fx);
+  }
+
+  /**
+   * Rewind the local shade to the last position the host confirmed, then replay
+   * every input the host has not seen yet.
+   *
+   * This is what makes prediction honest: the client is always exactly the
+   * authoritative state plus its own unacknowledged moves, so a disagreement
+   * resolves in one frame instead of rubber-banding.
+   */
+  private reconcile() {
+    const p = this.players.get(this.myPlayerId);
+    if (!p || !this.localAuth) return;
+
+    // Drop everything the host has already folded into the snapshot.
+    while (this.pending.length && this.pending[0].seq <= this.lastAck) this.pending.shift();
+
+    const replayed = {
+      pos: { x: this.localAuth.x, y: 0, z: this.localAuth.z },
+      vel: { x: p.vel.x, y: 0, z: p.vel.z },
+      facing: p.facing,
+      radius: p.radius,
+      speed: p.speed,
+      state: p.state as string,
+      stateT: p.stateT,
+      stagger: p.stagger,
+      isBusy: p.isBusy,
+    };
+    for (const step of this.pending) {
+      stepMovement(replayed, step.frame, step.dt, p.boons.moveMul);
+    }
+
+    // A small disagreement is smoothed away over the next few frames; a large
+    // one means we were wrong about something real, so take the host's word.
+    const err = Math.hypot(replayed.pos.x - p.pos.x, replayed.pos.z - p.pos.z);
+    if (err > 2.5) {
+      p.pos.set(replayed.pos.x, 0, replayed.pos.z);
+      p.vel.set(replayed.vel.x, 0, replayed.vel.z);
+    } else {
+      this.correction.x = replayed.pos.x - p.pos.x;
+      this.correction.z = replayed.pos.z - p.pos.z;
+    }
+  }
+
+  private correction = { x: 0, z: 0 };
+
+  /**
+   * Predict one frame of the local shade from local input, before the host has
+   * seen it. Called every render frame; `seq` is the packet the input went out
+   * on, or null when the frame was not sent.
+   */
+  predictLocal(dt: number, frame: FrameInput | null, seq: number | null) {
+    const p = this.players.get(this.myPlayerId);
+    if (!p) return;
+
+    // Only a living shade with input drives itself forward.
+    if (!p.dead && frame) {
+      stepMovement(p, frame, dt, p.boons.moveMul);
+      p.facing = Math.atan2(frame.aimX, frame.aimY);
+      if (seq !== null) this.pending.push({ seq, frame, dt });
+      // Roughly two seconds of unacked input; past that the link is gone.
+      while (this.pending.length > 120) this.pending.shift();
+    }
+
+    // The correction is bled off unconditionally. Gating it on having input
+    // meant a standing or downed player kept a stale offset forever, and the
+    // one place it matters most — a corpse waiting to be revived — never
+    // converged on where the host actually put it.
+    const k = Math.min(1, dt * 9);
+    p.pos.x += this.correction.x * k;
+    p.pos.z += this.correction.z * k;
+    this.correction.x -= this.correction.x * k;
+    this.correction.z -= this.correction.z * k;
   }
 
   /** Positions for the renderer's fixed bolt-light pool. */
@@ -272,29 +393,75 @@ export class RemoteView {
   }
 
   /**
-   * Runs every render frame. Eases positions toward the last authoritative one
-   * and ticks the rigs, so animation stays at display rate even though state
-   * only arrives 30 times a second.
+   * Runs every render frame. Other entities are interpolated from the keyframe
+   * buffer; the local shade keeps whatever prediction already put there.
    */
   update(dt: number) {
+    const sample = this.sampleAt(performance.now() - INTERP_MS);
+
     for (const [id, p] of this.players) {
-      const t = this.targets.get(id);
-      if (t) {
-        p.pos.x = damp(p.pos.x, t.x, 30, dt);
-        p.pos.z = damp(p.pos.z, t.z, 30, dt);
+      // The local shade is predicted, never interpolated — replaying its own
+      // input is what removes the round-trip from its movement.
+      if (id !== this.myPlayerId) {
+        const pose = sample.get(id);
+        if (pose) {
+          p.pos.x = pose.x;
+          p.pos.z = pose.z;
+        }
       }
       p.stateT += dt;
       p.tick(dt, null);
     }
     for (const [id, e] of this.enemies) {
-      const t = this.targets.get(-id);
-      if (t) {
-        e.pos.x = damp(e.pos.x, t.x, 30, dt);
-        e.pos.z = damp(e.pos.z, t.z, 30, dt);
+      const pose = sample.get(-id);
+      if (pose) {
+        e.pos.x = pose.x;
+        e.pos.z = pose.z;
       }
       e.stateT += dt;
       e.tick(dt);
     }
+  }
+
+  /**
+   * Positions at an arbitrary moment, interpolated between the two keyframes
+   * that straddle it. Falls back to the newest keyframe when the buffer has run
+   * dry — a stalled connection then looks like motion stopping, rather than
+   * entities teleporting when it resumes.
+   */
+  private sampleAt(when: number): Map<number, Pose> {
+    if (!this.history.length) return new Map();
+    const newest = this.history[this.history.length - 1];
+    if (when >= newest.t || this.history.length === 1) return newest.poses;
+
+    let a = this.history[0];
+    let b = newest;
+    for (let i = 0; i < this.history.length - 1; i++) {
+      if (this.history[i].t <= when && this.history[i + 1].t >= when) {
+        a = this.history[i];
+        b = this.history[i + 1];
+        break;
+      }
+    }
+    const span = b.t - a.t;
+    const alpha = span > 0 ? clamp((when - a.t) / span, 0, 1) : 1;
+
+    const out = new Map<number, Pose>();
+    for (const [id, pa] of a.poses) {
+      const pb = b.poses.get(id);
+      // An id in only one keyframe just spawned or died; hold it still rather
+      // than sliding it in from wherever it happens to be missing.
+      if (!pb) {
+        out.set(id, pa);
+        continue;
+      }
+      out.set(id, {
+        x: pa.x + (pb.x - pa.x) * alpha,
+        z: pa.z + (pb.z - pa.z) * alpha,
+      });
+    }
+    for (const [id, pb] of b.poses) if (!out.has(id)) out.set(id, pb);
+    return out;
   }
 
   /** Same contract as World.focus so the camera code is shared. */
@@ -330,7 +497,12 @@ export class RemoteView {
     this.players.clear();
     this.enemies.clear();
     this.bolts.clear();
-    this.targets.clear();
+    this.history.length = 0;
+    this.pending.length = 0;
+    this.localAuth = null;
+    this.lastAck = 0;
+    this.correction.x = 0;
+    this.correction.z = 0;
     this.lastTick = -1;
   }
 }

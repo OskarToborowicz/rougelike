@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Player, DASH } from './player';
 import type { AttackShape } from './classes';
+import { stepMovement } from './locomotion';
 import { BOSS_PATTERNS, Enemy, type BossPattern, type EnemyKind } from './enemy';
 import { separate, type Actor } from './actor';
 import { arenaRadius, makeGlowTexture } from '../render/arena';
@@ -245,26 +246,16 @@ export class World {
     }
 
     // --- locomotion ------------------------------------------------------
+    // Shared with the guest's predictor; both must integrate identically.
+    stepMovement(p, f, dt, b.moveMul);
     if (f && p.state !== 'dash' && p.stagger <= 0) {
-      const accel = p.isBusy ? 18 : 60;
-      const max = p.speed * b.moveMul * (p.state === 'attack' ? 0.25 : 1);
-      const wantX = f.moveX * max;
-      const wantZ = f.moveY * max;
-      p.vel.x = damp(p.vel.x, wantX, accel * 0.35, dt);
-      p.vel.z = damp(p.vel.z, wantZ, accel * 0.35, dt);
       p.state =
         p.state === 'idle' || p.state === 'run'
           ? Math.hypot(p.vel.x, p.vel.z) > 0.6
             ? 'run'
             : 'idle'
           : p.state;
-    } else if (!f) {
-      p.vel.multiplyScalar(Math.exp(-8 * dt));
     }
-
-    p.pos.x += p.vel.x * dt;
-    p.pos.z += p.vel.z * dt;
-    this.confine(p);
   }
 
   private confine(a: Actor) {

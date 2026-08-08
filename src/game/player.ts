@@ -1,19 +1,31 @@
-import * as THREE from 'three';
-import type { Actor } from './actor';
-import type { Frame } from '../core/input';
-import { angleDelta, clamp, damp } from '../core/math';
-import type { BoonSet } from './boons';
-import { addOutline } from '../render/outline';
-import { CLASSES, type AttackShape, type ClassDef, type ClassId } from './classes';
+import * as THREE from "three";
+import type { Actor } from "./actor";
+import type { Frame } from "../core/input";
+import { angleDelta, clamp, damp } from "../core/math";
+import type { BoonSet } from "./boons";
+import { addOutline } from "../render/outline";
+import {
+  CLASSES,
+  type AttackShape,
+  type ClassDef,
+  type ClassId,
+} from "./classes";
 
 export const PLAYER_TINTS = [0xff6a3d, 0x4fc3ff, 0x9d6bff, 0x5fe08a];
 
-export type PlayerState = 'idle' | 'run' | 'attack' | 'dash' | 'cast' | 'hurt' | 'down';
+export type PlayerState =
+  | "idle"
+  | "run"
+  | "attack"
+  | "dash"
+  | "cast"
+  | "hurt"
+  | "down";
 
 export const DASH = { dist: 4.6, time: 0.16, cooldown: 0.26, iframes: 0.22 };
 
 export class Player implements Actor {
-  team = 'player' as const;
+  team = "player" as const;
   pos = new THREE.Vector3();
   vel = new THREE.Vector3();
   facing = 0;
@@ -25,7 +37,7 @@ export class Player implements Actor {
   stagger = 0;
   flash = 0;
 
-  state: PlayerState = 'idle';
+  state: PlayerState = "idle";
   stateT = 0;
   comboIndex = 0;
   comboWindow = 0;
@@ -54,7 +66,7 @@ export class Player implements Actor {
     public seat: number,
     public boons: BoonSet,
     tint = PLAYER_TINTS[0],
-    public cls: ClassId = 'warrior'
+    public cls: ClassId = "warrior",
   ) {
     this.def = CLASSES[cls];
     this.maxHp = this.hp = this.def.maxHp;
@@ -69,7 +81,8 @@ export class Player implements Actor {
    */
   get currentAttack(): AttackShape {
     if (this.usingSpecial) return this.def.special;
-    const base = this.def.combo[clamp(this.comboIndex, 0, this.def.combo.length - 1)];
+    const base =
+      this.def.combo[clamp(this.comboIndex, 0, this.def.combo.length - 1)];
     const b = this.boons;
     if (b.attackSpeedMul === 1 && b.attackReachMul === 1) return base;
     return {
@@ -98,7 +111,10 @@ export class Player implements Actor {
       roughness: 0.72,
       metalness: 0.08,
     });
-    const cloth = new THREE.MeshStandardMaterial({ color: 0x171525, roughness: 0.95 });
+    const cloth = new THREE.MeshStandardMaterial({
+      color: 0x171525,
+      roughness: 0.95,
+    });
     const trim = new THREE.MeshStandardMaterial({
       color: 0xe8bb6b,
       roughness: 0.3,
@@ -107,19 +123,31 @@ export class Player implements Actor {
     });
 
     // Tapered torso — narrow waist, broad shoulders. A capsule has neither.
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.24, 0.78, 14), cloak);
+    const torso = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.42, 0.24, 0.78, 14),
+      cloak,
+    );
     torso.position.y = 1.08;
     torso.castShadow = true;
 
-    const chest = new THREE.Mesh(new THREE.SphereGeometry(0.33, 18, 14), this.bodyMat);
+    const chest = new THREE.Mesh(
+      new THREE.SphereGeometry(0.33, 18, 14),
+      this.bodyMat,
+    );
     chest.scale.set(1.15, 0.72, 0.85);
     chest.position.y = 1.42;
     chest.castShadow = true;
 
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, 0.16, 10), this.bodyMat);
+    const neck = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.11, 0.14, 0.16, 10),
+      this.bodyMat,
+    );
     neck.position.y = 1.62;
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 20, 16), this.bodyMat);
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(0.25, 20, 16),
+      this.bodyMat,
+    );
     head.scale.set(0.92, 1.08, 0.95);
     head.position.y = 1.82;
     head.castShadow = true;
@@ -132,22 +160,34 @@ export class Player implements Actor {
 
     // Shoulder pauldrons catch the key light and widen the top of the silhouette.
     for (const s of [-1, 1]) {
-      const pauldron = new THREE.Mesh(new THREE.SphereGeometry(0.19, 14, 10), trim);
+      const pauldron = new THREE.Mesh(
+        new THREE.SphereGeometry(0.19, 14, 10),
+        trim,
+      );
       pauldron.scale.set(1, 0.7, 1);
       pauldron.position.set(s * 0.4, 1.4, 0);
       pauldron.castShadow = true;
       this.mesh.add(pauldron);
     }
 
-    const belt = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.05, 8, 20).rotateX(Math.PI / 2), trim);
+    const belt = new THREE.Mesh(
+      new THREE.TorusGeometry(0.26, 0.05, 8, 20).rotateX(Math.PI / 2),
+      trim,
+    );
     belt.position.y = 0.72;
 
-    const skirt = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.66, 16, 1, true), cloth);
+    const skirt = new THREE.Mesh(
+      new THREE.ConeGeometry(0.5, 0.66, 16, 1, true),
+      cloth,
+    );
     skirt.position.y = 0.44;
     skirt.castShadow = true;
 
     for (const s of [-1, 1]) {
-      const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.3, 4, 8), this.bodyMat);
+      const leg = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.11, 0.3, 4, 8),
+        this.bodyMat,
+      );
       leg.position.set(s * 0.15, 0.24, 0);
       leg.castShadow = true;
       this.mesh.add(leg);
@@ -157,7 +197,11 @@ export class Player implements Actor {
 
     const shadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.6, 24).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 })
+      new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.35,
+      }),
     );
     shadow.position.y = 0.03;
 
@@ -166,7 +210,18 @@ export class Player implements Actor {
     const hero = new THREE.PointLight(tint, 6, 5.5, 2);
     hero.position.set(0, 2.6, 0.8);
 
-    this.mesh.add(torso, chest, neck, head, hair, belt, skirt, this.weaponPivot, shadow, hero);
+    this.mesh.add(
+      torso,
+      chest,
+      neck,
+      head,
+      hair,
+      belt,
+      skirt,
+      this.weaponPivot,
+      shadow,
+      hero,
+    );
     addOutline(this.mesh, 0.03);
   }
 
@@ -183,7 +238,10 @@ export class Player implements Actor {
       metalness: 0.9,
       emissive: 0x1b2540,
     });
-    const wood = new THREE.MeshStandardMaterial({ color: 0x5a3b22, roughness: 0.85 });
+    const wood = new THREE.MeshStandardMaterial({
+      color: 0x5a3b22,
+      roughness: 0.85,
+    });
     const glow = new THREE.MeshStandardMaterial({
       color: this.def.accent,
       emissive: this.def.accent,
@@ -193,32 +251,47 @@ export class Player implements Actor {
 
     this.weaponPivot.position.y = 1.0;
 
-    if (this.def.weapon === 'sword') {
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 1.9), steel);
+    if (this.def.weapon === "sword") {
+      const blade = new THREE.Mesh(
+        new THREE.BoxGeometry(0.1, 0.06, 1.9),
+        steel,
+      );
       blade.position.set(0.55, 0, 0.75);
       blade.castShadow = true;
-      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.1), trim);
+      const guard = new THREE.Mesh(
+        new THREE.BoxGeometry(0.34, 0.08, 0.1),
+        trim,
+      );
       guard.position.set(0.55, 0, -0.12);
       this.weapon = blade;
       this.weaponPivot.add(blade, guard);
       return;
     }
 
-    if (this.def.weapon === 'bow') {
+    if (this.def.weapon === "bow") {
       // Bow held across the body, limbs curving forward.
-      const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.34, 6), wood);
+      const grip = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.045, 0.045, 0.34, 6),
+        wood,
+      );
       grip.position.set(0.5, 0, 0.42);
       grip.castShadow = true;
       const group = new THREE.Group();
       group.add(grip);
       for (const s of [-1, 1]) {
-        const limb = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.035, 6, 14, 1.25), wood);
+        const limb = new THREE.Mesh(
+          new THREE.TorusGeometry(0.52, 0.035, 6, 14, 1.25),
+          wood,
+        );
         limb.position.set(0.5, s * 0.17, 0.42);
         limb.rotation.set(Math.PI / 2, 0, s > 0 ? 0.62 : -0.62 + Math.PI);
         limb.castShadow = true;
         group.add(limb);
       }
-      const string = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.5, 4), glow);
+      const string = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.012, 0.012, 1.5, 4),
+        glow,
+      );
       string.position.set(0.5, 0, 0.3);
       group.add(string);
       this.weapon = grip;
@@ -227,7 +300,10 @@ export class Player implements Actor {
     }
 
     // Staff: long shaft, planted upright, with a floating focus stone.
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 2.3, 7), wood);
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.06, 2.3, 7),
+      wood,
+    );
     shaft.position.set(0.5, 0.25, 0.2);
     shaft.rotation.set(0.22, 0, -0.14);
     shaft.castShadow = true;
@@ -240,7 +316,9 @@ export class Player implements Actor {
   }
 
   get isBusy() {
-    return this.state === 'attack' || this.state === 'dash' || this.state === 'cast';
+    return (
+      this.state === "attack" || this.state === "dash" || this.state === "cast"
+    );
   }
 
   hurt(amount: number) {
@@ -251,7 +329,7 @@ export class Player implements Actor {
     this.stagger = 0.18;
     if (this.hp <= 0) {
       this.dead = true;
-      this.state = 'down';
+      this.state = "down";
       this.deathCd = 0;
     }
     return true;
@@ -285,8 +363,9 @@ export class Player implements Actor {
     // Facing eases toward aim, but locks hard during an attack's active frames.
     if (f) {
       const wantFacing = Math.atan2(f.aimX, f.aimY);
-      const rate = this.state === 'attack' ? 3 : 18;
-      this.facing += angleDelta(this.facing, wantFacing) * clamp(rate * dt, 0, 1);
+      const rate = this.state === "attack" ? 3 : 18;
+      this.facing +=
+        angleDelta(this.facing, wantFacing) * clamp(rate * dt, 0, 1);
     }
 
     this.mesh.position.copy(this.pos);
@@ -295,35 +374,46 @@ export class Player implements Actor {
     // Run bob — small, but it's the difference between sliding and walking.
     const speed = Math.hypot(this.vel.x, this.vel.z);
     this.bob += dt * (6 + speed * 1.4);
-    this.mesh.position.y = Math.abs(Math.sin(this.bob)) * (speed > 0.5 ? 0.09 : 0.02);
+    this.mesh.position.y =
+      Math.abs(Math.sin(this.bob)) * (speed > 0.5 ? 0.09 : 0.02);
 
     this.animateWeapon(dt);
-    this.bodyMat.emissive.setRGB(this.flash, this.flash * 0.85, this.flash * 0.8);
-    if (this.iframes > 0 && this.state === 'dash') {
+    this.bodyMat.emissive.setRGB(
+      this.flash,
+      this.flash * 0.85,
+      this.flash * 0.8,
+    );
+    if (this.iframes > 0 && this.state === "dash") {
       this.bodyMat.emissive.addScalar(0.25);
     }
   }
 
   private animateWeapon(dt: number) {
-    const rest = this.def.weapon === 'sword' ? -0.5 : this.def.weapon === 'bow' ? -0.2 : -0.05;
+    const rest =
+      this.def.weapon === "sword"
+        ? -0.5
+        : this.def.weapon === "bow"
+          ? -0.2
+          : -0.05;
     let targetY = rest;
-    let targetX = this.def.weapon === 'staff' ? 0 : 0.1;
+    let targetX = this.def.weapon === "staff" ? 0 : 0.1;
 
-    if (this.state === 'attack') {
+    if (this.state === "attack") {
       const a = this.currentAttack;
       const total = a.wind + a.active + a.recover;
 
-      if (this.def.weapon === 'sword') {
+      if (this.def.weapon === "sword") {
         const t = clamp(this.stateT / total, 0, 1);
         // Wind up back, then whip through the arc, then settle.
         const swing = t < a.wind / total ? -0.9 * (t / (a.wind / total)) : 1;
         const through = clamp((this.stateT - a.wind) / a.active, 0, 1);
-        this.weaponPivot.rotation.y = swing < 1 ? -0.5 + swing * 0.8 : -1.3 + through * (a.arc + 0.6);
+        this.weaponPivot.rotation.y =
+          swing < 1 ? -0.5 + swing * 0.8 : -1.3 + through * (a.arc + 0.6);
         this.weaponPivot.rotation.x = this.usingSpecial ? -0.35 : 0.05;
         return;
       }
 
-      if (this.def.weapon === 'bow') {
+      if (this.def.weapon === "bow") {
         // Draw back through the wind-up, snap forward on release.
         const draw = clamp(this.stateT / a.wind, 0, 1);
         const released = this.stateT >= a.wind;
@@ -340,7 +430,17 @@ export class Player implements Actor {
       return;
     }
 
-    this.weaponPivot.rotation.y = damp(this.weaponPivot.rotation.y, targetY, 12, dt);
-    this.weaponPivot.rotation.x = damp(this.weaponPivot.rotation.x, targetX, 12, dt);
+    this.weaponPivot.rotation.y = damp(
+      this.weaponPivot.rotation.y,
+      targetY,
+      12,
+      dt,
+    );
+    this.weaponPivot.rotation.x = damp(
+      this.weaponPivot.rotation.x,
+      targetX,
+      12,
+      dt,
+    );
   }
 }

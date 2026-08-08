@@ -583,12 +583,14 @@ function loop(now: number) {
   stage.pointerToFloor(input.ndc, input.mouseWorld);
 
   if (running && mode === "guest") {
-    // Guests simulate nothing: send intent, render what the host says is true.
+    // Guests own nothing but their own intent: predict the local shade from it
+    // immediately, ship it, and render everyone else from the host's snapshots.
     const me = remote.players.get(remote.myPlayerId) ?? remote.playerList[0];
 
     const f = input.sample(0, me?.pos.x ?? 0, me?.pos.z ?? 0);
 
-    net.sendInput(f);
+    const seq = net.sendInput(f, now);
+    remote.predictLocal(dt, f, seq);
     remote.update(dt);
 
     // Seats appear on a guest as the host's roster arrives, not up front.
@@ -687,6 +689,8 @@ function loop(now: number) {
 
     if (mode === "host" && net.peers.length) {
       const owners: [number, number][] = [...seatOwner.entries()];
+      // Tell each guest which of its inputs this snapshot already accounts for.
+      const acks: [number, number][] = [...net.consumed.entries()];
 
       net.sendSnapshot(
         buildSnapshot(
@@ -694,6 +698,7 @@ function loop(now: number) {
           fx,
           tick++,
           owners,
+          acks,
           director.depth,
           director.label,
           paused,

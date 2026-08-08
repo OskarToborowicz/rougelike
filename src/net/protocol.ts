@@ -5,10 +5,14 @@ export const MAX_PLAYERS = 4;
 /** Fixed order — the index is the wire bit, so this list must never be reordered. */
 export const ACTIONS: Action[] = ['attack', 'special', 'cast', 'dash', 'call', 'interact'];
 
-/** Inputs go out every tick, so they travel as a packed array, not an object. */
-export type WireFrame = [number, number, number, number, number, number];
+/**
+ * Inputs go out every tick, so they travel as a packed array, not an object.
+ * The trailing value is the sequence number, echoed back by the host so the
+ * guest knows which of its predicted steps have been confirmed.
+ */
+export type WireFrame = [number, number, number, number, number, number, number];
 
-export function encodeFrame(f: Frame): WireFrame {
+export function encodeFrame(f: Frame, seq = 0): WireFrame {
   let pressed = 0;
   let held = 0;
   ACTIONS.forEach((a, i) => {
@@ -17,7 +21,7 @@ export function encodeFrame(f: Frame): WireFrame {
   });
   // Two decimals is well under the resolution of a 60Hz analogue stick.
   const q = (n: number) => Math.round(n * 100) / 100;
-  return [q(f.moveX), q(f.moveY), q(f.aimX), q(f.aimY), pressed, held];
+  return [q(f.moveX), q(f.moveY), q(f.aimX), q(f.aimY), pressed, held, seq];
 }
 
 export function decodeFrame(w: WireFrame): Frame {
@@ -32,11 +36,15 @@ export function decodeFrame(w: WireFrame): Frame {
 
 /**
  * [id, seat, x, z, facing, hp, maxHp, stateIdx, dead, castAmmo, callGauge,
- *  revive, iframes, classIdx, usingSpecial]
+ *  revive, iframes, classIdx, usingSpecial, moveSpeed]
+ *
+ * `moveSpeed` is the *effective* top speed after boons. The guest predicts its
+ * own movement and has no idea what boons the host applied, so sending the
+ * derived number keeps prediction and simulation on the same footing.
  */
 export type WirePlayer = [
   number, number, number, number, number, number, number, number,
-  number, number, number, number, number, number, number
+  number, number, number, number, number, number, number, number
 ];
 
 /** [id, kindIdx, x, z, facing, hp, maxHp, stateIdx, dead, enraged, flash] */
@@ -69,6 +77,12 @@ export interface Snapshot {
   owners: [number, number][];
   /** Boon choices the host is currently waiting on, if any. */
   offers?: WireOffer[];
+  /**
+   * [network id, last input sequence the host consumed]. Guests replay only the
+   * inputs newer than their ack, which is what keeps prediction from fighting
+   * the authoritative state.
+   */
+  acks: [number, number][];
   depth: number;
   label: string;
   /** Non-empty when the host wants a banner shown on every screen. */

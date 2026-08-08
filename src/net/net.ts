@@ -97,6 +97,8 @@ export class Net {
       }
       case 'in':
         this.remoteFrames.set(msg.id, decodeFrame(msg.f));
+        // Remember which input this was, so the snapshot can acknowledge it.
+        this.consumed.set(msg.id, msg.f[6] ?? 0);
         break;
       case 'sn':
         this.handlers.onSnapshot?.(msg);
@@ -107,11 +109,34 @@ export class Net {
     }
   }
 
-  /** Guest → host, every tick. */
-  sendInput(f: Frame) {
-    if (this.role !== 'guest' || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    const w: WireFrame = encodeFrame(f);
-    this.ws.send(JSON.stringify({ t: 'in', f: w }));
+  /** Sequence of the next input this guest will send. */
+  private seq = 1;
+  private nextInputAt = 0;
+  /** Last sequence the host confirmed consuming, per network id. */
+  readonly acks = new Map<number, number>();
+  /** Sequence numbers the host has consumed from each guest. */
+  readonly consumed = new Map<number, number>();
+
+  /**
+   * Guest → host at a fixed 60Hz.
+   *
+   * The render loop can run at 144Hz; sending an input packet per rendered frame
+   * floods the socket with duplicates the host cannot use. Returns the sequence
+   * stamped on the packet so the caller can record what it predicted.
+   */
+  sendInput(f: Frame, now: number): number | null {
+    if (this.role !== 'guest' || !this.ws || this.ws.readyState !== WebSocket.OPEN) return null;
+    // Deadline-based rather than a simple gap check: comparing against the last
+    // send time quantises to the render cadence, so a 144Hz client sending
+    // "every 16ms" actually sends every 21ms. Advancing a deadline keeps the
+    // long-run average honest.
+    const period = 1000 / 60;
+    if (this.nextInputAt === 0) this.nextInputAt = now;
+    if (now < this.nextInputAt) return null;
+    this.nextInputAt = Math.max(now - period, this.nextInputAt + period);
+    const seq = this.seq++;
+    this.ws.send(JSON.stringify({ t: 'in', f: encodeFrame(f, seq) }));
+    return seq;
   }
 
   /** Guest → host, once, when the player picks from their boon offer. */
