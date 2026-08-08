@@ -1,30 +1,30 @@
-import * as THREE from 'three';
-import { Stage } from './render/scene';
-import { Arena } from './render/arena';
-import { Vfx } from './render/vfx';
-import { FxBus } from './render/fxbus';
-import { Input, type Frame } from './core/input';
-import { World } from './game/world';
-import { Player, PLAYER_TINTS } from './game/player';
-import { BoonSet, offer, randomGod, type Boon, type God } from './game/boons';
-import type { WireOffer } from './net/protocol';
-import { CLASSES, type ClassId } from './game/classes';
-import { biomeForDepth } from './render/biome';
-import { Director } from './game/director';
-import { Gate } from './game/gate';
-import { offerDoors, type Reward } from './game/rewards';
-import { hammerColor, offerHammers } from './game/hammers';
-import { GODS } from './game/boons';
-import { shuffle } from './core/math';
-import { Hud } from './ui/hud';
-import { Menu } from './ui/menu';
-import { pixelRatioFor, settings } from './ui/settings';
-import { Net } from './net/net';
-import { MAX_PLAYERS } from './net/protocol';
-import { buildSnapshot, RemoteView } from './net/sync';
-import { clamp } from './core/math';
+import * as THREE from "three";
+import { Stage } from "./render/scene";
+import { Arena } from "./render/arena";
+import { Vfx } from "./render/vfx";
+import { FxBus } from "./render/fxbus";
+import { Input, type Frame } from "./core/input";
+import { World } from "./game/world";
+import { Player, PLAYER_TINTS } from "./game/player";
+import { BoonSet, offer, randomGod, type Boon, type God } from "./game/boons";
+import type { WireOffer } from "./net/protocol";
+import { CLASSES, type ClassId } from "./game/classes";
+import { biomeForDepth } from "./render/biome";
+import { Director } from "./game/director";
+import { Gate } from "./game/gate";
+import { offerDoors, type Reward } from "./game/rewards";
+import { hammerColor, offerHammers } from "./game/hammers";
+import { GODS } from "./game/boons";
+import { shuffle } from "./core/math";
+import { Hud } from "./ui/hud";
+import { Menu } from "./ui/menu";
+import { pixelRatioFor, settings } from "./ui/settings";
+import { Net } from "./net/net";
+import { MAX_PLAYERS } from "./net/protocol";
+import { buildSnapshot, RemoteView } from "./net/sync";
+import { clamp } from "./core/math";
 
-const host = document.getElementById('app')!;
+const host = document.getElementById("app")!;
 const stage = new Stage(host);
 const arena = new Arena(stage.scene);
 stage.root.add(arena.group);
@@ -37,7 +37,11 @@ const menu = new Menu(document.body);
 const world = new World(stage.root, fx);
 const remote = new RemoteView(stage.root, fx);
 /** Pool of doors. Never more than three are shown at once. */
-const gates = [new Gate(stage.root), new Gate(stage.root), new Gate(stage.root)];
+const gates = [
+  new Gate(stage.root),
+  new Gate(stage.root),
+  new Gate(stage.root),
+];
 const openGates = () => gates.filter((g) => g.isVisible);
 const hideGates = () => gates.forEach((g) => g.hide());
 
@@ -45,12 +49,13 @@ const hideGates = () => gates.forEach((g) => g.hide());
  * Seat labels. The class matters more than the shade's name once four people are
  * on screen — you need to know at a glance whose health bar is the fragile mage.
  */
-const seatLabel = (seat: number, cls: ClassId) => `P${seat + 1} · ${CLASSES[cls].name}`;
+const seatLabel = (seat: number, cls: ClassId) =>
+  `P${seat + 1} · ${CLASSES[cls].name}`;
 
 /** Which network id owns which seat. Seat 0 is always the local host player. */
 const seatOwner = new Map<number, number>();
 
-let mode: 'solo' | 'host' | 'guest' = 'solo';
+let mode: "solo" | "host" | "guest" = "solo";
 let paused = true;
 let running = false;
 const focus = new THREE.Vector3();
@@ -58,14 +63,14 @@ const frames = new Map<number, Frame | null>();
 
 const net = new Net({
   onRole: (role, _id, room) => {
-    mode = role === 'host' ? 'host' : 'guest';
-    menu.showRoom(room, role === 'host', startRun);
+    mode = role === "host" ? "host" : "guest";
+    menu.showRoom(room, role === "host", startRun);
     refreshRoster();
-    menu.setStatus(role === 'guest' ? 'connected — waiting for the host' : '');
+    menu.setStatus(role === "guest" ? "connected — waiting for the host" : "");
   },
   onJoin: () => {
     refreshRoster();
-    if (mode === 'host') {
+    if (mode === "host") {
       fx.record = true;
       if (running) seatJoin();
     }
@@ -75,22 +80,22 @@ const net = new Net({
     dropSeat(id);
   },
   onSnapshot: (snap) => {
-    if (mode !== 'guest') return;
+    if (mode !== "guest") return;
     if (!running) {
       running = true;
       menu.hide();
     }
     remote.apply(snap, net.id);
   },
-  onFull: () => menu.setStatus('that room is full — four shades is the limit'),
+  onFull: () => menu.setStatus("that room is full — four shades is the limit"),
   onClose: () => {
-    if (mode === 'guest' && running) {
+    if (mode === "guest" && running) {
       // The host owned the simulation, so there is nothing left to play.
       running = false;
       remote.clear();
       hud.reset();
       boot();
-      menu.setStatus('lost the host — the run is over');
+      menu.setStatus("lost the host — the run is over");
     }
   },
 });
@@ -100,7 +105,7 @@ const net = new Net({
  * moment two clients share an origin — a second tab overwrites the key and the
  * host starts displaying the guest's name as its own.
  */
-let localName = 'Shade';
+let localName = "Shade";
 
 function refreshRoster() {
   menu.setRoster([localName, ...net.peers.map((p) => p.name)]);
@@ -108,8 +113,14 @@ function refreshRoster() {
 
 // ---------------------------------------------------------------- seating
 
-function addSeat(seat: number, cls: ClassId = 'warrior') {
-  const p = new Player(0, seat, new BoonSet(), PLAYER_TINTS[seat % PLAYER_TINTS.length], cls);
+function addSeat(seat: number, cls: ClassId = "warrior") {
+  const p = new Player(
+    0,
+    seat,
+    new BoonSet(),
+    PLAYER_TINTS[seat % PLAYER_TINTS.length],
+    cls,
+  );
   const a = (seat / MAX_PLAYERS) * Math.PI * 2;
   p.pos.set(Math.cos(a) * 2, 0, 3 + Math.sin(a) * 2);
   world.addPlayer(p);
@@ -122,11 +133,17 @@ function seatJoin() {
   for (const peer of net.peers) {
     if (seatOwner.has(peer.id)) continue;
     if (world.players.length >= MAX_PLAYERS) return;
-    const p = addSeat(world.players.length, (peer.cls as ClassId) ?? 'warrior');
+    const p = addSeat(world.players.length, (peer.cls as ClassId) ?? "warrior");
     seatOwner.set(peer.id, p.id);
     // A new arrival means the room needs to grow.
     reshapeArena();
-    fx.ring(p.pos.x, p.pos.z, PLAYER_TINTS[p.seat % PLAYER_TINTS.length], 2.2, 0.6);
+    fx.ring(
+      p.pos.x,
+      p.pos.z,
+      PLAYER_TINTS[p.seat % PLAYER_TINTS.length],
+      2.2,
+      0.6,
+    );
     hud.showBanner(`${peer.name} joins`);
   }
 }
@@ -148,7 +165,7 @@ const director = new Director(world, () => world.players.length);
 function startRun() {
   running = true;
   paused = false;
-  if (mode === 'host') {
+  if (mode === "host") {
     fx.record = net.peers.length > 0;
     seatJoin();
   }
@@ -161,7 +178,7 @@ function startRun() {
  * those actually changed, so it is safe to call whenever the run moves on.
  */
 function reshapeArena() {
-  const guest = mode === 'guest';
+  const guest = mode === "guest";
   // A guest has no director of its own; depth and roster arrive in snapshots.
   const depth = guest ? remote.depth : director.depth;
   const count = guest ? remote.playerList.length : world.players.length;
@@ -170,13 +187,13 @@ function reshapeArena() {
 
 /** A second local gamepad joins in solo/host play — couch co-op needs no menu. */
 function checkLocalJoin() {
-  if (mode === 'guest' || !running) return;
+  if (mode === "guest" || !running) return;
   if (!input.hasSecondPad) return;
   if (world.players.some((p) => p.seat === 1)) return;
   if (world.players.length >= MAX_PLAYERS) return;
   const p = addSeat(1);
   fx.ring(p.pos.x, p.pos.z, PLAYER_TINTS[1], 2.2, 0.6);
-  hud.showBanner('Player Two');
+  hud.showBanner("Player Two");
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -211,7 +228,12 @@ async function runBoonRound(god: God) {
     .map((r) => ({
       pid: r.p.id,
       god: r.god,
-      boons: r.choices.map((b) => ({ id: b.id, god: b.god, name: b.name, desc: b.desc })),
+      boons: r.choices.map((b) => ({
+        id: b.id,
+        god: b.god,
+        name: b.name,
+        desc: b.desc,
+      })),
     }));
 
   const remote = rolls.filter((r) => isRemoteSeat(r.p.id));
@@ -236,7 +258,11 @@ async function runBoonRound(god: God) {
   // Local seats share one screen, so they must choose one after another.
   const localPicks: { p: Player; boon: Boon }[] = [];
   for (const r of local) {
-    const boon = await hud.offerBoons(r.god, r.choices, seatLabel(r.p.seat, r.p.cls));
+    const boon = await hud.offerBoons(
+      r.god,
+      r.choices,
+      seatLabel(r.p.seat, r.p.cls),
+    );
     localPicks.push({ p: r.p, boon });
   }
 
@@ -252,17 +278,17 @@ async function runBoonRound(god: God) {
 
 /** Pay out whatever the chosen door promised. */
 async function grantReward(reward: Reward) {
-  if (reward.kind === 'boon' && reward.god) {
+  if (reward.kind === "boon" && reward.god) {
     await runBoonRound(reward.god);
     return;
   }
 
-  if (reward.kind === 'hammer') {
+  if (reward.kind === "hammer") {
     await runHammerRound();
     return;
   }
 
-  if (reward.kind === 'pom') {
+  if (reward.kind === "pom") {
     await runPomRound();
     return;
   }
@@ -272,7 +298,7 @@ async function grantReward(reward: Reward) {
     p.hp = p.maxHp;
     fx.ring(p.pos.x, p.pos.z, reward.color, 2.4, 0.6);
   }
-  hud.showBanner('Vitality');
+  hud.showBanner("Vitality");
   await wait(900);
 }
 
@@ -289,8 +315,8 @@ async function runHammerRound() {
       continue;
     }
     const picked = await hud.offerCards(
-      'HAMMER',
-      '#ffb04a',
+      "HAMMER",
+      "#ffb04a",
       `A weapon upgrade for ${seatLabel(p.seat, p.cls)}`,
       choices.map((h) => ({
         id: h.id,
@@ -298,7 +324,7 @@ async function runHammerRound() {
         desc: h.desc,
         kicker: h.slot,
         accent: hammerColor(h),
-      }))
+      })),
     );
     const h = choices.find((x) => x.id === picked.id)!;
     h.apply(p.boons);
@@ -319,18 +345,18 @@ async function runPomRound() {
       continue;
     }
     const picked = await hud.offerCards(
-      'EMPOWER',
-      '#d6a6ff',
+      "EMPOWER",
+      "#d6a6ff",
       `Strengthen a boon of ${seatLabel(p.seat, p.cls)}`,
       choices.map((b) => ({
         id: b.id,
-        name: `${b.name}  ${'I'.repeat(Math.min(5, p.boons.levelOf(b.id)))}→${'I'.repeat(
-          Math.min(5, p.boons.levelOf(b.id) + 1)
+        name: `${b.name}  ${"I".repeat(Math.min(5, p.boons.levelOf(b.id)))}→${"I".repeat(
+          Math.min(5, p.boons.levelOf(b.id) + 1),
         )}`,
         desc: b.desc,
         kicker: b.god,
         accent: GODS[b.god].css,
-      }))
+      })),
     );
     p.boons.upgrade(held.find((b) => b.id === picked.id)!);
     p.castAmmo = 3 + p.boons.extraCastAmmo;
@@ -341,7 +367,7 @@ async function runPomRound() {
 async function onChamberCleared() {
   paused = true;
   fx.ring(0, 0, 0xffd27f, 3, 0.8);
-  hud.showBanner('Chamber Cleared');
+  hud.showBanner("Chamber Cleared");
   // Let the banner finish its full animation before the boon screen comes up —
   // the two overlap in the middle of the frame otherwise.
   await wait(2000);
@@ -353,9 +379,13 @@ async function onChamberCleared() {
   // agrees on a door — not when the last enemy falls.
   paused = false;
   const anyBoons = world.players.some((p) => p.boons.taken.length > 0);
-  const doors = offerDoors(director.depth, Math.random() < 0.25 ? 3 : 2, anyBoons);
+  const doors = offerDoors(
+    director.depth,
+    Math.random() < 0.25 ? 3 : 2,
+    anyBoons,
+  );
   doors.forEach((door, i) => gates[i].show(door, i, doors.length));
-  hud.showBanner('Choose Your Path');
+  hud.showBanner("Choose Your Path");
 
   const chosen = await new Promise<Gate | null>((resolve) => {
     const check = () => {
@@ -369,7 +399,7 @@ async function onChamberCleared() {
 
   const reward = chosen?.reward ?? null;
   // The door also decides what kind of fight waits on the other side.
-  director.room = chosen?.room ?? 'combat';
+  director.room = chosen?.room ?? "combat";
   hideGates();
   hud.setGatePrompt(null);
   paused = true;
@@ -384,22 +414,25 @@ async function onChamberCleared() {
     if (p.dead) {
       p.dead = false;
       p.hp = p.maxHp * 0.5;
-      p.state = 'idle';
+      p.state = "idle";
       p.reviveProgress = 0;
     }
   }
   // Crossing into a new region is the run's landmark; say so instead of
   // announcing another anonymous chamber number.
   hud.showBanner(
-    director.biome.id !== wasBiome ? director.biome.name : `Chamber ${director.depth}`
+    director.biome.id !== wasBiome
+      ? director.biome.name
+      : `Chamber ${director.depth}`,
   );
   paused = false;
 }
 
-const isRemoteSeat = (playerId: number) => [...seatOwner.values()].includes(playerId);
+const isRemoteSeat = (playerId: number) =>
+  [...seatOwner.values()].includes(playerId);
 
 /** Offer id the guest is currently showing, so it opens exactly once. */
-let shownOffer = '';
+let shownOffer = "";
 
 /**
  * Guest side of the boon round. The host publishes open offers in the snapshot;
@@ -409,15 +442,15 @@ let shownOffer = '';
 function checkGuestOffer() {
   const mine = remote.offers.find((o) => o.pid === remote.myPlayerId);
   if (!mine) {
-    shownOffer = '';
+    shownOffer = "";
     return;
   }
-  const key = `${mine.pid}:${mine.boons.map((b) => b.id).join(',')}`;
+  const key = `${mine.pid}:${mine.boons.map((b) => b.id).join(",")}`;
   if (key === shownOffer) return;
   shownOffer = key;
 
   const me = remote.players.get(remote.myPlayerId);
-  const seatName = me ? seatLabel(me.seat, me.cls) : 'SHADE';
+  const seatName = me ? seatLabel(me.seat, me.cls) : "SHADE";
   hud
     .offerBoons(mine.god as God, mine.boons as unknown as Boon[], seatName)
     .then((picked) => net.sendPick(picked.id));
@@ -430,7 +463,7 @@ function checkGuestOffer() {
  */
 async function onWipe() {
   paused = true;
-  hud.showBanner('You Have Died');
+  hud.showBanner("You Have Died");
   fx.shake(0.9);
   await wait(2300);
   world.clearEnemies();
@@ -442,7 +475,7 @@ async function onWipe() {
     p.boons = new BoonSet();
     p.hp = p.maxHp;
     p.dead = false;
-    p.state = 'idle';
+    p.state = "idle";
     p.iframes = 1.5;
     p.reviveProgress = 0;
     p.castAmmo = 3;
@@ -452,7 +485,7 @@ async function onWipe() {
     p.vel.set(0, 0, 0);
   }
   director.depth = 1;
-  director.room = 'combat';
+  director.room = "combat";
   director.buildChamber();
   reshapeArena();
   hud.showBanner(director.biome.name);
@@ -474,16 +507,17 @@ let pauseHeld = false;
  * simulation for everyone else, and a guest cannot pause a world it does not
  * own. In a real party the menu still opens for settings, but the fight runs on.
  */
-addEventListener('keydown', (e) => {
-  if (e.code !== 'Escape' || !running || menu.isPaused) return;
-  const canFreeze = mode === 'solo' || (mode === 'host' && net.peers.length === 0);
+addEventListener("keydown", (e) => {
+  if (e.code !== "Escape" || !running || menu.isPaused) return;
+  const canFreeze =
+    mode === "solo" || (mode === "host" && net.peers.length === 0);
   e.preventDefault();
   if (canFreeze) pauseHeld = true;
   menu.openPause(
     () => {
       pauseHeld = false;
     },
-    () => abandonRun()
+    () => abandonRun(),
   );
 });
 
@@ -493,13 +527,15 @@ addEventListener('keydown', (e) => {
  * Applied every frame but guarded on change, so a slider moved in the pause menu
  * takes effect on the next frame instead of on the next run.
  */
-let appliedQuality = '';
+let appliedQuality = "";
 let appliedShadows: boolean | null = null;
 
 function applySettings() {
   if (appliedQuality !== settings.quality) {
     appliedQuality = settings.quality;
-    stage.renderer.setPixelRatio(Math.min(devicePixelRatio, pixelRatioFor(settings.quality)));
+    stage.renderer.setPixelRatio(
+      Math.min(devicePixelRatio, pixelRatioFor(settings.quality)),
+    );
   }
   if (appliedShadows !== settings.shadows) {
     appliedShadows = settings.shadows;
@@ -533,7 +569,7 @@ async function abandonRun() {
   hud.reset();
   seatOwner.clear();
   director.depth = 1;
-  director.room = 'combat';
+  director.room = "combat";
   director.buildChamber();
   boot();
 }
@@ -545,7 +581,7 @@ function loop(now: number) {
 
   stage.pointerToFloor(input.ndc, input.mouseWorld);
 
-  if (running && mode === 'guest') {
+  if (running && mode === "guest") {
     // Guests simulate nothing: send intent, render what the host says is true.
     const me = remote.players.get(remote.myPlayerId) ?? remote.playerList[0];
     const f = input.sample(0, me?.pos.x ?? 0, me?.pos.z ?? 0);
@@ -555,8 +591,15 @@ function loop(now: number) {
     for (const p of remote.playerList) {
       if (!hud.hasSeat(p.seat)) hud.addSeat(p.seat, seatLabel(p.seat, p.cls));
     }
-    hud.update(remote.playerList, remote.depth, remote.label, biomeForDepth(remote.depth).name);
-    hud.updateBoss([...remote.enemies.values()].find((e) => e.a.boss && !e.dead) ?? null);
+    hud.update(
+      remote.playerList,
+      remote.depth,
+      remote.label,
+      biomeForDepth(remote.depth).name,
+    );
+    hud.updateBoss(
+      [...remote.enemies.values()].find((e) => e.a.boss && !e.dead) ?? null,
+    );
     checkGuestOffer();
     reshapeArena();
   } else if (running) {
@@ -565,12 +608,14 @@ function loop(now: number) {
     if (!paused && !pauseHeld) {
       frames.clear();
       for (const p of world.players) {
-        const owner = [...seatOwner.entries()].find(([, pid]) => pid === p.id)?.[0];
+        const owner = [...seatOwner.entries()].find(
+          ([, pid]) => pid === p.id,
+        )?.[0];
         frames.set(
           p.id,
           owner === undefined
             ? input.sample(p.seat, p.pos.x, p.pos.z)
-            : net.remoteFrames.get(owner) ?? null
+            : (net.remoteFrames.get(owner) ?? null),
         );
       }
       world.update(dt, frames);
@@ -600,20 +645,34 @@ function loop(now: number) {
           ? p.of > 1
             ? `${active.caption} — ${p.in} / ${p.of}`
             : active.caption
-          : 'Choose a door'
+          : "Choose a door",
       );
     }
 
-    hud.update(world.players, director.depth, director.label, director.biome.name);
+    hud.update(
+      world.players,
+      director.depth,
+      director.label,
+      director.biome.name,
+    );
     hud.updateBoss(world.enemies.find((e) => e.a.boss && !e.dead) ?? null);
     // Cheap no-op unless the region or the party size actually changed.
     reshapeArena();
 
-    if (mode === 'host' && net.peers.length) {
+    if (mode === "host" && net.peers.length) {
       const owners: [number, number][] = [...seatOwner.entries()];
       net.sendSnapshot(
-        buildSnapshot(world, fx, tick++, owners, director.depth, director.label, paused, openOffers),
-        now
+        buildSnapshot(
+          world,
+          fx,
+          tick++,
+          owners,
+          director.depth,
+          director.label,
+          paused,
+          openOffers,
+        ),
+        now,
       );
     }
   }
@@ -624,12 +683,13 @@ function loop(now: number) {
   // Hand the fixed light pool the nearest few bolts, so a volley still lights
   // the floor without spawning a light per projectile.
   const lit =
-    running && mode === 'guest'
+    running && mode === "guest"
       ? remote.boltPositions()
       : world.projectiles.map((p) => ({ pos: p.pos, color: p.color }));
   stage.lightBolts(lit.slice(0, 5));
 
-  let spread = running && mode === 'guest' ? remote.focus(focus) : world.focus(focus);
+  let spread =
+    running && mode === "guest" ? remote.focus(focus) : world.focus(focus);
 
   // Pull the open doors into frame the same way a boss is pulled in — a choice
   // between exits you cannot see is not a choice. Bias toward their midpoint so
@@ -647,7 +707,10 @@ function loop(now: number) {
     focus.x += (mx - focus.x) * 0.4;
     focus.z += (mz - focus.z) * 0.4;
     for (const g of live) {
-      spread = Math.max(spread, Math.hypot(g.position.x - focus.x, g.position.z - focus.z));
+      spread = Math.max(
+        spread,
+        Math.hypot(g.position.x - focus.x, g.position.z - focus.z),
+      );
     }
   }
 
@@ -666,17 +729,23 @@ function loop(now: number) {
 
 async function boot() {
   const choice = await menu.choose();
-  if (choice.mode !== 'solo') localName = choice.name;
-  if (choice.mode === 'solo') {
-    mode = 'solo';
+  if (choice.mode !== "solo") localName = choice.name;
+  if (choice.mode === "solo") {
+    mode = "solo";
     addSeat(0, choice.cls);
     startRun();
     return;
   }
-  menu.setStatus('connecting…');
-  net.connect(choice.url, choice.room, choice.name, choice.cls);
-  if (choice.mode === 'host') {
-    mode = 'host';
+  menu.setStatus("connecting…");
+  net.connect(
+    import.meta.env.VITE_RELAY_URL,
+
+    choice.room,
+    choice.name,
+    choice.cls,
+  );
+  if (choice.mode === "host") {
+    mode = "host";
     addSeat(0, choice.cls);
   }
   // Guests get no local Player at all — their shade is whatever the host's
