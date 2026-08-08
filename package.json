@@ -1,0 +1,21 @@
+{
+  "name": "styx",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "relay": "node server/relay.mjs"
+  },
+  "dependencies": {
+    "three": "^0.169.0",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@types/three": "^0.169.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
