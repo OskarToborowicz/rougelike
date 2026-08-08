@@ -576,6 +576,7 @@ async function abandonRun() {
 
 function loop(now: number) {
   requestAnimationFrame(loop);
+
   const dt = clamp((now - last) / 1000, 0, 0.05);
   last = now;
 
@@ -584,22 +585,30 @@ function loop(now: number) {
   if (running && mode === "guest") {
     // Guests simulate nothing: send intent, render what the host says is true.
     const me = remote.players.get(remote.myPlayerId) ?? remote.playerList[0];
+
     const f = input.sample(0, me?.pos.x ?? 0, me?.pos.z ?? 0);
+
     net.sendInput(f);
     remote.update(dt);
+
     // Seats appear on a guest as the host's roster arrives, not up front.
     for (const p of remote.playerList) {
-      if (!hud.hasSeat(p.seat)) hud.addSeat(p.seat, seatLabel(p.seat, p.cls));
+      if (!hud.hasSeat(p.seat)) {
+        hud.addSeat(p.seat, seatLabel(p.seat, p.cls));
+      }
     }
+
     hud.update(
       remote.playerList,
       remote.depth,
       remote.label,
       biomeForDepth(remote.depth).name,
     );
+
     hud.updateBoss(
       [...remote.enemies.values()].find((e) => e.a.boss && !e.dead) ?? null,
     );
+
     checkGuestOffer();
     reshapeArena();
   } else if (running) {
@@ -607,10 +616,12 @@ function loop(now: number) {
 
     if (!paused && !pauseHeld) {
       frames.clear();
+
       for (const p of world.players) {
         const owner = [...seatOwner.entries()].find(
           ([, pid]) => pid === p.id,
         )?.[0];
+
         frames.set(
           p.id,
           owner === undefined
@@ -618,15 +629,22 @@ function loop(now: number) {
             : (net.remoteFrames.get(owner) ?? null),
         );
       }
+
       world.update(dt, frames);
       director.update(dt);
 
       if (world.livePlayers.length === 0 && !clearedHandled) {
         clearedHandled = true;
-        onWipe().then(() => (clearedHandled = false));
+
+        onWipe().then(() => {
+          clearedHandled = false;
+        });
       } else if (director.chamberDone && !clearedHandled) {
         clearedHandled = true;
-        onChamberCleared().then(() => (clearedHandled = false));
+
+        onChamberCleared().then(() => {
+          clearedHandled = false;
+        });
       }
     } else {
       // Keep the world breathing behind the boon screen, just without agency.
@@ -634,12 +652,18 @@ function loop(now: number) {
       world.update(dt * 0.35, frames);
     }
 
-    for (const g of gates) g.update(dt, world.players);
+    for (const g of gates) {
+      g.update(dt, world.players);
+    }
+
     const live = openGates();
+
     if (live.length) {
       // Prompt for whichever door someone is actually standing in.
       const active = live.find((g) => g.progress(world.players).in > 0);
+
       const p = active?.progress(world.players);
+
       hud.setGatePrompt(
         active && p
           ? p.of > 1
@@ -655,12 +679,15 @@ function loop(now: number) {
       director.label,
       director.biome.name,
     );
+
     hud.updateBoss(world.enemies.find((e) => e.a.boss && !e.dead) ?? null);
+
     // Cheap no-op unless the region or the party size actually changed.
     reshapeArena();
 
     if (mode === "host" && net.peers.length) {
       const owners: [number, number][] = [...seatOwner.entries()];
+
       net.sendSnapshot(
         buildSnapshot(
           world,
@@ -680,33 +707,41 @@ function loop(now: number) {
   arena.update(dt);
   vfx.update(dt);
 
-  // Hand the fixed light pool the nearest few bolts, so a volley still lights
-  // the floor without spawning a light per projectile.
+  // Hand the fixed light pool the nearest few bolts,
+  // so a volley still lights the floor without spawning a light per projectile.
   const lit =
     running && mode === "guest"
       ? remote.boltPositions()
-      : world.projectiles.map((p) => ({ pos: p.pos, color: p.color }));
+      : world.projectiles.map((p) => ({
+          pos: p.pos,
+          color: p.color,
+        }));
+
   stage.lightBolts(lit.slice(0, 5));
 
   let spread =
     running && mode === "guest" ? remote.focus(focus) : world.focus(focus);
 
-  // Pull the open doors into frame the same way a boss is pulled in — a choice
-  // between exits you cannot see is not a choice. Bias toward their midpoint so
-  // every option stays on screen at once.
-  const live = openGates();
-  if (live.length) {
+  // Pull the open doors into frame the same way a boss is pulled in —
+  // a choice between exits you cannot see is not a choice.
+  const liveGates = openGates();
+
+  if (liveGates.length) {
     let mx = 0;
     let mz = 0;
-    for (const g of live) {
+
+    for (const g of liveGates) {
       mx += g.position.x;
       mz += g.position.z;
     }
-    mx /= live.length;
-    mz /= live.length;
+
+    mx /= liveGates.length;
+    mz /= liveGates.length;
+
     focus.x += (mx - focus.x) * 0.4;
     focus.z += (mz - focus.z) * 0.4;
-    for (const g of live) {
+
+    for (const g of liveGates) {
       spread = Math.max(
         spread,
         Math.hypot(g.position.x - focus.x, g.position.z - focus.z),
@@ -717,8 +752,11 @@ function loop(now: number) {
   stage.follow(focus, dt, spread);
   arena.cullOccluders(stage.camera, focus);
 
-  if (settings.damageNumbers) hud.spawnDamage(world.damageEvents, stage.camera);
-  else world.damageEvents.length = 0;
+  if (settings.damageNumbers) {
+    hud.spawnDamage(world.damageEvents, stage.camera);
+  } else {
+    world.damageEvents.length = 0;
+  }
 
   applySettings();
   input.endFrame();
@@ -739,7 +777,6 @@ async function boot() {
   menu.setStatus("connecting…");
   net.connect(
     import.meta.env.VITE_RELAY_URL,
-
     choice.room,
     choice.name,
     choice.cls,

@@ -1,25 +1,39 @@
-import * as THREE from 'three';
-import type { World } from '../game/world';
-import { Player, PLAYER_TINTS, type PlayerState } from '../game/player';
-import { Enemy, type EnemyKind, type EnemyState } from '../game/enemy';
-import { BoonSet } from '../game/boons';
-import { CLASS_ORDER } from '../game/classes';
-import type { FxBus } from '../render/fxbus';
-import { damp } from '../core/math';
-import type { Snapshot, WireEnemy, WireOffer, WirePlayer, WireProjectile } from './protocol';
+import * as THREE from "three";
+import type { World } from "../game/world";
+import { Player, PLAYER_TINTS, type PlayerState } from "../game/player";
+import { Enemy, type EnemyKind, type EnemyState } from "../game/enemy";
+import { BoonSet } from "../game/boons";
+import { CLASS_ORDER } from "../game/classes";
+import type { FxBus } from "../render/fxbus";
+import { damp } from "../core/math";
+import type {
+  Snapshot,
+  WireEnemy,
+  WireOffer,
+  WirePlayer,
+  WireProjectile,
+} from "./protocol";
 
 // Fixed index tables. Order is part of the wire format — append only.
-const PLAYER_STATES: PlayerState[] = ['idle', 'run', 'attack', 'dash', 'cast', 'hurt', 'down'];
-const ENEMY_STATES: EnemyState[] = [
-  'spawn',
-  'chase',
-  'tell',
-  'strike',
-  'recover',
-  'dead',
-  'pattern',
+const PLAYER_STATES: PlayerState[] = [
+  "idle",
+  "run",
+  "attack",
+  "dash",
+  "cast",
+  "hurt",
+  "down",
 ];
-const ENEMY_KINDS: EnemyKind[] = ['wretch', 'lobber', 'brute', 'erinys'];
+const ENEMY_STATES: EnemyState[] = [
+  "spawn",
+  "chase",
+  "tell",
+  "strike",
+  "recover",
+  "dead",
+  "pattern",
+];
+const ENEMY_KINDS: EnemyKind[] = ["wretch", "lobber", "brute", "erinys"];
 
 const r = (n: number) => Math.round(n * 100) / 100;
 
@@ -31,7 +45,7 @@ export function buildSnapshot(
   depth: number,
   label: string,
   paused: boolean,
-  offers: WireOffer[] = []
+  offers: WireOffer[] = [],
 ): Snapshot {
   const players: WirePlayer[] = world.players.map((p) => [
     p.id,
@@ -70,11 +84,11 @@ export function buildSnapshot(
     r(pr.pos.x),
     r(pr.pos.z),
     pr.color,
-    pr.team === 'player' ? 1 : 0,
+    pr.team === "player" ? 1 : 0,
   ]);
 
   return {
-    t: 'sn',
+    t: "sn",
     n,
     players,
     enemies,
@@ -103,14 +117,17 @@ export class RemoteView {
   private targets = new Map<number, { x: number; z: number }>();
   private lastTick = -1;
   depth = 1;
-  label = '';
+  label = "";
   paused = false;
   /** Player id this client controls, resolved from the snapshot's owner table. */
   myPlayerId = -1;
   /** Boon choices the host is waiting on. */
   offers: WireOffer[] = [];
 
-  constructor(private scene: THREE.Object3D, private fx: FxBus) {}
+  constructor(
+    private scene: THREE.Object3D,
+    private fx: FxBus,
+  ) {}
 
   /** Ordered by seat, so the HUD can lay out player one through four. */
   get playerList() {
@@ -120,7 +137,8 @@ export class RemoteView {
   apply(snap: Snapshot, myNetId: number) {
     if (snap.n <= this.lastTick) return; // stale or duplicated packet
     this.lastTick = snap.n;
-    this.myPlayerId = snap.owners.find(([netId]) => netId === myNetId)?.[1] ?? -1;
+    this.myPlayerId =
+      snap.owners.find(([netId]) => netId === myNetId)?.[1] ?? -1;
     this.depth = snap.depth;
     this.label = snap.label;
     this.paused = snap.paused;
@@ -129,8 +147,23 @@ export class RemoteView {
 
     const seenP = new Set<number>();
     for (const w of snap.players) {
-      const [id, seat, x, z, facing, hp, maxHp, st, dead, ammo, call, revive, iframes, clsIdx, spec] =
-        w;
+      const [
+        id,
+        seat,
+        x,
+        z,
+        facing,
+        hp,
+        maxHp,
+        st,
+        dead,
+        ammo,
+        call,
+        revive,
+        iframes,
+        clsIdx,
+        spec,
+      ] = w;
       seenP.add(id);
       let p = this.players.get(id);
       if (!p) {
@@ -139,7 +172,7 @@ export class RemoteView {
           seat,
           new BoonSet(),
           PLAYER_TINTS[seat % PLAYER_TINTS.length],
-          CLASS_ORDER[clsIdx] ?? 'warrior'
+          CLASS_ORDER[clsIdx] ?? "warrior",
         );
         p.pos.set(x, 0, z);
         this.players.set(id, p);
@@ -150,7 +183,7 @@ export class RemoteView {
       p.facing = facing;
       p.hp = hp;
       p.maxHp = maxHp;
-      p.state = PLAYER_STATES[st] ?? 'idle';
+      p.state = PLAYER_STATES[st] ?? "idle";
       p.dead = !!dead;
       p.castAmmo = ammo;
       p.callGauge = call;
@@ -166,11 +199,12 @@ export class RemoteView {
 
     const seenE = new Set<number>();
     for (const w of snap.enemies) {
-      const [id, kindIdx, x, z, facing, hp, maxHp, st, dead, enraged, flash] = w;
+      const [id, kindIdx, x, z, facing, hp, maxHp, st, dead, enraged, flash] =
+        w;
       seenE.add(id);
       let e = this.enemies.get(id);
       if (!e) {
-        e = new Enemy(id, ENEMY_KINDS[kindIdx] ?? 'wretch');
+        e = new Enemy(id, ENEMY_KINDS[kindIdx] ?? "wretch");
         e.pos.set(x, 0, z);
         e.mesh.position.set(x, -1.2, z);
         this.enemies.set(id, e);
@@ -180,7 +214,7 @@ export class RemoteView {
       e.facing = facing;
       e.hp = hp;
       e.maxHp = maxHp;
-      const next = ENEMY_STATES[st] ?? 'chase';
+      const next = ENEMY_STATES[st] ?? "chase";
       // stateT drives the tell ramp and the death sink, so restart it on change.
       if (next !== e.state) e.stateT = 0;
       e.state = next;
@@ -214,10 +248,13 @@ export class RemoteView {
       let m = this.bolts.get(id);
       if (!m) {
         // No per-bolt light: the renderer pools a fixed set of them instead.
-        const tint = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.55);
+        const tint = new THREE.Color(color).lerp(
+          new THREE.Color(0xffffff),
+          0.55,
+        );
         m = new THREE.Mesh(
           new THREE.SphereGeometry(0.26, 12, 10),
-          new THREE.MeshBasicMaterial({ color: tint })
+          new THREE.MeshBasicMaterial({ color: tint }),
         );
         m.userData.glowColor = color;
         this.bolts.set(id, m);
@@ -243,8 +280,8 @@ export class RemoteView {
     for (const [id, p] of this.players) {
       const t = this.targets.get(id);
       if (t) {
-        p.pos.x = damp(p.pos.x, t.x, 16, dt);
-        p.pos.z = damp(p.pos.z, t.z, 16, dt);
+        p.pos.x = damp(p.pos.x, t.x, 30, dt);
+        p.pos.z = damp(p.pos.z, t.z, 30, dt);
       }
       p.stateT += dt;
       p.tick(dt, null);
@@ -252,8 +289,8 @@ export class RemoteView {
     for (const [id, e] of this.enemies) {
       const t = this.targets.get(-id);
       if (t) {
-        e.pos.x = damp(e.pos.x, t.x, 16, dt);
-        e.pos.z = damp(e.pos.z, t.z, 16, dt);
+        e.pos.x = damp(e.pos.x, t.x, 30, dt);
+        e.pos.z = damp(e.pos.z, t.z, 30, dt);
       }
       e.stateT += dt;
       e.tick(dt);
@@ -270,13 +307,17 @@ export class RemoteView {
     out.divideScalar(list.length);
 
     let spread = 0;
-    for (const p of list) spread = Math.max(spread, Math.hypot(p.pos.x - out.x, p.pos.z - out.z));
+    for (const p of list)
+      spread = Math.max(spread, Math.hypot(p.pos.x - out.x, p.pos.z - out.z));
 
     const boss = [...this.enemies.values()].find((e) => e.a.boss && !e.dead);
     if (boss) {
       out.x += (boss.pos.x - out.x) * 0.42;
       out.z += (boss.pos.z - out.z) * 0.42;
-      spread = Math.max(spread, Math.hypot(boss.pos.x - out.x, boss.pos.z - out.z));
+      spread = Math.max(
+        spread,
+        Math.hypot(boss.pos.x - out.x, boss.pos.z - out.z),
+      );
     }
     out.y = 0;
     return spread;
