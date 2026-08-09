@@ -4,6 +4,24 @@ import type { Enemy } from '../game/enemy';
 import { GODS } from '../game/boons';
 import type { DamageEvent } from '../game/world';
 import { clamp } from '../core/math';
+import { ROOMS, type RoomKind } from '../game/rewards';
+import { onLanguageChange, t } from './i18n';
+
+/**
+ * Turn the director's wave token into a line of text. The token travels to
+ * guests in every snapshot precisely so each client can render it in its own
+ * language — see Director.label.
+ */
+export function waveLabel(token: string) {
+  if (token === 'cleared') return t('wave.cleared');
+  if (token === 'boss') return t('wave.boss');
+  const [, room, i, n] = token.split(':');
+  if (!i) return token;
+  const wave = t('wave.n', { i, n });
+  return room && room !== 'combat'
+    ? `${ROOMS[room as RoomKind].label} · ${wave}`
+    : wave;
+}
 
 const el = (tag: string, cls?: string, html?: string) => {
   const n = document.createElement(tag);
@@ -32,6 +50,7 @@ interface SeatUi {
   call: HTMLElement;
   boons: HTMLElement;
   downed: HTMLElement;
+  name: HTMLElement;
   lastBoonCount: number;
 }
 
@@ -82,13 +101,16 @@ export class Hud {
     this.gatePrompt.id = 'gateprompt';
     this.root.appendChild(this.gatePrompt);
 
-    const hint = el(
-      'div',
-      '',
-      'WASD move · LMB attack · RMB special · Q cast · F call · SPACE dash · pad 2 joins as player two'
-    );
+    const hint = el('div', '', t('hud.hint'));
     hint.id = 'hint';
     this.root.appendChild(hint);
+    // Written once at boot and then left on screen, so it has to be told.
+    onLanguageChange(() => {
+      hint.textContent = t('hud.hint');
+      // Boon chips are only rebuilt when the count changes; force the next frame
+      // to redraw them so their names follow the language too.
+      for (const s of this.seats) s.lastBoonCount = -1;
+    });
   }
 
   addSeat(index: number, name: string) {
@@ -104,7 +126,8 @@ export class Hud {
     callbar.appendChild(call);
     const boons = el('div', 'boons');
     const downed = el('div', 'downed', '');
-    root.append(el('div', 'name', name), bar, pips, callbar, boons, downed);
+    const nameEl = el('div', 'name', name);
+    root.append(nameEl, bar, pips, callbar, boons, downed);
     this.root.appendChild(root);
     this.seats.push({
       seat: index,
@@ -116,8 +139,15 @@ export class Hud {
       call,
       boons,
       downed,
+      name: nameEl,
       lastBoonCount: -1,
     });
+  }
+
+  /** Re-title a seat — the class name changes with the language. */
+  setSeatName(seat: number, name: string) {
+    const s = this.seats.find((x) => x.seat === seat);
+    if (s) s.name.textContent = name;
   }
 
   /** Tear the per-run HUD down, for returning to the title screen. */
@@ -136,12 +166,12 @@ export class Hud {
   update(
     players: Player[],
     depth: number,
-    waveLabel: string,
-    region = 'Tartarus',
+    waveToken: string,
+    region: string,
     runObols = 0
   ) {
-    this.roomDepth.textContent = `${region} · Chamber ${depth}`;
-    this.roomWave.textContent = waveLabel;
+    this.roomDepth.textContent = t('hud.room', { region, n: depth });
+    this.roomWave.textContent = waveLabel(waveToken);
     // Stays blank until the first obol drops, so a brand new player is never
     // shown a counter for a system they have not met yet.
     this.purse.textContent = runObols > 0 ? `${runObols} ◆` : '';
@@ -152,10 +182,10 @@ export class Hud {
       // the remaining ones must keep their own corner of the screen.
       const s = this.seats.find((x) => x.seat === p.seat);
       if (!s) return;
-      const t = clamp(p.hp / p.maxHp, 0, 1);
-      worst = Math.min(worst, p.dead ? 0 : t);
-      s.fill.style.transform = `scaleX(${t})`;
-      s.lag.style.transform = `scaleX(${t})`;
+      const frac = clamp(p.hp / p.maxHp, 0, 1);
+      worst = Math.min(worst, p.dead ? 0 : frac);
+      s.fill.style.transform = `scaleX(${frac})`;
+      s.lag.style.transform = `scaleX(${frac})`;
       s.num.textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
 
       const ammo = 3 + p.boons.extraCastAmmo;
@@ -183,7 +213,7 @@ export class Hud {
       }
 
       s.downed.textContent = p.dead
-        ? `DOWNED — ${Math.round(p.reviveProgress * 100)}%  (stand close to revive)`
+        ? t('hud.downed', { pct: Math.round(p.reviveProgress * 100) })
         : '';
     });
 
@@ -194,11 +224,11 @@ export class Hud {
   updateBoss(boss: Enemy | null) {
     this.boss.classList.toggle('show', !!boss && !boss.dead);
     if (!boss) return;
-    const t = clamp(boss.hp / boss.maxHp, 0, 1);
-    this.bossFill.style.transform = `scaleX(${t})`;
-    this.bossLag.style.transform = `scaleX(${t})`;
+    const frac = clamp(boss.hp / boss.maxHp, 0, 1);
+    this.bossFill.style.transform = `scaleX(${frac})`;
+    this.bossLag.style.transform = `scaleX(${frac})`;
     this.boss.classList.toggle('enraged', boss.enraged);
-    const title = boss.a.title ?? 'BOSS';
+    const title = boss.a.title ?? t('hud.boss');
     if (this.bossTitle.textContent !== title) this.bossTitle.textContent = title;
   }
 
@@ -268,7 +298,7 @@ export class Hud {
           kicker,
           el('div', 'cname', card.name),
           el('div', 'cdesc', card.desc),
-          el('div', 'key', `press ${i + 1}`)
+          el('div', 'key', t('hud.press', { n: i + 1 }))
         );
         c.onclick = () => finish(card);
         list.appendChild(c);

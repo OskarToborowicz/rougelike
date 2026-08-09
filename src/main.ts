@@ -14,8 +14,9 @@ import { biomeForDepth } from "./render/biome";
 import { Director } from "./game/director";
 import { Gate } from "./game/gate";
 import { offerDoors, type Reward } from "./game/rewards";
-import { hammerColor, offerHammers } from "./game/hammers";
-import { GODS } from "./game/boons";
+import { hammerColor, hammerSlotLabel, offerHammers } from "./game/hammers";
+import { godName, GODS } from "./game/boons";
+import { onLanguageChange, t } from "./ui/i18n";
 import { shuffle } from "./core/math";
 import { Hud } from "./ui/hud";
 import { Menu, type RunSummary } from "./ui/menu";
@@ -66,7 +67,14 @@ const hideGates = () => gates.forEach((g) => g.hide());
  * on screen — you need to know at a glance whose health bar is the fragile mage.
  */
 const seatLabel = (seat: number, cls: ClassId) =>
-  `P${seat + 1} · ${CLASSES[cls].name}`;
+  t("hud.seat", { n: seat + 1, cls: CLASSES[cls].name });
+
+// Seat titles are written once when the seat is created, so switching language
+// mid-run has to go back and re-title them.
+onLanguageChange(() => {
+  const seated = mode === "guest" ? remote.playerList : world.players;
+  for (const p of seated) hud.setSeatName(p.seat, seatLabel(p.seat, p.cls));
+});
 
 /** Which network id owns which seat. Seat 0 is always the local host player. */
 const seatOwner = new Map<number, number>();
@@ -82,7 +90,7 @@ const net = new Net({
     mode = role === "host" ? "host" : "guest";
     menu.showRoom(room, role === "host", startRun);
     refreshRoster();
-    menu.setStatus(role === "guest" ? "connected — waiting for the host" : "");
+    menu.setStatus(role === "guest" ? t("net.waitingHost") : "");
   },
   onJoin: () => {
     refreshRoster();
@@ -103,7 +111,7 @@ const net = new Net({
     }
     remote.apply(snap, net.id);
   },
-  onFull: () => menu.setStatus("that room is full — four shades is the limit"),
+  onFull: () => menu.setStatus(t("net.full")),
   onClose: () => {
     if (mode === "guest" && running) {
       // The host owned the simulation, so there is nothing left to play.
@@ -111,7 +119,7 @@ const net = new Net({
       remote.clear();
       hud.reset();
       boot();
-      menu.setStatus("lost the host — the run is over");
+      menu.setStatus(t("net.lostHost"));
     }
   },
 });
@@ -121,7 +129,7 @@ const net = new Net({
  * moment two clients share an origin — a second tab overwrites the key and the
  * host starts displaying the guest's name as its own.
  */
-let localName = "Shade";
+let localName = t("menu.defaultName");
 
 function refreshRoster() {
   menu.setRoster([localName, ...net.peers.map((p) => p.name)]);
@@ -176,7 +184,7 @@ function seatJoin() {
       2.2,
       0.6,
     );
-    hud.showBanner(`${peer.name} joins`);
+    hud.showBanner(t("banner.joins", { name: peer.name }));
   }
 }
 
@@ -247,7 +255,7 @@ function checkLocalJoin() {
   if (world.players.length >= MAX_PLAYERS) return;
   const p = addSeat(1);
   fx.ring(p.pos.x, p.pos.z, PLAYER_TINTS[1], 2.2, 0.6);
-  hud.showBanner("Player Two");
+  hud.showBanner(t("banner.playerTwo"));
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -346,15 +354,15 @@ async function runCardRound<T extends { id: string }>(round: CardRound<T>) {
 
 const runBoonRound = (god: God) =>
   runCardRound<Boon>({
-    title: () => god,
+    title: () => godName(god),
     accent: () => GODS[god].css,
-    subtitle: (p) => `A boon for ${seatLabel(p.seat, p.cls)}`,
+    subtitle: (p) => t("round.sub.boon", { seat: seatLabel(p.seat, p.cls) }),
     choices: (p) => offer(p.boons, 3),
     card: (_p, b) => ({
       id: b.id,
       name: b.name,
       desc: b.desc,
-      kicker: b.god,
+      kicker: godName(b.god),
       accent: GODS[b.god].css,
     }),
     apply: (p, b) => p.boons.add(b),
@@ -364,15 +372,15 @@ const runBoonRound = (god: God) =>
 /** Weapon hammer: pick one of three upgrades to a slot. */
 const runHammerRound = () =>
   runCardRound({
-    title: () => "HAMMER",
+    title: () => t("round.hammer"),
     accent: () => "#ffb04a",
-    subtitle: (p) => `A weapon upgrade for ${seatLabel(p.seat, p.cls)}`,
+    subtitle: (p) => t("round.sub.hammer", { seat: seatLabel(p.seat, p.cls) }),
     choices: (p) => offerHammers(p.boons, p.cls, 3),
     card: (_p, h) => ({
       id: h.id,
       name: h.name,
       desc: h.desc,
-      kicker: h.slot,
+      kicker: hammerSlotLabel(h),
       accent: hammerColor(h),
     }),
     apply: (p, h) => {
@@ -385,9 +393,9 @@ const runHammerRound = () =>
 /** Pom: empower a boon already held, raising its level. */
 const runPomRound = () =>
   runCardRound<Boon>({
-    title: () => "EMPOWER",
+    title: () => t("round.empower"),
     accent: () => "#d6a6ff",
-    subtitle: (p) => `Strengthen a boon of ${seatLabel(p.seat, p.cls)}`,
+    subtitle: (p) => t("round.sub.pom", { seat: seatLabel(p.seat, p.cls) }),
     choices: (p) => shuffle(p.boons.taken.slice()).slice(0, 3),
     card: (p, b) => ({
       id: b.id,
@@ -395,7 +403,7 @@ const runPomRound = () =>
         Math.min(5, p.boons.levelOf(b.id) + 1),
       )}`,
       desc: b.desc,
-      kicker: b.god,
+      kicker: godName(b.god),
       accent: GODS[b.god].css,
     }),
     apply: (p, b) => p.boons.upgrade(b),
@@ -449,14 +457,14 @@ async function grantReward(reward: Reward) {
     p.hp = p.maxHp;
     fx.ring(p.pos.x, p.pos.z, reward.color, 2.4, 0.6);
   }
-  hud.showBanner("Vitality");
+  hud.showBanner(t("banner.vitality"));
   await wait(900);
 }
 
 async function onChamberCleared() {
   paused = true;
   fx.ring(0, 0, 0xffd27f, 3, 0.8);
-  hud.showBanner("Chamber Cleared");
+  hud.showBanner(t("banner.cleared"));
   // Let the banner finish its full animation before the boon screen comes up —
   // the two overlap in the middle of the frame otherwise.
   await wait(2000);
@@ -474,7 +482,7 @@ async function onChamberCleared() {
     anyBoons,
   );
   doors.forEach((door, i) => gates[i].show(door, i, doors.length));
-  hud.showBanner("Choose Your Path");
+  hud.showBanner(t("banner.choosePath"));
 
   /**
    * The doors are open and the party has control, which means the party can
@@ -527,7 +535,7 @@ async function onChamberCleared() {
   hud.showBanner(
     director.biome.id !== wasBiome
       ? director.biome.name
-      : `Chamber ${director.depth}`,
+      : t("banner.chamber", { n: director.depth }),
   );
   paused = false;
 }
@@ -590,7 +598,7 @@ function visitShore(summary: RunSummary) {
  */
 async function onWipe() {
   paused = true;
-  hud.showBanner("You Have Died");
+  hud.showBanner(t("banner.died"));
   fx.shake(0.9);
   await wait(2300);
   world.clearEnemies();
@@ -824,7 +832,7 @@ function loop(now: number) {
           ? p.of > 1
             ? `${active.caption} — ${p.in} / ${p.of}`
             : active.caption
-          : "Choose a door",
+          : t("hud.chooseDoor"),
       );
     }
 
@@ -945,7 +953,7 @@ async function boot() {
     startRun();
     return;
   }
-  menu.setStatus("connecting…");
+  menu.setStatus(t("net.connecting"));
   net.connect(
     import.meta.env.VITE_RELAY_URL,
     choice.room,

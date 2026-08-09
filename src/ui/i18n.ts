@@ -442,7 +442,7 @@ const PL: Partial<Record<Key, string>> = {
   'boon.poseidon-dash.desc':
     'Twój Unik rani i odrzuca wrogów, przez których przebiegasz.',
   'boon.artemis-crit.name': 'Znak Łowczyni',
-  'boon.artemis-crit.desc': '+15% szansy na trafienie krytyczne wszystkim.',
+  'boon.artemis-crit.desc': '+15% szansy na trafienie krytyczne każdym atakiem.',
   'boon.ares-special.name': 'Tnący Strzał',
   'boon.ares-special.desc':
     'Twój Specjał zadaje +55% obrażeń i nakłada Zgubę: detonuje się chwilę później.',
@@ -486,7 +486,9 @@ const PL: Partial<Record<Key, string>> = {
   'meta.swiftness.name': 'Rączość',
   'meta.swiftness.desc': '+{n}% szybkości ruchu.',
   'meta.reserve.name': 'Głęboka Rezerwa',
-  'meta.reserve.desc': '+{n} ładunków Czaru.',
+  // Phrased around the number rather than after it: Polish would need three
+  // different forms of "ładunek" for +1, +2 and +5.
+  'meta.reserve.desc': 'Ładunki Czaru: +{n}.',
   'meta.fortune.name': 'Łaska Charona',
   'meta.fortune.desc': '+{n}% zdobywanych oboli.',
   'meta.zeal.name': 'Zapał',
