@@ -23,28 +23,31 @@ export const LANG_LABEL: Record<Lang, string> = {
 type Vars = Record<string, string | number>;
 
 const EN = {
-  // ------------------------------------------------------------- menu
-  'menu.sub.title': 'a co-op descent · up to four shades',
-  'menu.play': 'PLAY',
-  'menu.shore': 'THE SHORE · {obols} ◆',
-  'menu.options': 'OPTIONS',
-  'menu.controls': 'CONTROLS',
+  // -------------------------------------------------------------------- menu
+  brand: 'ECUMENE',
+  'menu.sub.title': 'the last council of the dead',
+  'menu.kicker': 'the seven thrones stand empty',
+  'menu.tagline': 'four shades · one descent',
+  'menu.play': 'DESCEND',
+  'menu.shore': 'THE RELIQUARY',
+  'menu.options': 'RITES',
+  'menu.controls': 'THE CANON',
   'menu.sub.setup': 'choose your shade',
   'menu.field.name': 'name',
   'menu.field.relay': 'relay',
   'menu.field.code': 'code',
   'menu.code.placeholder': 'CODE',
-  'menu.playSolo': 'PLAY SOLO',
-  'menu.host': 'HOST ONLINE',
+  'menu.playSolo': 'DESCEND ALONE',
+  'menu.host': 'OPEN A WAY',
   'menu.join': 'JOIN WITH CODE',
   'menu.back': 'BACK',
-  'menu.online': 'online',
+  'menu.online': 'together',
   'menu.needCode': 'Enter the four-letter code from your host.',
   'menu.defaultName': 'Shade',
   'menu.descend': 'DESCEND',
 
-  // ----------------------------------------------------------- shrine
-  'shrine.sub': 'the shore',
+  // ---------------------------------------------------------------- reliquary
+  'shrine.sub': 'the reliquary',
   'shrine.won': 'THE DESCENT ENDS',
   'shrine.died': 'YOU HAVE DIED',
   'shrine.depth': 'Chamber reached',
@@ -54,8 +57,8 @@ const EN = {
   'shrine.max': 'MAX',
   'shrine.again': 'DESCEND AGAIN',
 
-  // ---------------------------------------------------------- options
-  'options.sub': 'options',
+  // -------------------------------------------------------------------- rites
+  'options.sub': 'rites',
   'options.sound': 'Sound',
   'options.music': 'Music',
   'options.damageNumbers': 'Damage numbers',
@@ -71,8 +74,8 @@ const EN = {
   'options.on': 'ON',
   'options.off': 'OFF',
 
-  // --------------------------------------------------------- controls
-  'controls.sub': 'controls',
+  // ---------------------------------------------------------------- the canon
+  'controls.sub': 'the canon',
   'controls.move': 'Move',
   'controls.move.how': 'W A S D  ·  left stick',
   'controls.aim': 'Aim',
@@ -85,6 +88,8 @@ const EN = {
   'controls.cast.how': 'Q  ·  Y',
   'controls.call': 'Call',
   'controls.call.how': 'F  ·  RB — when the gauge is full',
+  'controls.concord': 'Concord',
+  'controls.concord.how': 'F, held with an ally whose gauge is also full',
   'controls.dash': 'Dash',
   'controls.dash.how': 'Space  ·  B',
   'controls.pause': 'Pause',
@@ -95,127 +100,243 @@ const EN = {
   'controls.p2': 'Player two',
   'controls.p2.how': 'Connect a second gamepad — joins instantly',
 
-  // ------------------------------------------------------------ pause
+  // -------------------------------------------------------------------- pause
   'pause.sub': 'paused',
   'pause.resume': 'RESUME',
   'pause.abandon': 'ABANDON RUN',
 
-  // ------------------------------------------------------------- room
+  // --------------------------------------------------------------------- room
   'room.sub.host': 'share this code',
   'room.sub.guest': 'joined room',
   'room.copy': 'click to copy',
   'room.waiting': 'waiting for the host to begin…',
   'room.slot.open': 'open',
 
-  // ------------------------------------------------------------- net
+  // ---------------------------------------------------------------------- net
   'net.connecting': 'connecting…',
   'net.waitingHost': 'connected — waiting for the host',
   'net.full': 'that room is full — four shades is the limit',
   'net.lostHost': 'lost the host — the run is over',
 
-  // ----------------------------------------------------------- banners
+  // ------------------------------------------------------------------ banners
   'banner.joins': '{name} joins',
   'banner.playerTwo': 'Player Two',
   'banner.vitality': 'Vitality',
   'banner.cleared': 'Chamber Cleared',
   'banner.choosePath': 'Choose Your Path',
   'banner.died': 'You Have Died',
-  'banner.chamber': 'Chamber {n}',
+  'banner.chamber': 'Camera {n}',
+  'banner.concord': 'CONCORD',
 
-  // --------------------------------------------------------------- hud
+  // ---------------------------------------------------------------------- hud
   'hud.hint':
     'WASD move · LMB attack · RMB special · Q cast · F call · SPACE dash · pad 2 joins as player two',
-  'hud.room': '{region} · Chamber {n}',
-  'hud.downed': 'DOWNED — {pct}%  (stand close to revive)',
+  'hud.room': '{region} · CAMERA {n}',
+  'hud.downed': 'the seal breaks',
+  'hud.downedPct': '{pct}%',
   'hud.press': 'press {n}',
   'hud.boss': 'BOSS',
   'hud.chooseDoor': 'Choose a door',
   'hud.seat': 'P{n} · {cls}',
+  'hud.sworn': '{cls} · sworn to {pantheon}',
+  'hud.unsworn': '{cls} · unsworn',
+  'hud.cast': 'cast',
+  'hud.concord': 'CONCORD — HOLD F TOGETHER',
 
-  // -------------------------------------------------------- wave label
+  // ------------------------------------------------------------- wave label
   'wave.cleared': 'CLEARED',
   'wave.boss': 'BOSS',
   'wave.n': 'Wave {i} / {n}',
 
-  // -------------------------------------------------------- card rounds
+  // ------------------------------------------------------------- card rounds
   'round.hammer': 'HAMMER',
   'round.empower': 'EMPOWER',
-  'round.sub.boon': 'A boon for {seat}',
-  'round.sub.hammer': 'A weapon upgrade for {seat}',
-  'round.sub.pom': 'Strengthen a boon of {seat}',
+  'round.sub.boon': 'a boon for {seat}',
+  'round.sub.hammer': 'a weapon upgrade for {seat}',
+  'round.sub.pom': 'strengthen a boon of {seat}',
+  'round.answersOver': '{god} answers over him',
+  'round.spurned': '{pantheon} will not offer again this descent.',
+  'round.choosing': '{name} is choosing',
+  'round.chosen': '{name} has chosen',
 
-  // ------------------------------------------------------------- rooms
+  // -------------------------------------------------------------------- rooms
   'rooms.combat': 'CHAMBER',
   'rooms.elite': 'ELITE',
   'rooms.horde': 'HORDE',
   'rooms.boss': 'BOSS',
 
-  // ----------------------------------------------------------- rewards
-  'reward.boon': 'BOON OF {god}',
+  // ------------------------------------------------------------------ rewards
+  'reward.boon': 'BOON OF {pantheon}',
   'reward.pom': 'EMPOWER A BOON',
   'reward.vitality': 'VITALITY',
   'reward.hammer': 'WEAPON HAMMER',
 
-  // -------------------------------------------------------------- gods
-  'god.Aphrodite': 'Aphrodite',
-  'god.Ares': 'Ares',
-  'god.Zeus': 'Zeus',
-  'god.Poseidon': 'Poseidon',
-  'god.Artemis': 'Artemis',
-  /** The god's name as it reads after "boon of" — English needs no change. */
-  'god.of.Aphrodite': 'APHRODITE',
-  'god.of.Ares': 'ARES',
-  'god.of.Zeus': 'ZEUS',
-  'god.of.Poseidon': 'POSEIDON',
-  'god.of.Artemis': 'ARTEMIS',
+  // --------------------------------------------------------- the seven thrones
+  'pantheon.hellenic': 'hellenic',
+  'pantheon.aesir': 'aesir',
+  'pantheon.netjer': 'netjer',
+  'pantheon.anunna': 'anunna',
+  'pantheon.choir': 'the choir',
+  'pantheon.legion': 'the legion',
+  'pantheon.rodnova': 'rodnova',
+  'pantheon.throne': '{name} · {n} throne',
+  'throne.hellenic': 'first',
+  'throne.aesir': 'second',
+  'throne.netjer': 'third',
+  'throne.anunna': 'fourth',
+  'throne.choir': 'fifth',
+  'throne.legion': 'sixth',
+  'throne.rodnova': 'seventh',
 
-  // ------------------------------------------------------------ biomes
+  // -------------------------------------------------------------------- gods
+  'god.zeus.name': 'ZEUS',
+  'god.zeus.epithet': 'who answers thunder with thunder',
+  'god.zeus.quote':
+    '“You want the storm. Nobody has ever wanted what comes after it.”',
+  'god.athena.name': 'ATHENA',
+  'god.athena.epithet': 'who has never drawn first and has never lost',
+  'god.athena.quote':
+    '“I will not make you stronger. I will make you correct, which is worse for them.”',
+  'god.odin.name': 'ODIN',
+  'god.odin.epithet': 'who gave an eye to see one thing clearly',
+  'god.odin.quote':
+    '“I know how this ends. Take it anyway — knowing has never once helped.”',
+  'god.skadi.name': 'SKADI',
+  'god.skadi.epithet': 'who hunts the winter down',
+  'god.skadi.quote':
+    '“Cold is not cruelty. Cold is patience that stopped pretending.”',
+  'god.anubis.name': 'ANUBIS',
+  'god.anubis.epithet': 'who weighs the heart against a feather',
+  'god.anubis.quote':
+    '“Yours is heavy. I am not telling you that to shame you.”',
+  'god.sekhmet.name': 'SEKHMET',
+  'god.sekhmet.epithet': 'whose mercy was an afterthought',
+  'god.sekhmet.quote':
+    '“They made me to end a plague. I found I preferred the work.”',
+  'god.inanna.name': 'INANNA',
+  'god.inanna.epithet': 'who went down and came back changed',
+  'god.inanna.quote':
+    '“I have stood where you are standing. I left something at every gate.”',
+  'god.nergal.name': 'NERGAL',
+  'god.nergal.epithet': 'who is the fever and the field it empties',
+  'god.nergal.quote': '“Burn it. What grows back will be yours and not theirs.”',
+  'god.michael.name': 'MICHAEL',
+  'god.michael.epithet': 'who holds the scales and does not look at them',
+  'god.michael.quote':
+    '“I have weighed better than you and let them fall. Take the sword or take the mercy — you will not be offered both again.”',
+  'god.raphael.name': 'RAPHAEL',
+  'god.raphael.epithet': 'who mends what should have been let die',
+  'god.raphael.quote':
+    '“Hold still. This will not hurt, and that is the part you should be frightened of.”',
+  'god.belial.name': 'BELIAL',
+  'god.belial.epithet': 'who is owed, and always collects',
+  'god.belial.quote':
+    '“He offered you a fair price. I am offering you the real one.”',
+  'god.lilith.name': 'LILITH',
+  'god.lilith.epithet': 'who left, and was called a monster for it',
+  'god.lilith.quote':
+    '“They will say you were given this. Let them. You and I know better.”',
+  'god.perun.name': 'PERUN',
+  'god.perun.epithet': 'whose axe is still in the oak',
+  'god.perun.quote':
+    '“Strike once. If it needs a second, you have already lost the argument.”',
+  'god.morana.name': 'MORANA',
+  'god.morana.epithet': 'who ends the year so it can begin',
+  'god.morana.quote':
+    '“I am not the end of you. I am only the winter you have to walk through.”',
+
+  // ------------------------------------------------------------------- boons
+  'boon.hel-attack.name': 'Lightning Strike',
+  'boon.hel-attack.desc':
+    'Your Attack deals +40% damage and Shocks: a jolt arcs to nearby foes.',
+  'boon.hel-cast.name': 'Thunderhead',
+  'boon.hel-cast.desc': 'Your Cast deals +55% damage and Shocks what it lands on.',
+  'boon.hel-crit.name': 'Aegis-Eye',
+  'boon.hel-crit.desc': '+15% critical chance with every attack.',
+  'boon.hel-dash.name': 'Stormstep',
+  'boon.hel-dash.desc': 'Your Dash damages and shoves aside foes you pass through.',
+  'boon.aes-attack.name': 'Frostbite',
+  'boon.aes-attack.desc':
+    'Your Attack deals +35% damage and makes foes Weak: they hit for 40% less.',
+  'boon.aes-special.name': 'Hammerfall',
+  'boon.aes-special.desc':
+    'Your Special deals +60% damage and leaves what survives it Weak.',
+  'boon.aes-dash.name': 'Riding the Gale',
+  'boon.aes-dash.desc': 'Your Dash damages and throws back everything it touches.',
+  'boon.aes-move.name': 'Wind-Shod',
+  'boon.aes-move.desc': '+14% movement speed.',
+  'boon.net-cast.name': 'Weighing of the Heart',
+  'boon.net-cast.desc':
+    'Your Cast deals +60% damage and inflicts Doom: it detonates a beat later.',
+  'boon.net-attack.name': "Devourer's Teeth",
+  'boon.net-attack.desc': 'Your Attack deals +30% damage and inflicts Doom.',
+  'boon.net-life.name': 'Ka Restored',
+  'boon.net-life.desc': 'Heal 5% of the damage you deal.',
+  'boon.net-ammo.name': 'Canopic Reserve',
+  'boon.net-ammo.desc': '+2 Cast ammo.',
+  'boon.anu-attack.name': 'Brand of the Descent',
+  'boon.anu-attack.desc':
+    'Your Attack deals +35% damage and sets what it strikes alight.',
+  'boon.anu-special.name': 'Scorched Field',
+  'boon.anu-special.desc':
+    'Your Special deals +55% damage and sets everything it catches alight.',
+  'boon.anu-fever.name': 'Fever',
+  'boon.anu-fever.desc': '+10% damage with everything you have.',
+  'boon.anu-cast.name': 'Furnace Bolt',
+  'boon.anu-cast.desc': 'Your Cast deals +25% damage and bursts on impact.',
+  'boon.cho-sword.name': 'Flaming Sword',
+  'boon.cho-sword.desc':
+    'Your Attack sets what it strikes alight. Burning foes take damage a beat at a time and light the ones they touch.',
+  'boon.cho-scales.name': 'The Scales',
+  'boon.cho-scales.desc':
+    'Damage you take above a quarter of your health is halved — and the other half is dealt to whatever struck you.',
+  'boon.cho-song.name': 'Choirsong',
+  'boon.cho-song.desc': '+8% critical chance and +6% movement speed.',
+  'boon.cho-cast.name': 'Annunciation',
+  'boon.cho-cast.desc': 'Your Cast punches through 3 more foes.',
+  'boon.leg-special.name': 'Slicing Shot',
+  'boon.leg-special.desc':
+    'Your Special deals +55% damage and inflicts Doom: it detonates a beat later.',
+  'boon.leg-fallen.name': 'Worth More Fallen',
+  'boon.leg-fallen.desc': 'Every ally who is down makes you 25% stronger.',
+  'boon.leg-life.name': 'Blood Frenzy',
+  'boon.leg-life.desc': 'Heal 4% of the damage you deal.',
+  'boon.leg-attack.name': "Butcher's Rhythm",
+  'boon.leg-attack.desc': 'Your Attack winds up and recovers 30% faster.',
+  'boon.rod-move.name': "Perun's Mark",
+  'boon.rod-move.desc': '+14% movement speed.',
+  'boon.rod-ammo.name': 'Deadly Volley',
+  'boon.rod-ammo.desc': '+2 Cast ammo.',
+  'boon.rod-special.name': 'Twin Strike',
+  'boon.rod-special.desc': 'Your Special fires a second time, a beat later.',
+  'boon.rod-attack.name': 'Oakheart',
+  'boon.rod-attack.desc': 'Your Attack deals +25% damage and reaches 20% further.',
+
+  // ------------------------------------------------------------------ biomes
   'biome.tartarus': 'TARTARUS',
   'biome.asphodel': 'ASPHODEL',
   'biome.elysium': 'ELYSIUM',
 
-  // ------------------------------------------------------------ bosses
+  // ------------------------------------------------------------------ bosses
   'boss.erinys': 'ERINYS · SCOURGE OF TARTARUS',
   'boss.hydra': 'BONE HYDRA · JAWS OF ASPHODEL',
   'boss.champion': 'CHAMPIONS OF ELYSIUM',
 
-  // ----------------------------------------------------------- classes
+  // ----------------------------------------------------------------- classes
   'class.warrior.name': 'WARRIOR',
-  'class.warrior.title': 'Ares-sworn',
+  'class.warrior.title': 'blade-sworn',
   'class.warrior.blurb':
     'Blade and dash. Toughest of the three, and the only one who heals by closing in.',
   'class.archer.name': 'MARKSMAN',
-  'class.archer.title': 'Artemis-sworn',
+  'class.archer.title': 'bolt-sworn',
   'class.archer.blurb':
     'Crossbow bolts that punch through a line. Fragile and fastest on foot, but every shot costs a reload.',
   'class.mage.name': 'MAGE',
-  'class.mage.title': 'Zeus-sworn',
+  'class.mage.title': 'storm-sworn',
   'class.mage.blurb':
     'Slow, heavy orbs that burst on impact. Weakest body, largest hits.',
 
-  // ------------------------------------------------------------- boons
-  'boon.zeus-attack.name': 'Lightning Strike',
-  'boon.zeus-attack.desc':
-    'Your Attack deals +40% damage and Shocks: a jolt arcs to nearby foes.',
-  'boon.poseidon-dash.name': 'Tidal Dash',
-  'boon.poseidon-dash.desc':
-    'Your Dash damages and knocks back foes you pass through.',
-  'boon.artemis-crit.name': "Hunter's Mark",
-  'boon.artemis-crit.desc': '+15% critical chance on everything.',
-  'boon.ares-special.name': 'Slicing Shot',
-  'boon.ares-special.desc':
-    'Your Special deals +55% damage and inflicts Doom: it detonates a beat later.',
-  'boon.aphro-cast.name': 'Crush Shot',
-  'boon.aphro-cast.desc':
-    'Your Cast deals +60% damage and makes foes Weak: they hit for 40% less.',
-  'boon.zeus-passive.name': 'Storm Sandals',
-  'boon.zeus-passive.desc': '+12% movement speed.',
-  'boon.ares-life.name': 'Blood Frenzy',
-  'boon.ares-life.desc': 'Heal 4% of damage you deal.',
-  'boon.artemis-ammo.name': 'Deadly Volley',
-  'boon.artemis-ammo.desc': '+2 Cast ammo.',
-
-  // ----------------------------------------------------------- hammers
+  // ----------------------------------------------------------------- hammers
   'hammer.slot.ATTACK': 'ATTACK',
   'hammer.slot.SPECIAL': 'SPECIAL',
   'hammer.slot.CAST': 'CAST',
@@ -237,7 +358,7 @@ const EN = {
   'hammer.twin-cast.name': 'Double Charge',
   'hammer.twin-cast.desc': '+2 Cast ammo and +35% Cast damage.',
 
-  // ---------------------------------------------------------- upgrades
+  // ---------------------------------------------------------------- upgrades
   'meta.vigour.name': 'Vigour',
   'meta.vigour.desc': '+{n} maximum health.',
   'meta.edge.name': 'Whetted Edge',
@@ -255,41 +376,43 @@ const EN = {
   'meta.secondwind.name': 'Second Wind',
   'meta.secondwind.desc': 'Once per run, survive a killing blow at 35% health.',
 
-  // ------------------------------------------------------ touch buttons
+  // ----------------------------------------------------------- touch buttons
   'touch.dash': 'DASH',
   'touch.special': 'SPEC',
   'touch.cast': 'CAST',
   'touch.call': 'CALL',
 
-  // ------------------------------------------------------------- title
-  'page.title': 'STYX — co-op descent',
+  // ------------------------------------------------------------------- title
+  'page.title': 'ECUMENE — the last council of the dead',
 };
 
 export type Key = keyof typeof EN;
 
 const PL: Partial<Record<Key, string>> = {
-  // ------------------------------------------------------------- menu
-  'menu.sub.title': 'kooperacyjne zejście · do czterech cieni',
-  'menu.play': 'GRAJ',
-  'menu.shore': 'BRZEG · {obols} ◆',
-  'menu.options': 'OPCJE',
-  'menu.controls': 'STEROWANIE',
+  // -------------------------------------------------------------------- menu
+  'menu.sub.title': 'ostatnia rada umarłych',
+  'menu.kicker': 'siedem tronów stoi pustych',
+  'menu.tagline': 'cztery cienie · jedno zejście',
+  'menu.play': 'ZEJDŹ',
+  'menu.shore': 'RELIKWIARZ',
+  'menu.options': 'RYTY',
+  'menu.controls': 'KANON',
   'menu.sub.setup': 'wybierz swój cień',
   'menu.field.name': 'imię',
   'menu.field.relay': 'serwer',
   'menu.field.code': 'kod',
   'menu.code.placeholder': 'KOD',
-  'menu.playSolo': 'GRAJ SOLO',
-  'menu.host': 'ZAŁÓŻ GRĘ',
+  'menu.playSolo': 'ZEJDŹ SAMOTNIE',
+  'menu.host': 'OTWÓRZ PRZEJŚCIE',
   'menu.join': 'DOŁĄCZ KODEM',
   'menu.back': 'WSTECZ',
-  'menu.online': 'sieć',
+  'menu.online': 'razem',
   'menu.needCode': 'Wpisz czteroliterowy kod od gospodarza.',
   'menu.defaultName': 'Cień',
   'menu.descend': 'ZEJDŹ',
 
-  // ----------------------------------------------------------- shrine
-  'shrine.sub': 'brzeg',
+  // ---------------------------------------------------------------- reliquary
+  'shrine.sub': 'relikwiarz',
   'shrine.won': 'ZEJŚCIE DOBIEGA KOŃCA',
   'shrine.died': 'ŚMIERĆ',
   'shrine.depth': 'Osiągnięta komnata',
@@ -299,8 +422,8 @@ const PL: Partial<Record<Key, string>> = {
   'shrine.max': 'MAKS',
   'shrine.again': 'ZEJDŹ ZNÓW',
 
-  // ---------------------------------------------------------- options
-  'options.sub': 'opcje',
+  // -------------------------------------------------------------------- ryty
+  'options.sub': 'ryty',
   'options.sound': 'Dźwięk',
   'options.music': 'Muzyka',
   'options.damageNumbers': 'Liczby obrażeń',
@@ -316,8 +439,8 @@ const PL: Partial<Record<Key, string>> = {
   'options.on': 'WŁ',
   'options.off': 'WYŁ',
 
-  // --------------------------------------------------------- controls
-  'controls.sub': 'sterowanie',
+  // ------------------------------------------------------------------- kanon
+  'controls.sub': 'kanon',
   'controls.move': 'Ruch',
   'controls.move.how': 'W A S D  ·  lewa gałka',
   'controls.aim': 'Celowanie',
@@ -330,6 +453,8 @@ const PL: Partial<Record<Key, string>> = {
   'controls.cast.how': 'Q  ·  Y',
   'controls.call': 'Zew',
   'controls.call.how': 'F  ·  RB — gdy wskaźnik jest pełny',
+  'controls.concord': 'Zgoda',
+  'controls.concord.how': 'F, trzymane razem z sojusznikiem o pełnym wskaźniku',
   'controls.dash': 'Unik',
   'controls.dash.how': 'Spacja  ·  B',
   'controls.pause': 'Pauza',
@@ -340,25 +465,25 @@ const PL: Partial<Record<Key, string>> = {
   'controls.p2': 'Drugi gracz',
   'controls.p2.how': 'Podłącz drugi pad — dołącza natychmiast',
 
-  // ------------------------------------------------------------ pause
+  // -------------------------------------------------------------------- pauza
   'pause.sub': 'pauza',
   'pause.resume': 'WRÓĆ DO GRY',
   'pause.abandon': 'PORZUĆ PRÓBĘ',
 
-  // ------------------------------------------------------------- room
+  // -------------------------------------------------------------------- pokój
   'room.sub.host': 'udostępnij ten kod',
   'room.sub.guest': 'dołączono do pokoju',
   'room.copy': 'kliknij, aby skopiować',
   'room.waiting': 'czekanie, aż gospodarz zacznie…',
   'room.slot.open': 'wolne',
 
-  // ------------------------------------------------------------- net
+  // ---------------------------------------------------------------------- sieć
   'net.connecting': 'łączenie…',
   'net.waitingHost': 'połączono — czekanie na gospodarza',
   'net.full': 'ten pokój jest pełny — limit to cztery cienie',
   'net.lostHost': 'utracono gospodarza — próba zakończona',
 
-  // ----------------------------------------------------------- banners
+  // ------------------------------------------------------------------ banery
   'banner.joins': '{name} dołącza',
   'banner.playerTwo': 'Drugi gracz',
   'banner.vitality': 'Witalność',
@@ -366,97 +491,211 @@ const PL: Partial<Record<Key, string>> = {
   'banner.choosePath': 'Wybierz drogę',
   'banner.died': 'Śmierć',
   'banner.chamber': 'Komnata {n}',
+  'banner.concord': 'ZGODA',
 
-  // --------------------------------------------------------------- hud
+  // ---------------------------------------------------------------------- hud
   'hud.hint':
     'WASD ruch · LPM atak · PPM specjał · Q czar · F zew · SPACJA unik · pad 2 dołącza jako drugi gracz',
-  'hud.room': '{region} · Komnata {n}',
-  'hud.downed': 'POWALONY — {pct}%  (podejdź, by wskrzesić)',
+  'hud.room': '{region} · KOMNATA {n}',
+  'hud.downed': 'pieczęć pęka',
   'hud.press': 'wciśnij {n}',
   'hud.boss': 'BOSS',
   'hud.chooseDoor': 'Wybierz drzwi',
+  'hud.sworn': '{cls} · zaprzysiężony: {pantheon}',
+  'hud.unsworn': '{cls} · niezaprzysiężony',
+  'hud.cast': 'czar',
+  'hud.concord': 'ZGODA — TRZYMAJCIE F RAZEM',
 
-  // -------------------------------------------------------- wave label
+  // ------------------------------------------------------------------- fale
   'wave.cleared': 'OCZYSZCZONO',
   'wave.n': 'Fala {i} / {n}',
 
-  // -------------------------------------------------------- card rounds
+  // ------------------------------------------------------------------ oferta
   'round.hammer': 'MŁOT',
   'round.empower': 'WZMOCNIENIE',
-  'round.sub.boon': 'Dar dla {seat}',
-  'round.sub.hammer': 'Ulepszenie broni dla {seat}',
-  'round.sub.pom': 'Wzmocnij dar gracza {seat}',
+  'round.sub.boon': 'dar dla {seat}',
+  'round.sub.hammer': 'ulepszenie broni dla {seat}',
+  'round.sub.pom': 'wzmocnij dar gracza {seat}',
+  'round.answersOver': '{god} odpowiada ponad nim',
+  'round.spurned': '{pantheon} nie złoży już oferty w tym zejściu.',
+  'round.choosing': '{name} wybiera',
+  'round.chosen': '{name} wybrał',
 
-  // ------------------------------------------------------------- rooms
+  // ------------------------------------------------------------------ komnaty
   'rooms.combat': 'KOMNATA',
   'rooms.elite': 'ELITA',
   'rooms.horde': 'HORDA',
 
-  // ----------------------------------------------------------- rewards
-  'reward.boon': 'DAR {god}',
+  // ------------------------------------------------------------------ nagrody
+  'reward.boon': 'DAR · {pantheon}',
   'reward.pom': 'WZMOCNIJ DAR',
   'reward.vitality': 'WITALNOŚĆ',
   'reward.hammer': 'MŁOT BRONI',
 
-  // -------------------------------------------------------------- gods
-  'god.Aphrodite': 'Afrodyta',
-  'god.Ares': 'Ares',
-  'god.Poseidon': 'Posejdon',
-  'god.Artemis': 'Artemida',
-  // Dopełniacz — "DAR AFRODYTY".
-  'god.of.Aphrodite': 'AFRODYTY',
-  'god.of.Ares': 'ARESA',
-  'god.of.Zeus': 'ZEUSA',
-  'god.of.Poseidon': 'POSEJDONA',
-  'god.of.Artemis': 'ARTEMIDY',
+  // ---------------------------------------------------------- siedem tronów
+  'pantheon.hellenic': 'hellenowie',
+  'pantheon.aesir': 'asowie',
+  'pantheon.netjer': 'neczer',
+  'pantheon.anunna': 'anunnaki',
+  'pantheon.choir': 'chór',
+  'pantheon.legion': 'legion',
+  'pantheon.rodnova': 'rodnowie',
+  'pantheon.throne': '{name} · {n} tron',
+  'throne.hellenic': 'pierwszy',
+  'throne.aesir': 'drugi',
+  'throne.netjer': 'trzeci',
+  'throne.anunna': 'czwarty',
+  'throne.choir': 'piąty',
+  'throne.legion': 'szósty',
+  'throne.rodnova': 'siódmy',
 
-  // ------------------------------------------------------------ biomes
+  // ----------------------------------------------------------------- bogowie
+  'god.zeus.name': 'ZEUS',
+  'god.zeus.epithet': 'ten, który odpowiada gromem na grom',
+  'god.zeus.quote':
+    '„Chcesz burzy. Nikt nigdy nie chciał tego, co przychodzi po niej.”',
+  'god.athena.name': 'ATENA',
+  'god.athena.epithet': 'ta, która nigdy nie uderza pierwsza i nigdy nie przegrywa',
+  'god.athena.quote':
+    '„Nie uczynię cię silniejszym. Uczynię cię słusznym, co dla nich jest gorsze.”',
+  'god.odin.name': 'ODYN',
+  'god.odin.epithet': 'ten, który oddał oko, by zobaczyć jedno wyraźnie',
+  'god.odin.quote':
+    '„Wiem, jak to się skończy. Bierz mimo to — wiedza jeszcze nikomu nie pomogła.”',
+  'god.skadi.name': 'SKADI',
+  'god.skadi.epithet': 'ta, która tropi zimę aż do końca',
+  'god.skadi.quote':
+    '„Chłód to nie okrucieństwo. Chłód to cierpliwość, która przestała udawać.”',
+  'god.anubis.name': 'ANUBIS',
+  'god.anubis.epithet': 'ten, który waży serce naprzeciw pióru',
+  'god.anubis.quote': '„Twoje jest ciężkie. Nie mówię tego, by cię zawstydzić.”',
+  'god.sekhmet.name': 'SECHMET',
+  'god.sekhmet.epithet': 'ta, której litość była dopiero drugą myślą',
+  'god.sekhmet.quote':
+    '„Stworzono mnie, by zakończyć zarazę. Okazało się, że wolę samą pracę.”',
+  'god.inanna.name': 'INANNA',
+  'god.inanna.epithet': 'ta, która zeszła i wróciła odmieniona',
+  'god.inanna.quote':
+    '„Stałam tam, gdzie ty teraz stoisz. Przy każdej bramie coś zostawiłam.”',
+  'god.nergal.name': 'NERGAL',
+  'god.nergal.epithet': 'ten, który jest gorączką i polem, które opróżnia',
+  'god.nergal.quote': '„Spal to. Co odrośnie, będzie twoje, a nie ich.”',
+  'god.michael.name': 'MICHAŁ',
+  'god.michael.epithet': 'ten, który trzyma wagę i na nią nie patrzy',
+  'god.michael.quote':
+    '„Ważyłem lepszych od ciebie i pozwoliłem im upaść. Weź miecz albo weź litość — drugi raz nie dostaniesz obu.”',
+  'god.raphael.name': 'RAFAŁ',
+  'god.raphael.epithet': 'ten, który zszywa to, co należało zostawić',
+  'god.raphael.quote':
+    '„Nie ruszaj się. To nie zaboli — i właśnie tego powinieneś się bać.”',
+  'god.belial.name': 'BELIAL',
+  'god.belial.epithet': 'ten, któremu się należy i który zawsze ściąga dług',
+  'god.belial.quote':
+    '„On zaproponował ci uczciwą cenę. Ja proponuję prawdziwą.”',
+  'god.lilith.name': 'LILITH',
+  'god.lilith.epithet': 'ta, która odeszła i nazwano ją za to potworem',
+  'god.lilith.quote':
+    '„Powiedzą, że ci to dano. Niech mówią. Ty i ja wiemy lepiej.”',
+  'god.perun.name': 'PERUN',
+  'god.perun.epithet': 'ten, którego topór wciąż tkwi w dębie',
+  'god.perun.quote':
+    '„Uderz raz. Jeśli potrzeba drugiego, spór już przegrałeś.”',
+  'god.morana.name': 'MARZANNA',
+  'god.morana.epithet': 'ta, która kończy rok, by mógł się zacząć',
+  'god.morana.quote':
+    '„Nie jestem twoim końcem. Jestem tylko zimą, przez którą musisz przejść.”',
+
+  // -------------------------------------------------------------------- dary
+  'boon.hel-attack.name': 'Uderzenie Pioruna',
+  'boon.hel-attack.desc':
+    'Twój Atak zadaje +40% obrażeń i Poraża: wyładowanie przeskakuje na pobliskich wrogów.',
+  'boon.hel-cast.name': 'Czoło Burzy',
+  'boon.hel-cast.desc': 'Twój Czar zadaje +55% obrażeń i Poraża trafionego.',
+  'boon.hel-crit.name': 'Oko Egidy',
+  'boon.hel-crit.desc': '+15% szansy na trafienie krytyczne każdym atakiem.',
+  'boon.hel-dash.name': 'Krok Burzy',
+  'boon.hel-dash.desc': 'Twój Unik rani i rozrzuca wrogów, przez których przebiegasz.',
+  'boon.aes-attack.name': 'Odmrożenie',
+  'boon.aes-attack.desc':
+    'Twój Atak zadaje +35% obrażeń i Osłabia wrogów: biją o 40% słabiej.',
+  'boon.aes-special.name': 'Spadający Młot',
+  'boon.aes-special.desc':
+    'Twój Specjał zadaje +60% obrażeń, a to, co przetrwa, zostaje Osłabione.',
+  'boon.aes-dash.name': 'Na Wichrze',
+  'boon.aes-dash.desc': 'Twój Unik rani i odrzuca wszystko, czego dotknie.',
+  'boon.aes-move.name': 'Wiatrem Obuty',
+  'boon.aes-move.desc': '+14% szybkości ruchu.',
+  'boon.net-cast.name': 'Ważenie Serca',
+  'boon.net-cast.desc':
+    'Twój Czar zadaje +60% obrażeń i nakłada Zgubę: detonuje się chwilę później.',
+  'boon.net-attack.name': 'Zęby Pożeraczki',
+  'boon.net-attack.desc': 'Twój Atak zadaje +30% obrażeń i nakłada Zgubę.',
+  'boon.net-life.name': 'Przywrócone Ka',
+  'boon.net-life.desc': 'Leczysz 5% zadanych obrażeń.',
+  'boon.net-ammo.name': 'Zapas Kanopski',
+  'boon.net-ammo.desc': '+2 ładunki Czaru.',
+  'boon.anu-attack.name': 'Piętno Zejścia',
+  'boon.anu-attack.desc': 'Twój Atak zadaje +35% obrażeń i podpala trafionego.',
+  'boon.anu-special.name': 'Spalone Pole',
+  'boon.anu-special.desc':
+    'Twój Specjał zadaje +55% obrażeń i podpala wszystko, co obejmie.',
+  'boon.anu-fever.name': 'Gorączka',
+  'boon.anu-fever.desc': '+10% obrażeń ze wszystkiego, co masz.',
+  'boon.anu-cast.name': 'Bełt z Pieca',
+  'boon.anu-cast.desc': 'Twój Czar zadaje +25% obrażeń i wybucha przy trafieniu.',
+  'boon.cho-sword.name': 'Płonący Miecz',
+  'boon.cho-sword.desc':
+    'Twój Atak podpala trafionego. Płonący wróg traci zdrowie takt po takcie i podpala tych, których dotknie.',
+  'boon.cho-scales.name': 'Waga',
+  'boon.cho-scales.desc':
+    'Obrażenia większe niż ćwierć twojego zdrowia są o połowę mniejsze — a ta połowa wraca do tego, kto cię uderzył.',
+  'boon.cho-song.name': 'Pieśń Chóru',
+  'boon.cho-song.desc': '+8% szansy na trafienie krytyczne i +6% szybkości ruchu.',
+  'boon.cho-cast.name': 'Zwiastowanie',
+  'boon.cho-cast.desc': 'Twój Czar przebija 3 wrogów więcej.',
+  'boon.leg-special.name': 'Tnący Strzał',
+  'boon.leg-special.desc':
+    'Twój Specjał zadaje +55% obrażeń i nakłada Zgubę: detonuje się chwilę później.',
+  'boon.leg-fallen.name': 'Wart Więcej Poległy',
+  'boon.leg-fallen.desc': 'Każdy powalony sojusznik czyni cię o 25% silniejszym.',
+  'boon.leg-life.name': 'Krwawy Szał',
+  'boon.leg-life.desc': 'Leczysz 4% zadanych obrażeń.',
+  'boon.leg-attack.name': 'Rytm Rzeźnika',
+  'boon.leg-attack.desc': 'Twój Atak zamachuje się i kończy o 30% szybciej.',
+  'boon.rod-move.name': 'Znak Peruna',
+  'boon.rod-move.desc': '+14% szybkości ruchu.',
+  'boon.rod-ammo.name': 'Zabójcza Salwa',
+  'boon.rod-ammo.desc': '+2 ładunki Czaru.',
+  'boon.rod-special.name': 'Bliźniaczy Cios',
+  'boon.rod-special.desc': 'Twój Specjał uderza po raz drugi, chwilę później.',
+  'boon.rod-attack.name': 'Dębowe Serce',
+  'boon.rod-attack.desc': 'Twój Atak zadaje +25% obrażeń i sięga o 20% dalej.',
+
+  // ------------------------------------------------------------------ krainy
   'biome.tartarus': 'TARTAR',
   'biome.asphodel': 'ASFODEL',
   'biome.elysium': 'ELIZJUM',
 
-  // ------------------------------------------------------------ bosses
+  // ------------------------------------------------------------------ bossowie
   'boss.erinys': 'ERYNIA · BICZ TARTARU',
   'boss.hydra': 'KOŚCIANA HYDRA · PASZCZE ASFODELU',
   'boss.champion': 'CZEMPIONI ELIZJUM',
 
-  // ----------------------------------------------------------- classes
+  // ------------------------------------------------------------------- klasy
   'class.warrior.name': 'WOJOWNIK',
-  'class.warrior.title': 'Zaprzysiężony Aresowi',
+  'class.warrior.title': 'zaprzysiężony ostrzu',
   'class.warrior.blurb':
     'Ostrze i unik. Najwytrzymalszy z trójki i jedyny, który leczy się, wchodząc w zwarcie.',
   'class.archer.name': 'STRZELEC',
-  'class.archer.title': 'Zaprzysiężony Artemidzie',
+  'class.archer.title': 'zaprzysiężony bełtowi',
   'class.archer.blurb':
     'Bełty kuszy przebijające całą linię wrogów. Kruchy i najszybszy, ale każdy strzał kosztuje przeładowanie.',
   'class.mage.name': 'MAG',
-  'class.mage.title': 'Zaprzysiężony Zeusowi',
+  'class.mage.title': 'zaprzysiężony burzy',
   'class.mage.blurb':
     'Powolne, ciężkie kule wybuchające przy trafieniu. Najsłabsze ciało, największe ciosy.',
 
-  // ------------------------------------------------------------- boons
-  'boon.zeus-attack.name': 'Uderzenie Pioruna',
-  'boon.zeus-attack.desc':
-    'Twój Atak zadaje +40% obrażeń i Poraża: wyładowanie przeskakuje na pobliskich wrogów.',
-  'boon.poseidon-dash.name': 'Przypływowy Unik',
-  'boon.poseidon-dash.desc':
-    'Twój Unik rani i odrzuca wrogów, przez których przebiegasz.',
-  'boon.artemis-crit.name': 'Znak Łowczyni',
-  'boon.artemis-crit.desc': '+15% szansy na trafienie krytyczne każdym atakiem.',
-  'boon.ares-special.name': 'Tnący Strzał',
-  'boon.ares-special.desc':
-    'Twój Specjał zadaje +55% obrażeń i nakłada Zgubę: detonuje się chwilę później.',
-  'boon.aphro-cast.name': 'Miażdżący Strzał',
-  'boon.aphro-cast.desc':
-    'Twój Czar zadaje +60% obrażeń i Osłabia wrogów: biją o 40% słabiej.',
-  'boon.zeus-passive.name': 'Sandały Burzy',
-  'boon.zeus-passive.desc': '+12% szybkości ruchu.',
-  'boon.ares-life.name': 'Krwawy Szał',
-  'boon.ares-life.desc': 'Leczysz 4% zadanych obrażeń.',
-  'boon.artemis-ammo.name': 'Zabójcza Salwa',
-  'boon.artemis-ammo.desc': '+2 ładunki Czaru.',
-
-  // ----------------------------------------------------------- hammers
+  // ------------------------------------------------------------------- młoty
   'hammer.slot.ATTACK': 'ATAK',
   'hammer.slot.SPECIAL': 'SPECJAŁ',
   'hammer.slot.CAST': 'CZAR',
@@ -478,7 +717,7 @@ const PL: Partial<Record<Key, string>> = {
   'hammer.twin-cast.name': 'Podwójny Ładunek',
   'hammer.twin-cast.desc': '+2 ładunki Czaru i +35% obrażeń Czaru.',
 
-  // ---------------------------------------------------------- upgrades
+  // -------------------------------------------------------------- ulepszenia
   'meta.vigour.name': 'Wigor',
   'meta.vigour.desc': '+{n} maksymalnego zdrowia.',
   'meta.edge.name': 'Naostrzone Ostrze',
@@ -496,17 +735,16 @@ const PL: Partial<Record<Key, string>> = {
   'meta.hunter.name': 'Oko Łowcy',
   'meta.hunter.desc': '+{n}% szansy na trafienie krytyczne.',
   'meta.secondwind.name': 'Drugi Oddech',
-  'meta.secondwind.desc':
-    'Raz na próbę przeżywasz śmiertelny cios z 35% zdrowia.',
+  'meta.secondwind.desc': 'Raz na próbę przeżywasz śmiertelny cios z 35% zdrowia.',
 
-  // ------------------------------------------------------ touch buttons
+  // --------------------------------------------------------- przyciski dotyku
   'touch.dash': 'UNIK',
   'touch.special': 'SPEC',
   'touch.cast': 'CZAR',
   'touch.call': 'ZEW',
 
-  // ------------------------------------------------------------- title
-  'page.title': 'STYX — kooperacyjne zejście',
+  // ------------------------------------------------------------------- tytuł
+  'page.title': 'ECUMENE — ostatnia rada umarłych',
 };
 
 const DICTS: Record<Lang, Partial<Record<Key, string>>> = { en: EN, pl: PL };
@@ -519,6 +757,8 @@ function detect(): Lang {
   return tags.some((l) => l.toLowerCase().startsWith('pl')) ? 'pl' : 'en';
 }
 
+// The save keys stay on the `styx.` prefix through the rename: they are storage,
+// not copy, and changing them would silently orphan every existing reliquary.
 const KEY = 'styx.lang';
 
 function load(): Lang {
@@ -567,6 +807,38 @@ export function t(key: Key, vars?: Vars): string {
   return raw.replace(/\{(\w+)\}/g, (whole, name: string) =>
     name in vars ? String(vars[name]) : whole
   );
+}
+
+/**
+ * Roman numerals, for chamber numbers on the HUD banner. The design writes them
+ * out — "CAMERA VII" — and a run never reaches a depth where this gets silly.
+ */
+const ROMAN: [number, string][] = [
+  [1000, 'M'],
+  [900, 'CM'],
+  [500, 'D'],
+  [400, 'CD'],
+  [100, 'C'],
+  [90, 'XC'],
+  [50, 'L'],
+  [40, 'XL'],
+  [10, 'X'],
+  [9, 'IX'],
+  [5, 'V'],
+  [4, 'IV'],
+  [1, 'I'],
+];
+
+export function roman(n: number): string {
+  let left = Math.max(0, Math.floor(n));
+  let out = '';
+  for (const [value, sign] of ROMAN) {
+    while (left >= value) {
+      out += sign;
+      left -= value;
+    }
+  }
+  return out || '—';
 }
 
 document.title = t('page.title');

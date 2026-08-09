@@ -1,35 +1,14 @@
 import { pick, shuffle } from '../core/math';
 import type { StatusKind } from './enemy';
 import { t, type Key } from '../ui/i18n';
-
-export type God = 'Aphrodite' | 'Ares' | 'Zeus' | 'Poseidon' | 'Artemis';
-
-/** The god's name as the player reads it. The id stays English everywhere else. */
-export const godName = (g: God) => t(`god.${g}` as Key);
-
-/** The same name in whatever case "boon of ___" needs, upper-cased. */
-export const godOf = (g: God) => t(`god.of.${g}` as Key);
-
-export interface GodStyle {
-  color: number;
-  css: string;
-  /** Status the god's damage applies, if any. */
-  status?: 'weak' | 'doom' | 'shock' | 'knockback' | 'crit';
-}
-
-export const GODS: Record<God, GodStyle> = {
-  Aphrodite: { color: 0xff6f9c, css: '#ff6f9c', status: 'weak' },
-  Ares: { color: 0xb3212f, css: '#e2384a', status: 'doom' },
-  Zeus: { color: 0xffe066, css: '#ffe066', status: 'shock' },
-  Poseidon: { color: 0x35c6ff, css: '#35c6ff', status: 'knockback' },
-  Artemis: { color: 0x7ee08a, css: '#7ee08a', status: 'crit' },
-};
+import { PANTHEON_ORDER, PANTHEONS, type PantheonId } from './pantheons';
 
 export type Slot = 'attack' | 'special' | 'cast' | 'dash' | 'passive';
 
 export interface Boon {
   id: string;
-  god: God;
+  /** The throne that owns it. The god who offers it is chosen per offer. */
+  pantheon: PantheonId;
   slot: Slot;
   name: string;
   desc: string;
@@ -50,13 +29,25 @@ export class BoonSet {
   dashKnockback = 0;
   /**
    * Which status each source of damage inflicts. Split per slot because the
-   * cards promise per-slot effects — one shared field made Ares's Special boon
-   * silently overwrite Zeus's Attack boon.
+   * cards promise per-slot effects — one shared field made a Special boon
+   * silently overwrite an Attack boon.
    */
   statusOnAttack: StatusKind | null = null;
   statusOnSpecial: StatusKind | null = null;
   statusOnCast: StatusKind | null = null;
   taken: Boon[] = [];
+
+  // --- the choir's bargain ----------------------------------------------
+  /**
+   * The Scales. A blow costing more than this fraction of maximum health is
+   * halved, and the half that was spared is owed back to whatever struck you.
+   * Zero means the choir never offered.
+   */
+  scalesThreshold = 0;
+
+  // --- the legion's bargain ---------------------------------------------
+  /** Extra damage per ally currently down. Worth More Fallen. */
+  perDownedAlly = 0;
 
   // --- weapon modifications, granted by hammers -------------------------
   /** Scales the wind-up and recovery of the basic attack. Lower is faster. */
@@ -81,12 +72,18 @@ export class BoonSet {
   /** Killing blows survived per run, at 35% health. */
   secondWind = 0;
 
+  /**
+   * Thrones that will not offer again this descent, because a rival was taken
+   * over their heads. Cleared when the run restarts.
+   */
+  spurned = new Set<PantheonId>();
+
   /** How many times each boon has been taken; a pom raises the level. */
   private levels = new Map<string, number>();
 
   add(b: Boon) {
     b.apply(this);
-    if (!this.taken.some((t) => t.id === b.id)) this.taken.push(b);
+    if (!this.taken.some((x) => x.id === b.id)) this.taken.push(b);
     this.levels.set(b.id, (this.levels.get(b.id) ?? 0) + 1);
   }
 
@@ -101,6 +98,11 @@ export class BoonSet {
    */
   upgrade(b: Boon) {
     this.add(b);
+  }
+
+  /** Thrones still willing to speak to this shade. */
+  get courted(): PantheonId[] {
+    return PANTHEON_ORDER.filter((p) => !this.spurned.has(p));
   }
 }
 
@@ -119,10 +121,23 @@ const boon = (spec: Omit<Boon, 'name' | 'desc'>): Boon => ({
   },
 });
 
+/**
+ * Four boons per throne, and each throne plays differently rather than trading
+ * in the same percentages:
+ *
+ *   hellenic — shock and crit, the crowd-clearer
+ *   aesir    — weak and knockback, the one that buys you room
+ *   netjer   — doom and lifesteal, paid out on a delay
+ *   anunna   — burn, damage that spreads on its own
+ *   choir    — defensive bargains, the only throne that gives back
+ *   legion   — raw damage bought with something
+ *   rodnova  — speed, ammo and reach; no status at all
+ */
 export const ALL_BOONS: Boon[] = [
+  // ---------------------------------------------------------- I · hellenic
   boon({
-    id: 'zeus-attack',
-    god: 'Zeus',
+    id: 'hel-attack',
+    pantheon: 'hellenic',
     slot: 'attack',
     apply: (b) => {
       b.attackMul += 0.4;
@@ -130,23 +145,175 @@ export const ALL_BOONS: Boon[] = [
     },
   }),
   boon({
-    id: 'poseidon-dash',
-    god: 'Poseidon',
-    slot: 'dash',
+    id: 'hel-cast',
+    pantheon: 'hellenic',
+    slot: 'cast',
     apply: (b) => {
-      b.dashDamage += 18;
-      b.dashKnockback += 14;
+      b.castMul += 0.55;
+      b.statusOnCast = 'shock';
     },
   }),
   boon({
-    id: 'artemis-crit',
-    god: 'Artemis',
+    id: 'hel-crit',
+    pantheon: 'hellenic',
     slot: 'passive',
     apply: (b) => (b.critChance += 0.15),
   }),
   boon({
-    id: 'ares-special',
-    god: 'Ares',
+    id: 'hel-dash',
+    pantheon: 'hellenic',
+    slot: 'dash',
+    apply: (b) => {
+      b.dashDamage += 20;
+      b.dashKnockback += 10;
+    },
+  }),
+
+  // ------------------------------------------------------------- II · aesir
+  boon({
+    id: 'aes-attack',
+    pantheon: 'aesir',
+    slot: 'attack',
+    apply: (b) => {
+      b.attackMul += 0.35;
+      b.statusOnAttack = 'weak';
+    },
+  }),
+  boon({
+    id: 'aes-special',
+    pantheon: 'aesir',
+    slot: 'special',
+    apply: (b) => {
+      b.specialMul += 0.6;
+      b.statusOnSpecial = 'weak';
+    },
+  }),
+  boon({
+    id: 'aes-dash',
+    pantheon: 'aesir',
+    slot: 'dash',
+    apply: (b) => {
+      b.dashDamage += 18;
+      b.dashKnockback += 16;
+    },
+  }),
+  boon({
+    id: 'aes-move',
+    pantheon: 'aesir',
+    slot: 'passive',
+    apply: (b) => (b.moveMul += 0.14),
+  }),
+
+  // ------------------------------------------------------------ III · netjer
+  boon({
+    id: 'net-cast',
+    pantheon: 'netjer',
+    slot: 'cast',
+    apply: (b) => {
+      b.castMul += 0.6;
+      b.statusOnCast = 'doom';
+    },
+  }),
+  boon({
+    id: 'net-attack',
+    pantheon: 'netjer',
+    slot: 'attack',
+    apply: (b) => {
+      b.attackMul += 0.3;
+      b.statusOnAttack = 'doom';
+    },
+  }),
+  boon({
+    id: 'net-life',
+    pantheon: 'netjer',
+    slot: 'passive',
+    apply: (b) => (b.lifesteal += 0.05),
+  }),
+  boon({
+    id: 'net-ammo',
+    pantheon: 'netjer',
+    slot: 'cast',
+    apply: (b) => (b.extraCastAmmo += 2),
+  }),
+
+  // ------------------------------------------------------------ IV · anunna
+  boon({
+    id: 'anu-attack',
+    pantheon: 'anunna',
+    slot: 'attack',
+    apply: (b) => {
+      b.attackMul += 0.35;
+      b.statusOnAttack = 'burn';
+    },
+  }),
+  boon({
+    id: 'anu-special',
+    pantheon: 'anunna',
+    slot: 'special',
+    apply: (b) => {
+      b.specialMul += 0.55;
+      b.statusOnSpecial = 'burn';
+    },
+  }),
+  boon({
+    id: 'anu-fever',
+    pantheon: 'anunna',
+    slot: 'passive',
+    apply: (b) => {
+      b.attackMul += 0.1;
+      b.specialMul += 0.1;
+      b.castMul += 0.1;
+    },
+  }),
+  boon({
+    id: 'anu-cast',
+    pantheon: 'anunna',
+    slot: 'cast',
+    apply: (b) => {
+      b.castMul += 0.25;
+      b.castBurst = Math.max(b.castBurst, 3.0);
+    },
+  }),
+
+  // ------------------------------------------------------------- V · choir
+  boon({
+    id: 'cho-sword',
+    pantheon: 'choir',
+    slot: 'attack',
+    apply: (b) => {
+      b.attackMul += 0.25;
+      b.statusOnAttack = 'burn';
+    },
+  }),
+  boon({
+    id: 'cho-scales',
+    pantheon: 'choir',
+    slot: 'passive',
+    // Stacking lowers the bar rather than halving twice: a second Scales means
+    // more blows qualify, which is legible. Compounding reduction would not be.
+    apply: (b) =>
+      (b.scalesThreshold = b.scalesThreshold === 0 ? 0.25 : b.scalesThreshold + 0.1),
+  }),
+  boon({
+    id: 'cho-song',
+    pantheon: 'choir',
+    slot: 'passive',
+    apply: (b) => {
+      b.critChance += 0.08;
+      b.moveMul += 0.06;
+    },
+  }),
+  boon({
+    id: 'cho-cast',
+    pantheon: 'choir',
+    slot: 'cast',
+    apply: (b) => (b.castPierce += 3),
+  }),
+
+  // ------------------------------------------------------------ VI · legion
+  boon({
+    id: 'leg-special',
+    pantheon: 'legion',
     slot: 'special',
     apply: (b) => {
       b.specialMul += 0.55;
@@ -154,40 +321,85 @@ export const ALL_BOONS: Boon[] = [
     },
   }),
   boon({
-    id: 'aphro-cast',
-    god: 'Aphrodite',
-    slot: 'cast',
-    apply: (b) => {
-      b.castMul += 0.6;
-      b.statusOnCast = 'weak';
-    },
-  }),
-  boon({
-    id: 'zeus-passive',
-    god: 'Zeus',
+    id: 'leg-fallen',
+    pantheon: 'legion',
     slot: 'passive',
-    apply: (b) => (b.moveMul += 0.12),
+    apply: (b) => (b.perDownedAlly += 0.25),
   }),
   boon({
-    id: 'ares-life',
-    god: 'Ares',
+    id: 'leg-life',
+    pantheon: 'legion',
     slot: 'passive',
     apply: (b) => (b.lifesteal += 0.04),
   }),
   boon({
-    id: 'artemis-ammo',
-    god: 'Artemis',
+    id: 'leg-attack',
+    pantheon: 'legion',
+    slot: 'attack',
+    apply: (b) => (b.attackSpeedMul *= 0.7),
+  }),
+
+  // ----------------------------------------------------------- VII · rodnova
+  boon({
+    id: 'rod-move',
+    pantheon: 'rodnova',
+    slot: 'passive',
+    apply: (b) => (b.moveMul += 0.14),
+  }),
+  boon({
+    id: 'rod-ammo',
+    pantheon: 'rodnova',
     slot: 'cast',
     apply: (b) => (b.extraCastAmmo += 2),
   }),
+  boon({
+    id: 'rod-special',
+    pantheon: 'rodnova',
+    slot: 'special',
+    apply: (b) => (b.doubleSpecial = true),
+  }),
+  boon({
+    id: 'rod-attack',
+    pantheon: 'rodnova',
+    slot: 'attack',
+    apply: (b) => {
+      b.attackMul += 0.25;
+      b.attackReachMul += 0.2;
+    },
+  }),
 ];
 
-/** Three distinct offers, never repeating a boon the player already holds. */
-export function offer(set: BoonSet, count = 3): Boon[] {
+export const boonById = (id: string) => ALL_BOONS.find((b) => b.id === id);
+
+const ofPantheon = (p: PantheonId) => ALL_BOONS.filter((b) => b.pantheon === p);
+
+/**
+ * What one throne is willing to offer this shade, newest first out of the hat.
+ * Never repeats something already held — a card you cannot take is a wasted
+ * third of the screen.
+ */
+export function offerFrom(set: BoonSet, p: PantheonId, count = 3): Boon[] {
   const held = new Set(set.taken.map((b) => b.id));
-  const pool = ALL_BOONS.filter((b) => !held.has(b.id));
-  if (pool.length <= count) return pool;
-  return shuffle(pool.slice()).slice(0, count);
+  return shuffle(ofPantheon(p).filter((b) => !held.has(b.id))).slice(0, count);
 }
 
-export const randomGod = (): God => pick(Object.keys(GODS) as God[]);
+/**
+ * The rival's card: one boon from a throne that has a quarrel with this one, and
+ * that this shade has not already spurned. Null when every rival is exhausted or
+ * already spoken for — the offer then simply runs three cards deep.
+ */
+export function rivalOffer(set: BoonSet, p: PantheonId): Boon | null {
+  const held = new Set(set.taken.map((b) => b.id));
+  const rivals = shuffle(
+    PANTHEONS[p].rivals.filter((r) => !set.spurned.has(r))
+  );
+  for (const r of rivals) {
+    const pool = ofPantheon(r).filter((b) => !held.has(b.id));
+    if (pool.length) return pick(pool);
+  }
+  return null;
+}
+
+/** A throne that still speaks to this shade. */
+export const randomPantheon = (set?: BoonSet): PantheonId =>
+  pick(set && set.courted.length ? set.courted : PANTHEON_ORDER);

@@ -1,11 +1,20 @@
 import * as THREE from 'three';
 import type { Player } from '../game/player';
 import type { Enemy } from '../game/enemy';
-import { GODS } from '../game/boons';
 import type { DamageEvent } from '../game/world';
 import { clamp } from '../core/math';
 import { ROOMS, type RoomKind } from '../game/rewards';
-import { onLanguageChange, t } from './i18n';
+import { pantheonName, roundel } from '../game/pantheons';
+import type { ClassId } from '../game/classes';
+import { onLanguageChange, roman, t } from './i18n';
+import { godArt, shadeArt } from './art';
+
+const el = (tag: string, cls?: string, text?: string) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+};
 
 /**
  * Turn the director's wave token into a line of text. The token travels to
@@ -18,79 +27,151 @@ export function waveLabel(token: string) {
   const [, room, i, n] = token.split(':');
   if (!i) return token;
   const wave = t('wave.n', { i, n });
-  return room && room !== 'combat'
-    ? `${ROOMS[room as RoomKind].label} · ${wave}`
-    : wave;
+  return room && room !== 'combat' ? `${ROOMS[room as RoomKind].label} · ${wave}` : wave;
 }
 
-const el = (tag: string, cls?: string, html?: string) => {
-  const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (html !== undefined) n.innerHTML = html;
-  return n;
-};
+/** How many wave diamonds to draw, and how many are behind you. */
+function waveCount(token: string): [number, number] {
+  if (token === 'cleared' || token === 'boss') return [1, 1];
+  const [, , i, n] = token.split(':');
+  const of = Number(n);
+  return Number.isFinite(of) && of > 0 ? [Number(i) || 0, of] : [0, 0];
+}
 
 /** Anything the card chooser can display. */
 export interface Card {
   id: string;
   name: string;
   desc: string;
-  /** Small label above the name — a god, a rarity, a slot. */
+  /** Small label above the name — a throne, a slot, a rival's interruption. */
   kicker: string;
   accent: string;
+  /** Drawn in the rival's own colour rather than the screen's amber. */
+  rival?: boolean;
+  /** Levels held, and levels on the track, for a boon being stacked. */
+  pips?: number;
+  pipsOf?: number;
+}
+
+/** Everything the offer screen shows besides the cards themselves. */
+export interface OfferView {
+  /** The god's name, or HAMMER / EMPOWER for the rounds without one. */
+  title: string;
+  accent: string;
+  subtitle: string;
+  epithet?: string;
+  quote?: string;
+  /** The throne behind the god: its numeral, its metal, and the line under it. */
+  numeral?: string;
+  roundel?: string;
+  ink?: string;
+  throne?: string;
+  /** God id, for the plate art. */
+  art?: string;
 }
 
 interface SeatUi {
   seat: number;
+  cls: ClassId;
+  /** The cell that owns the downed class — the ally box, or the plate itself. */
   root: HTMLElement;
-  fill: HTMLElement;
-  lag: HTMLElement;
-  num: HTMLElement;
-  pips: HTMLElement;
-  call: HTMLElement;
-  boons: HTMLElement;
-  downed: HTMLElement;
+  plate: HTMLElement;
+  hp: HTMLElement;
+  revive: HTMLElement;
   name: HTMLElement;
+  /** Only the local shade has these. */
+  sworn?: HTMLElement;
+  pips?: HTMLElement;
+  boons?: HTMLElement;
+  lore?: HTMLElement;
+  fallen?: HTMLElement;
   lastBoonCount: number;
 }
+
+/** Seat colours, as CSS. Matches PLAYER_TINTS in game/player.ts. */
+const PLATE_TINTS = ['#ff6a3d', '#4fc3ff', '#9d6bff', '#5fe08a'];
+
+const ROMAN_SMALL = ['I', 'II', 'III'];
+
+/**
+ * What a plate shows while its portrait is missing. The seat number, not the
+ * name's first letter — every seat is labelled "P1 · WARRIOR" and so every
+ * plate came out reading "P".
+ */
+const seatSigil = (index: number) => String(index + 1);
 
 export class Hud {
   private root = document.getElementById('ui')!;
   private seats: SeatUi[] = [];
-  private roomWave = el('div', 'wave', '');
-  private roomDepth = el('div', 'depth', '');
-  /** Obols banked so far this run. Hidden until the first one drops. */
-  private purse = el('div', 'purse', '');
+
+  private camera = el('div', 'e-camera');
+  private waves = el('div');
+  private purse = el('div');
+  private purseCount = el('span');
+
+  private shades = el('div', 'e-shades');
+  private allies = el('div', 'e-allies');
+  private concord = el('div');
+  private concordCall = el('div', 'e-call-to', t('hud.concord'));
+
   private choice = el('div');
   private banner = el('div');
   private hurt = el('div');
   private boss = el('div');
-  private bossBar = el('div');
   private bossFill = el('i');
   private bossLag = el('i');
   private bossTitle = el('div');
   private gatePrompt = el('div');
   private v3 = new THREE.Vector3();
 
+  /**
+   * Which seat gets the big plate and the build panel. Seat 0 for a host or a
+   * solo run; a guest is told its own once the first snapshot lands.
+   */
+  private localSeat = 0;
+
   constructor() {
-    this.root.appendChild(el('div', '', '')).id = 'vignette';
-    (this.root.lastChild as HTMLElement).id = 'vignette';
+    const vignette = el('div');
+    vignette.id = 'vignette';
+    this.root.appendChild(vignette);
 
     this.hurt.id = 'hurtflash';
     this.root.appendChild(this.hurt);
 
-    const info = el('div');
-    info.id = 'roominfo';
-    info.append(this.roomDepth, this.roomWave, this.purse);
-    this.root.appendChild(info);
+    // --- top centre: the chamber, and how far through it you are ---------
+    const top = el('div');
+    top.id = 'e-top';
+    const line = el('div', 'e-top-line');
+    line.append(el('div', 'e-hair left'), this.camera, el('div', 'e-hair right'));
+    this.waves.id = 'e-waves';
+    top.append(line, this.waves);
+    this.root.appendChild(top);
+
+    // --- top right: obols banked this descent ---------------------------
+    this.purse.id = 'e-purse';
+    this.purse.append(el('span', 'e-obol'), this.purseCount);
+    this.root.appendChild(this.purse);
 
     this.boss.id = 'boss';
-    this.bossBar.className = 'bbar';
-    this.bossBar.append(this.bossLag, this.bossFill);
+    const bar = el('div', 'bbar');
     this.bossLag.className = 'lag';
-    this.boss.append(this.bossTitle, this.bossBar);
+    bar.append(this.bossLag, this.bossFill);
     this.bossTitle.className = 'btitle';
+    this.boss.append(this.bossTitle, bar);
     this.root.appendChild(this.boss);
+
+    this.root.append(this.shades, this.allies);
+
+    // --- bottom centre: the shared hold ---------------------------------
+    this.concord.id = 'e-concord';
+    const link = el('div', 'e-link');
+    link.append(el('i'), el('i', 'e-thread'), el('i'));
+    (link.firstChild as HTMLElement).style.background =
+      'linear-gradient(160deg,#f4e3ae,#c9a227 50%,#6d5214)';
+    (link.lastChild as HTMLElement).style.background =
+      'linear-gradient(160deg,#f6b98a,#c06a2e 50%,#653a18)';
+    this.concord.append(link, this.concordCall);
+    this.root.appendChild(this.concord);
 
     this.choice.id = 'choice';
     this.root.appendChild(this.choice);
@@ -104,42 +185,103 @@ export class Hud {
     const hint = el('div', '', t('hud.hint'));
     hint.id = 'hint';
     this.root.appendChild(hint);
-    // Written once at boot and then left on screen, so it has to be told.
+
     onLanguageChange(() => {
       hint.textContent = t('hud.hint');
-      // Boon chips are only rebuilt when the count changes; force the next frame
-      // to redraw them so their names follow the language too.
-      for (const s of this.seats) s.lastBoonCount = -1;
+      this.concordCall.textContent = t('hud.concord');
+      for (const s of this.seats) {
+        // Boon roundels and the sworn line are rebuilt when the boon count
+        // changes, and the cast pips when the ammo count does — neither of which
+        // a translation touches. Reset both guards so the next frame redraws.
+        s.lastBoonCount = -1;
+        if (s.pips) s.pips.innerHTML = '';
+      }
     });
   }
 
-  addSeat(index: number, name: string) {
-    const root = el('div', `seat p${index}`);
-    const bar = el('div', 'bar');
-    const lag = el('i', 'lag') as HTMLElement;
-    const fill = el('i', 'fill') as HTMLElement;
-    const num = el('div', 'num', '');
-    bar.append(lag, fill, num);
-    const pips = el('div', 'pips');
-    const callbar = el('div', 'callbar');
-    const call = el('i');
-    callbar.appendChild(call);
-    const boons = el('div', 'boons');
-    const downed = el('div', 'downed', '');
-    const nameEl = el('div', 'name', name);
-    root.append(nameEl, bar, pips, callbar, boons, downed);
-    this.root.appendChild(root);
+  /** Told by the run once it knows which body belongs to this machine. */
+  setLocalSeat(seat: number) {
+    if (this.localSeat === seat) return;
+    this.localSeat = seat;
+    // Seats already laid out are now on the wrong side of the screen.
+    const existing = this.seats.map((s) => ({
+      seat: s.seat,
+      cls: s.cls,
+      name: s.name.textContent ?? '',
+    }));
+    this.reset();
+    for (const e of existing) this.addSeat(e.seat, e.name, e.cls);
+  }
+
+  /**
+   * Build one shade's plate. The local seat gets the large plate and the whole
+   * build beside it; everyone else gets the compact version on the right.
+   */
+  addSeat(index: number, name: string, cls: ClassId = 'warrior') {
+    const local = index === this.localSeat;
+    const tint = PLATE_TINTS[index % PLATE_TINTS.length];
+
+    const plate = el('div', 'e-plate');
+    plate.style.setProperty('--hp', '1');
+    plate.style.setProperty('--tint', tint);
+    plate.appendChild(shadeArt(cls, seatSigil(index), tint));
+
+    const hp = el('div', 'e-hp');
+    const revive = el('div', 'e-revive');
+    plate.append(
+      el('div', 'e-shadow'),
+      el('div', 'e-out'),
+      el('div', 'e-spark'),
+      hp,
+      revive,
+      el('div', 'e-call-track'),
+      el('div', 'e-call')
+    );
+
+    if (local) {
+      const meta = el('div', 'e-shade-meta');
+      const nameEl = el('div', 'e-shade-name', name);
+      const sworn = el('div', 'e-shade-sworn');
+      const pips = el('div', 'e-pips');
+      const boons = el('div', 'e-boons');
+      const lore = el('div', 'e-lore');
+      meta.append(nameEl, sworn, pips, boons, lore);
+
+      this.shades.append(plate, meta);
+      this.seats.push({
+        seat: index,
+        cls,
+        root: plate,
+        plate,
+        hp,
+        revive,
+        name: nameEl,
+        sworn,
+        pips,
+        boons,
+        lore,
+        lastBoonCount: -1,
+      });
+      return;
+    }
+
+    const cell = el('div', 'e-ally');
+    cell.style.setProperty('--tint', tint);
+    const nameEl = el('div', 'e-ally-name', name);
+    const boons = el('div', 'e-boons');
+    const fallen = el('div', 'e-fallen');
+    cell.append(plate, nameEl, boons, fallen);
+    this.allies.appendChild(cell);
     this.seats.push({
       seat: index,
-      root,
-      fill,
-      lag,
-      num,
-      pips,
-      call,
-      boons,
-      downed,
+      cls,
+      root: cell,
+      plate,
+      hp,
+      revive,
       name: nameEl,
+      boons,
+      fallen,
       lastBoonCount: -1,
     });
   }
@@ -152,10 +294,12 @@ export class Hud {
 
   /** Tear the per-run HUD down, for returning to the title screen. */
   reset() {
-    for (const s of this.seats) s.root.remove();
+    this.shades.innerHTML = '';
+    this.allies.innerHTML = '';
     this.seats.length = 0;
     this.setGatePrompt(null);
     this.updateBoss(null);
+    this.concord.classList.remove('show');
   }
 
   /** Seats already laid out, by seat index. Guests learn theirs from snapshots. */
@@ -170,52 +314,99 @@ export class Hud {
     region: string,
     runObols = 0
   ) {
-    this.roomDepth.textContent = t('hud.room', { region, n: depth });
-    this.roomWave.textContent = waveLabel(waveToken);
-    // Stays blank until the first obol drops, so a brand new player is never
+    this.camera.textContent = t('hud.room', { region, n: roman(depth) });
+
+    const [done, of] = waveCount(waveToken);
+    if (this.waves.children.length !== of) {
+      this.waves.innerHTML = '';
+      for (let i = 0; i < of; i++) this.waves.appendChild(el('i'));
+    }
+    Array.from(this.waves.children).forEach((c, i) => c.classList.toggle('on', i < done));
+
+    // Stays hidden until the first obol drops, so a brand new player is never
     // shown a counter for a system they have not met yet.
-    this.purse.textContent = runObols > 0 ? `${runObols} ◆` : '';
+    this.purse.classList.toggle('show', runObols > 0);
+    this.purseCount.textContent = String(runObols);
 
     let worst = 1;
+    let ready = 0;
+    let live = 0;
+
     players.forEach((p) => {
       // Look up by seat, never by array index — in co-op a player can leave and
       // the remaining ones must keep their own corner of the screen.
       const s = this.seats.find((x) => x.seat === p.seat);
       if (!s) return;
+
       const frac = clamp(p.hp / p.maxHp, 0, 1);
       worst = Math.min(worst, p.dead ? 0 : frac);
-      s.fill.style.transform = `scaleX(${frac})`;
-      s.lag.style.transform = `scaleX(${frac})`;
-      s.num.textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
+      if (!p.dead) live++;
+      if (!p.dead && p.callGauge >= 1) ready++;
 
-      const ammo = 3 + p.boons.extraCastAmmo;
-      if (s.pips.children.length !== ammo) {
-        s.pips.innerHTML = '';
-        for (let k = 0; k < ammo; k++) s.pips.appendChild(el('i', 'pip'));
-      }
-      Array.from(s.pips.children).forEach((c, k) =>
-        c.classList.toggle('on', k < p.castAmmo)
+      s.plate.style.setProperty('--hp', p.dead ? '0' : frac.toFixed(3));
+      s.plate.style.setProperty('--call', p.callGauge.toFixed(3));
+      s.plate.classList.toggle('downed', p.dead);
+      s.plate.classList.toggle('ready', !p.dead && p.callGauge >= 1);
+      s.root.classList.toggle('downed', p.dead);
+
+      s.hp.replaceChildren(
+        document.createTextNode(String(Math.ceil(p.hp))),
+        el('span', '', ` / ${p.maxHp}`)
       );
 
-      s.call.style.transform = `scaleX(${p.callGauge})`;
-      // A full bar has to announce itself, or the player never learns the key
-      // exists. The pulse stops the moment it's spent.
-      s.call.parentElement?.classList.toggle('ready', p.callGauge >= 1);
-
-      if (s.lastBoonCount !== p.boons.taken.length) {
-        s.lastBoonCount = p.boons.taken.length;
-        s.boons.innerHTML = '';
-        for (const b of p.boons.taken) {
-          const chip = el('span', 'boon-chip', b.name);
-          chip.style.color = GODS[b.god].css;
-          s.boons.appendChild(chip);
-        }
+      if (p.dead) {
+        s.revive.textContent = t('hud.downedPct', {
+          pct: Math.round(p.reviveProgress * 100),
+        });
+        if (s.fallen) s.fallen.textContent = t('hud.downed');
+      } else if (s.fallen) {
+        s.fallen.textContent = '';
       }
 
-      s.downed.textContent = p.dead
-        ? t('hud.downed', { pct: Math.round(p.reviveProgress * 100) })
-        : '';
+      if (s.pips) {
+        const ammo = 3 + p.boons.extraCastAmmo;
+        // One extra child: the trailing "cast" label.
+        if (s.pips.children.length !== ammo + 1) {
+          s.pips.innerHTML = '';
+          for (let k = 0; k < ammo; k++) s.pips.appendChild(el('i'));
+          s.pips.appendChild(el('span', 'e-pips-label', t('hud.cast')));
+        }
+        Array.from(s.pips.children).forEach((c, k) => {
+          if (k < ammo) c.classList.toggle('on', k < p.castAmmo);
+        });
+      }
+
+      if (s.boons && s.lastBoonCount !== p.boons.taken.length) {
+        s.lastBoonCount = p.boons.taken.length;
+        s.boons.innerHTML = '';
+        // Allies show a few; the local shade shows everything plus one empty
+        // socket, so there is always somewhere for the next one to go.
+        const shown = s.lore ? p.boons.taken : p.boons.taken.slice(0, 4);
+        for (const b of shown) {
+          const disc = el('i');
+          disc.style.background = roundel(b.pantheon);
+          disc.title = b.name;
+          s.boons.appendChild(disc);
+        }
+        if (s.lore) s.boons.appendChild(el('i', 'empty'));
+
+        if (s.sworn) {
+          const first = p.boons.taken[0];
+          s.sworn.textContent = first
+            ? t('hud.sworn', { cls: p.def.name, pantheon: pantheonName(first.pantheon) })
+            : t('hud.unsworn', { cls: p.def.name });
+        }
+        if (s.lore) {
+          const last = p.boons.taken[p.boons.taken.length - 1];
+          s.lore.textContent = last ? `${last.name} · ${pantheonName(last.pantheon)}` : '';
+        }
+      }
     });
+
+    // Two shades with full gauges can agree on something. The prompt is the only
+    // place the mechanic is ever explained, so it goes up whenever it is
+    // actually available — not once someone has already started holding.
+    this.concord.classList.toggle('show', ready >= 2 && live >= 2);
 
     this.hurt.style.opacity = worst < 0.34 ? String(0.35 + (0.34 - worst) * 1.6) : '0';
   }
@@ -237,7 +428,11 @@ export class Hud {
     for (const e of events) {
       this.v3.set(e.x, 1.6, e.z).project(camera);
       if (this.v3.z > 1) continue;
-      const n = el('div', `float${e.crit ? ' crit' : ''}`, e.crit ? `${e.amount}!` : `${e.amount}`);
+      const n = el(
+        'div',
+        `float${e.crit ? ' crit' : ''}`,
+        e.crit ? `${e.amount}!` : `${e.amount}`
+      );
       n.style.color = e.color;
       n.style.left = `${((this.v3.x + 1) / 2) * 100}%`;
       n.style.top = `${((-this.v3.y + 1) / 2) * 100}%`;
@@ -261,26 +456,46 @@ export class Hud {
   }
 
   /**
-   * The card chooser, used for every "pick one of three" moment: god boons,
-   * boon upgrades, and weapon hammers. They share one screen so the player
-   * learns the interaction once.
+   * The offer.
+   *
+   * One screen for every "pick one of three" moment — a throne's boons, a weapon
+   * hammer, empowering something already held. The god fills the left half and
+   * the terms sit beside it, which is the design's whole argument: you are being
+   * spoken to by someone, not browsing a list.
    */
-  offerCards<T extends Card>(
-    title: string,
-    titleColor: string,
-    subtitle: string,
-    cards: T[]
-  ): Promise<T> {
+  offerCards<T extends Card>(view: OfferView, cards: T[]): Promise<T> {
     return new Promise((resolve) => {
-      this.choice.innerHTML = '';
-      const head = el('div', 'head');
-      const g = el('div', 'god', title);
-      g.style.color = titleColor;
-      head.append(g, el('div', 'sub', subtitle));
-      const list = el('div', 'cards');
+      const screen = el('div', 'e-offer');
+
+      // --- the god ------------------------------------------------------
+      const plate = el('div', 'e-offer-god');
+      const art = view.art
+        ? godArt(view.art, (view.title[0] ?? '?').toUpperCase())
+        : el('div', 'e-art missing');
+      art.style.setProperty('--tint', view.accent);
+      plate.append(art, el('div', 'e-scrim'));
+
+      const body = el('div', 'e-god-body');
+      if (view.numeral && view.roundel) {
+        const throne = el('div', 'e-god-throne');
+        const disc = el('span', 'e-roundel', view.numeral);
+        disc.style.background = view.roundel;
+        if (view.ink) disc.style.color = view.ink;
+        throne.append(disc, el('span', '', view.throne ?? ''));
+        body.appendChild(throne);
+      }
+      body.appendChild(el('div', 'e-god-name e-leaf', view.title));
+      if (view.epithet) body.appendChild(el('div', 'e-god-epithet', view.epithet));
+      if (view.quote) body.appendChild(el('div', 'e-god-quote', view.quote));
+      plate.appendChild(body);
+
+      // --- the terms ----------------------------------------------------
+      const terms = el('div', 'e-offer-terms');
+      terms.appendChild(el('div', 'e-terms-kicker', view.subtitle));
 
       const finish = (c: T) => {
         this.choice.classList.remove('show');
+        this.choice.innerHTML = '';
         removeEventListener('keydown', onKey);
         resolve(c);
       };
@@ -290,23 +505,59 @@ export class Hud {
       };
 
       cards.forEach((card, i) => {
-        const c = el('div', 'card');
-        c.style.color = card.accent;
-        const kicker = el('div', 'cgod', card.kicker);
-        kicker.style.color = card.accent;
-        c.append(
-          kicker,
-          el('div', 'cname', card.name),
-          el('div', 'cdesc', card.desc),
-          el('div', 'key', t('hud.press', { n: i + 1 }))
-        );
+        const c = el('button', 'e-card' + (card.rival ? ' rival' : ''));
+        // The interrupting throne's own metal drives the whole card, not just
+        // the seal — a rival from netjer must not arrive wearing the legion's red.
+        if (card.rival) c.style.setProperty('--rival', card.accent);
+        const row = el('div', 'e-card-row');
+
+        const seal = el('span', 'e-seal');
+        seal.style.background = card.accent;
+
+        const text = el('div', 'e-card-text');
+        if (card.kicker) text.appendChild(el('div', 'e-card-kicker', card.kicker));
+        const cname = el('div', 'e-card-name', card.name);
+        if (card.rival) cname.style.color = card.accent;
+        text.append(cname, el('div', 'e-card-desc', card.desc));
+
+        // Levels already held, so stacking reads as progress rather than as the
+        // same card turning up twice.
+        if (card.pipsOf) {
+          const pips = el('div', 'e-card-pips');
+          for (let k = 0; k < card.pipsOf; k++) {
+            pips.appendChild(el('i', k < (card.pips ?? 0) ? 'on' : ''));
+          }
+          text.appendChild(pips);
+        }
+
+        row.append(seal, text, el('span', 'e-card-index', ROMAN_SMALL[i] ?? String(i + 1)));
+        c.appendChild(row);
         c.onclick = () => finish(card);
-        list.appendChild(c);
+        terms.appendChild(c);
       });
 
-      this.choice.append(head, list);
+      terms.appendChild(this.offerFoot());
+      screen.append(plate, terms);
+
+      this.choice.replaceChildren(screen);
       this.choice.classList.add('show');
       addEventListener('keydown', onKey);
     });
+  }
+
+  /** Who else is still deciding. Empty in a solo run, so it collapses away. */
+  private offerFoot() {
+    const foot = el('div', 'e-offer-foot');
+    const waiting = el('div', 'e-waiting');
+    for (const s of this.seats) {
+      if (s.seat === this.localSeat) continue;
+      const who = el('div', 'e-who');
+      const dot = el('i');
+      dot.style.background = PLATE_TINTS[s.seat % PLATE_TINTS.length];
+      who.append(dot, el('span', '', t('round.choosing', { name: s.name.textContent ?? '' })));
+      waiting.appendChild(who);
+    }
+    foot.append(waiting, el('div', 'e-hint', t('hud.press', { n: '1 · 2 · 3' })));
+    return foot;
   }
 }
