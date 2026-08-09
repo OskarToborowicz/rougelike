@@ -267,7 +267,12 @@ export class Hud {
 
     const cell = el('div', 'e-ally');
     cell.style.setProperty('--tint', tint);
-    const nameEl = el('div', 'e-ally-name', name);
+    // Two labels, one shown at a time. "P3 · MARKSMAN" does not fit a 44px
+    // column on a phone, and truncating it to "P3 · M…" is worse than dropping
+    // the class, which the plate's tint and portrait already carry.
+    const nameEl = el('div', 'e-ally-name');
+    const full = el('span', 'e-ally-full', name);
+    nameEl.append(full, el('span', 'e-ally-short', `P${index + 1}`));
     const boons = el('div', 'e-boons');
     const fallen = el('div', 'e-fallen');
     cell.append(plate, nameEl, boons, fallen);
@@ -279,7 +284,7 @@ export class Hud {
       plate,
       hp,
       revive,
-      name: nameEl,
+      name: full,
       boons,
       fallen,
       lastBoonCount: -1,

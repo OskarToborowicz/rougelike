@@ -770,6 +770,11 @@
   text-align: center;
 }
 
+/* The short form only exists where the full one cannot fit. */
+.e-ally-short {
+  display: none;
+}
+
 .e-ally.downed .e-ally-name {
   color: rgba(240, 227, 200, 0.44);
 }
@@ -1356,7 +1361,20 @@
   display: none !important;
 }
 
-/* -------------------------------------------------------------- narrow screens */
+/* ============================================================ small screens */
+
+/*
+ * The design doc is a 1600x900 desktop frame and has nothing to say about
+ * thumbs. Three things change on a phone, and only the blocking changes — the
+ * palette, the type and the materials are the same everywhere:
+ *
+ *   · both bottom corners are given back to the touch controls
+ *   · the build readout survives at a smaller size, because it is information
+ *     the player needs, not decoration
+ *   · the offer becomes a scrolling sheet instead of two clipped columns
+ */
+
+/* ------------------------------------------------- desktop, but not roomy */
 
 @media (max-width: 1100px) {
   .e-shade-meta {
@@ -1390,7 +1408,9 @@
   }
 }
 
-@media (max-width: 900px) {
+/* --------------------------------------------- the offer, stacked as a sheet */
+
+@media (max-width: 900px) and (orientation: portrait) {
   .e-title-art {
     width: 100%;
     opacity: 0.5;
@@ -1418,26 +1438,458 @@
     flex-direction: column;
   }
 
+  /*
+   * The god becomes a header. Its body was anchored `bottom: 56px` inside a
+   * short box, which overflowed upward and cut the throne line off above the
+   * fold — so here it is a flex item pushed to the bottom instead, which
+   * cannot overflow past its own container.
+   */
   .e-offer-god {
     width: 100%;
-    height: 34%;
+    height: auto;
+    flex: 0 0 auto;
+    min-height: 26vh;
+    max-height: 40vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
   }
 
-  .e-offer-terms {
-    gap: 12px;
+  .e-offer-god .e-god-body {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    padding: 18px 20px 20px;
   }
-}
 
-@media (max-width: 700px) {
-  .e-shades .e-shade-meta {
+  .e-god-name {
+    font-size: clamp(28px, 8vw, 44px);
+  }
+
+  .e-god-epithet {
+    font-size: 15px;
+    margin-top: 6px;
+  }
+
+  /* First thing to go: it is the longest text on screen and pure flavour. */
+  .e-god-quote {
     display: none;
   }
 
+  /*
+   * And the terms scroll. Centring fixed-height content in a fixed-height
+   * column is what pushed the third card — the rival, the whole point of the
+   * round — off the bottom with no way to reach it.
+   */
+  .e-offer-terms {
+    flex: 1 1 auto;
+    min-height: 0;
+    justify-content: flex-start;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px 16px 22px;
+    gap: 12px;
+  }
+
+  .e-card {
+    padding: 14px 16px;
+  }
+
+  .e-card-row {
+    gap: 12px;
+  }
+
+  .e-card .e-seal {
+    width: 28px;
+    height: 28px;
+  }
+
+  .e-card-kicker {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .e-card-name {
+    font-size: 19px;
+  }
+
+  .e-card-desc {
+    font-size: 14px;
+    margin-top: 4px;
+  }
+
+  .e-offer-foot {
+    margin-top: 4px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}
+
+/* ------------------------------------------------------ phones: the HUD moves */
+
+/*
+ * Narrow *or* short: a landscape phone is not narrow, but its vertical budget
+ * is what breaks, and either way the thumbs land in the same two corners.
+ */
+@media (max-width: 820px), (max-height: 520px) {
+  /* One line across the top, so the plates can sit under it rather than beside. */
+  #e-top {
+    top: 8px;
+  }
+
+  #e-top .e-hair {
+    display: none;
+  }
+
+  #e-top .e-camera {
+    font-size: 15px;
+    letter-spacing: 0.26em;
+    margin-left: 0.26em;
+  }
+
+  #e-waves {
+    margin-top: 6px;
+    gap: 7px;
+  }
+
+  #e-waves i {
+    width: 9px;
+    height: 9px;
+  }
+
+  #e-purse {
+    top: 10px;
+    right: 12px;
+    font-size: 13px;
+    gap: 7px;
+  }
+
+  #e-purse .e-obol {
+    width: 13px;
+    height: 13px;
+  }
+
+  /* --- the local shade, docked top-left out of the movement stick --- */
+  .e-shades {
+    left: 12px;
+    bottom: auto;
+    top: 58px;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .e-shades .e-plate {
+    width: 56px;
+    height: 72px;
+    box-shadow:
+      0 0 0 1px rgba(217, 178, 94, 0.5),
+      0 0 0 3px #14100c,
+      0 6px 16px rgba(0, 0, 0, 0.8);
+  }
+
+  .e-plate .e-hp {
+    font-size: 9px;
+    padding: 3px 4px;
+    letter-spacing: 0.06em;
+  }
+
+  /* The maximum is inferable from the plate; the current number is not. */
+  .e-plate .e-hp span {
+    display: none;
+  }
+
+  .e-plate .e-call,
+  .e-plate .e-call-track {
+    right: -5px;
+    width: 3px;
+  }
+
+  .e-plate .e-revive {
+    font-size: 8px;
+    padding: 3px 2px;
+  }
+
+  /*
+   * The meta column stays, stripped to the two readouts that carry
+   * information: how much Cast is left, and which thrones you are sworn to.
+   * The name, the sworn line and the lore are the parts a player can do
+   * without on a 375px screen.
+   */
+  .e-shade-meta {
+    width: auto;
+    max-width: 42vw;
+    padding-bottom: 0;
+  }
+
+  .e-shade-name,
+  .e-shade-sworn,
+  .e-lore {
+    display: none;
+  }
+
+  .e-pips {
+    margin-top: 0;
+    gap: 5px;
+  }
+
+  .e-pips i {
+    width: 12px;
+    height: 12px;
+  }
+
+  .e-pips .e-pips-label {
+    display: none;
+  }
+
+  .e-boons {
+    margin-top: 7px;
+    gap: 5px;
+  }
+
+  .e-boons i {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* No room for an invitation; the roundels that exist are the whole story. */
+  .e-boons i.empty {
+    display: none;
+  }
+
+  /* --- allies, top-right under the purse --- */
   .e-allies {
+    right: 12px;
+    bottom: auto;
+    top: 58px;
     gap: 8px;
+  }
+
+  .e-ally {
+    width: 44px;
+  }
+
+  .e-ally .e-plate {
+    width: 44px;
+    height: 56px;
+    box-shadow:
+      0 0 0 1px var(--tint, rgba(217, 178, 94, 0.6)),
+      0 0 0 3px #0f1216,
+      0 6px 16px rgba(0, 0, 0, 0.8);
+  }
+
+  .e-ally-name {
+    margin-top: 4px;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+
+  .e-ally-full {
+    display: none;
+  }
+
+  .e-ally-short {
+    display: inline;
+  }
+
+  .e-ally .e-boons {
+    display: none;
+  }
+
+  .e-ally .e-fallen {
+    margin-top: 3px;
+    font-size: 7px;
+    letter-spacing: 0.1em;
+  }
+
+  /* --- the shared hold, clear of both thumbs --- */
+  #e-concord {
+    bottom: auto;
+    top: 42%;
+  }
+
+  #e-concord .e-link i {
+    width: 22px;
+    height: 22px;
+  }
+
+  #e-concord .e-link .e-thread {
+    width: 30px;
+  }
+
+  #e-concord .e-call-to {
+    margin-top: 8px;
+    font-size: 13px;
+    letter-spacing: 0.2em;
   }
 
   .e-tagline {
     display: none;
   }
+}
+
+/* ------------------------------------------------- landscape: short, not narrow */
+
+/*
+ * A landscape phone has width to spare and almost no height. Stacking the offer
+ * here would be the wrong trade — it would push the terms into a 150px slot and
+ * throw away the one dimension the frame actually has. So the two columns stay
+ * and everything inside them gets shorter instead.
+ */
+@media (orientation: landscape) and (max-height: 560px) {
+  .e-offer-god {
+    width: 42%;
+  }
+
+  .e-offer-god .e-god-body {
+    left: 24px;
+    right: 24px;
+    bottom: 20px;
+  }
+
+  .e-god-throne .e-roundel {
+    width: 24px;
+    height: 24px;
+    font-size: 10px;
+  }
+
+  .e-god-throne span {
+    font-size: 9px;
+    letter-spacing: 0.3em;
+  }
+
+  .e-god-name {
+    margin-top: 10px;
+    font-size: clamp(24px, 4.4vw, 36px);
+  }
+
+  .e-god-epithet {
+    margin-top: 6px;
+    font-size: 13px;
+  }
+
+  .e-god-quote {
+    display: none;
+  }
+
+  .e-offer-terms {
+    padding: 16px 22px;
+    gap: 10px;
+  }
+
+  .e-card {
+    padding: 10px 14px;
+  }
+
+  .e-card .e-seal {
+    width: 24px;
+    height: 24px;
+  }
+
+  .e-card-row {
+    gap: 12px;
+  }
+
+  .e-card-kicker {
+    font-size: 8px;
+    margin-bottom: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .e-card-name {
+    font-size: 17px;
+  }
+
+  .e-card-desc {
+    margin-top: 3px;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .e-card-index {
+    font-size: 16px;
+  }
+
+  .e-offer-foot {
+    margin-top: 6px;
+    font-size: 9px;
+  }
+
+  /* The title has the same problem: centred type plus a thrones row does not
+     fit 375px of height. */
+  .e-title {
+    padding: 16px 5vw 14px;
+  }
+
+  .e-kicker {
+    margin-top: 14px;
+  }
+
+  .e-menu {
+    margin-top: 20px;
+  }
+
+  .e-menu-row {
+    padding: 5px 0;
+  }
+
+  .e-subtitle {
+    margin-top: 10px;
+  }
+
+  .e-thrones {
+    margin-top: 14px;
+    gap: 14px;
+  }
+
+  .e-roundel {
+    width: 26px;
+    height: 26px;
+    font-size: 10px;
+  }
+
+  .e-throne-name {
+    display: none;
+  }
+}
+
+/*
+ * Wherever the terms are taller than the space they were given, they scroll.
+ * Centring fixed-height content in a fixed-height column is what pushed the
+ * third card off the bottom with no way to reach it.
+ */
+@media (max-height: 780px) {
+  .e-offer-terms {
+    justify-content: flex-start;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/*
+ * While the chooser owns the screen, nothing from the fight underneath is
+ * allowed to draw on top of it. hud.css already does this for the touch pad;
+ * the gate prompt and the hint line need the same treatment, or a door prompt
+ * left over from the chamber lands across a card.
+ */
+body:has(#choice.show) #gateprompt,
+body:has(#choice.show) #hint,
+body:has(#choice.show) #e-concord {
+  opacity: 0;
+}
+
+/* ------------------------------------------------------------ no keyboard */
+
+/*
+ * Only once the screen has actually been touched. A tablet with a keyboard
+ * attached keeps its numerals; a phone loses instructions it cannot follow.
+ */
+body.touching .e-card-index,
+body.touching .e-offer-foot .e-hint {
+  display: none;
 }
