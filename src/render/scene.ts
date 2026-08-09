@@ -24,7 +24,18 @@ export class Stage {
   /** Multiplier on `offset`, eased toward whatever the frame needs to contain. */
   private zoom = 1;
 
+  /**
+   * The host element, measured for every resize.
+   *
+   * `innerHeight` is the wrong number on a phone: it counts the space behind a
+   * collapsing URL bar, while the canvas is laid out with `100dvh`. Sizing the
+   * drawing buffer from the element keeps the two in agreement, so the image
+   * never ends up subtly stretched.
+   */
+  private host: HTMLElement;
+
   constructor(host: HTMLElement) {
+    this.host = host;
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       powerPreference: 'high-performance',
@@ -32,7 +43,8 @@ export class Stage {
       preserveDrawingBuffer: true,
     });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    this.renderer.setSize(innerWidth, innerHeight);
+    const size = this.viewport();
+    this.renderer.setSize(size.w, size.h);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -40,7 +52,7 @@ export class Stage {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     host.appendChild(this.renderer.domElement);
 
-    this.camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.5, 200);
+    this.camera = new THREE.PerspectiveCamera(42, size.w / size.h, 0.5, 200);
     this.camPos.copy(this.offset);
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(0, 0, 0);
@@ -53,6 +65,10 @@ export class Stage {
     this.buildLights();
 
     addEventListener('resize', () => this.resize());
+    // Fires when the URL bar slides away or the on-screen keyboard opens —
+    // neither of which necessarily raises a window resize.
+    visualViewport?.addEventListener('resize', () => this.resize());
+    addEventListener('orientationchange', () => this.resize());
   }
 
   private buildLights() {
@@ -125,10 +141,19 @@ export class Stage {
     }
   }
 
+  /** Visible size in CSS pixels, from the laid-out host rather than the window. */
+  private viewport() {
+    const r = this.host.getBoundingClientRect();
+    return { w: Math.max(1, Math.round(r.width)), h: Math.max(1, Math.round(r.height)) };
+  }
+
   resize() {
-    this.camera.aspect = innerWidth / innerHeight;
+    const { w, h } = this.viewport();
+    this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(innerWidth, innerHeight);
+    // `false` leaves the canvas's CSS size alone — the stylesheet owns that, and
+    // letting three write inline styles would fight the `!important` rules.
+    this.renderer.setSize(w, h, false);
   }
 
   /** Player-facing multipliers, driven by the options screen. */

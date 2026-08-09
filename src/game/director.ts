@@ -94,11 +94,18 @@ export class Director {
     return biomeForDepth(this.depth);
   }
 
+  /**
+   * A token, not a sentence: it travels to guests in every snapshot, and a guest
+   * playing in another language must render it in *theirs*. Formatted for the
+   * screen by `waveLabel()` in ui/i18n.ts.
+   *
+   *   `cleared` · `boss` · `wave:<room>:<index>:<count>`
+   */
   get label() {
-    if (this.chamberDone) return 'CLEARED';
-    if (this.isBossChamber) return 'BOSS';
-    const prefix = this.room === 'combat' ? '' : `${ROOMS[this.room].label} · `;
-    return `${prefix}Wave ${Math.min(this.waveIndex + 1, this.waves.length)} / ${this.waves.length}`;
+    if (this.chamberDone) return 'cleared';
+    if (this.isBossChamber) return 'boss';
+    const i = Math.min(this.waveIndex + 1, this.waves.length);
+    return `wave:${this.room}:${i}:${this.waves.length}`;
   }
 
   /** Enemy strength multiplier for the current room type. */

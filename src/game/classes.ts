@@ -1,3 +1,5 @@
+import { t } from "../ui/i18n";
+
 export type ClassId = "warrior" | "archer" | "mage";
 
 export interface AttackShape {
@@ -40,10 +42,17 @@ export interface ClassDef {
 export const CLASSES: Record<ClassId, ClassDef> = {
   warrior: {
     id: "warrior",
-    name: "WARRIOR",
-    title: "Ares-sworn",
-    blurb:
-      "Blade and dash. Toughest of the three, and the only one who heals by closing in.",
+    // Text is read through getters so a language change lands the next time
+    // anything renders, rather than at module load. See ui/i18n.ts.
+    get name() {
+      return t("class.warrior.name");
+    },
+    get title() {
+      return t("class.warrior.title");
+    },
+    get blurb() {
+      return t("class.warrior.blurb");
+    },
     attack: "melee",
     maxHp: 110,
     speed: 8.2,
@@ -93,10 +102,15 @@ export const CLASSES: Record<ClassId, ClassDef> = {
 
   archer: {
     id: "archer",
-    name: "MARKSMAN",
-    title: "Artemis-sworn",
-    blurb:
-      "Crossbow bolts that punch through a line. Fragile and fastest on foot, but every shot costs a reload.",
+    get name() {
+      return t("class.archer.name");
+    },
+    get title() {
+      return t("class.archer.title");
+    },
+    get blurb() {
+      return t("class.archer.blurb");
+    },
     attack: "bolt",
     maxHp: 82,
     speed: 9.1,
@@ -131,9 +145,15 @@ export const CLASSES: Record<ClassId, ClassDef> = {
 
   mage: {
     id: "mage",
-    name: "MAGE",
-    title: "Zeus-sworn",
-    blurb: "Slow, heavy orbs that burst on impact. Weakest body, largest hits.",
+    get name() {
+      return t("class.mage.name");
+    },
+    get title() {
+      return t("class.mage.title");
+    },
+    get blurb() {
+      return t("class.mage.blurb");
+    },
     attack: "orb",
     maxHp: 76,
     speed: 7.4,

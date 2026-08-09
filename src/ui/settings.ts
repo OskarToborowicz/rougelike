@@ -38,14 +38,29 @@ export const DEFAULTS: Settings = {
  */
 export const settings: Settings = load();
 
+/**
+ * First-run defaults for the machine we actually landed on.
+ *
+ * A phone at devicePixelRatio 3 rendering shadow maps at full resolution is a
+ * slideshow, and a player whose first impression is 15fps never gets to the
+ * options screen to fix it. Only ever applied when nothing is stored — an
+ * explicit choice is never second-guessed.
+ */
+function deviceDefaults(): Settings {
+  const coarse = matchMedia?.('(pointer: coarse)').matches ?? false;
+  const small = Math.min(innerWidth, innerHeight) < 820;
+  if (!coarse || !small) return { ...DEFAULTS };
+  return { ...DEFAULTS, quality: 'medium', shadows: false };
+}
+
 function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULTS };
+    if (!raw) return deviceDefaults();
     const parsed = JSON.parse(raw) as Partial<Settings>;
     return { ...DEFAULTS, ...parsed };
   } catch {
-    return { ...DEFAULTS };
+    return deviceDefaults();
   }
 }
 

@@ -1,6 +1,7 @@
 import type { BoonSet } from './boons';
 import type { ClassId } from './classes';
 import { shuffle } from '../core/math';
+import { t, type Key } from '../ui/i18n';
 
 export interface Hammer {
   id: string;
@@ -20,72 +21,70 @@ export interface Hammer {
  * separate track is what stops a build from being a pile of damage percentages —
  * one of these should change how you actually play the weapon.
  */
+/**
+ * Name and description read through getters keyed off the id, so a language
+ * change reaches hammers already granted. See ui/i18n.ts.
+ */
+const hammer = (spec: Omit<Hammer, 'name' | 'desc'>): Hammer => ({
+  ...spec,
+  get name() {
+    return t(`hammer.${spec.id}.name` as Key);
+  },
+  get desc() {
+    return t(`hammer.${spec.id}.desc` as Key);
+  },
+});
+
 export const HAMMERS: Hammer[] = [
-  {
+  hammer({
     id: 'heavy-strike',
-    name: 'Heavy Strike',
     slot: 'ATTACK',
-    desc: 'Your Attack deals +30% damage and reaches 20% further.',
     apply: (b) => {
       b.attackMul += 0.3;
       b.attackReachMul += 0.2;
     },
-  },
-  {
+  }),
+  hammer({
     id: 'swift-strike',
-    name: 'Swift Strike',
     slot: 'ATTACK',
-    desc: 'Your Attack winds up and recovers 30% faster.',
     apply: (b) => (b.attackSpeedMul *= 0.7),
-  },
-  {
+  }),
+  hammer({
     id: 'relentless',
-    name: 'Relentless Edge',
     slot: 'ATTACK',
-    desc: 'Your Attack deals +15% damage and heals 3% of it back.',
     apply: (b) => {
       b.attackMul += 0.15;
       b.lifesteal += 0.03;
     },
-  },
-  {
+  }),
+  hammer({
     id: 'twin-special',
-    name: 'Twin Strike',
     slot: 'SPECIAL',
-    desc: 'Your Special fires a second time, a beat later.',
     apply: (b) => (b.doubleSpecial = true),
-  },
-  {
+  }),
+  hammer({
     id: 'brutal-special',
-    name: 'Brutal Special',
     slot: 'SPECIAL',
-    desc: 'Your Special deals +70% damage.',
     apply: (b) => (b.specialMul += 0.7),
-  },
-  {
+  }),
+  hammer({
     id: 'piercing-cast',
-    name: 'Piercing Cast',
     slot: 'CAST',
-    desc: 'Your Cast punches through 3 more foes.',
     apply: (b) => (b.castPierce += 3),
-  },
-  {
+  }),
+  hammer({
     id: 'shattering-cast',
-    name: 'Shattering Cast',
     slot: 'CAST',
-    desc: 'Your Cast bursts on impact, damaging everything nearby.',
     apply: (b) => (b.castBurst = Math.max(b.castBurst, 3.0)),
-  },
-  {
+  }),
+  hammer({
     id: 'twin-cast',
-    name: 'Double Charge',
     slot: 'CAST',
-    desc: '+2 Cast ammo and +35% Cast damage.',
     apply: (b) => {
       b.extraCastAmmo += 2;
       b.castMul += 0.35;
     },
-  },
+  }),
 ];
 
 const SLOT_COLOR: Record<Hammer['slot'], string> = {
@@ -95,6 +94,9 @@ const SLOT_COLOR: Record<Hammer['slot'], string> = {
 };
 
 export const hammerColor = (h: Hammer) => SLOT_COLOR[h.slot];
+
+/** The slot as the card's kicker reads it. The id itself stays English. */
+export const hammerSlotLabel = (h: Hammer) => t(`hammer.slot.${h.slot}` as Key);
 
 /** Three hammers the player does not already hold. */
 export function offerHammers(set: BoonSet, cls: ClassId, count = 3): Hammer[] {

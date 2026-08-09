@@ -1,4 +1,5 @@
 import type { BoonSet } from './boons';
+import { t, type Key } from '../ui/i18n';
 
 /**
  * What survives a death.
@@ -42,19 +43,28 @@ export interface Upgrade {
 const ramp = (base: number, step: number) => (level: number) =>
   Math.round(base + step * level * (level + 1) * 0.5);
 
+/**
+ * The name is a live getter keyed off the id, so a language change reaches the
+ * shrine's list without rebuilding the table. See ui/i18n.ts.
+ */
+const upgrade = (spec: Omit<Upgrade, 'name'>): Upgrade => ({
+  ...spec,
+  get name() {
+    return t(`meta.${spec.id}.name` as Key);
+  },
+});
+
 export const UPGRADES: Upgrade[] = [
-  {
+  upgrade({
     id: 'vigour',
-    name: 'Vigour',
-    desc: (n) => `+${n * 12} maximum health.`,
+    desc: (n) => t('meta.vigour.desc', { n: n * 12 }),
     maxLevel: 5,
     cost: ramp(30, 22),
     apply: (b, l) => (b.metaMaxHp += l * 12),
-  },
-  {
+  }),
+  upgrade({
     id: 'edge',
-    name: 'Whetted Edge',
-    desc: (n) => `+${n * 6}% damage with everything.`,
+    desc: (n) => t('meta.edge.desc', { n: n * 6 }),
     maxLevel: 5,
     cost: ramp(35, 26),
     apply: (b, l) => {
@@ -62,57 +72,51 @@ export const UPGRADES: Upgrade[] = [
       b.specialMul += l * 0.06;
       b.castMul += l * 0.06;
     },
-  },
-  {
+  }),
+  upgrade({
     id: 'swiftness',
-    name: 'Swiftness',
-    desc: (n) => `+${n * 4}% movement speed.`,
+    desc: (n) => t('meta.swiftness.desc', { n: n * 4 }),
     maxLevel: 4,
     cost: ramp(40, 28),
     apply: (b, l) => (b.moveMul += l * 0.04),
-  },
-  {
+  }),
+  upgrade({
     id: 'reserve',
-    name: 'Deep Reserve',
-    desc: (n) => `+${n} Cast ammo.`,
+    desc: (n) => t('meta.reserve.desc', { n }),
     maxLevel: 3,
     cost: ramp(45, 35),
     apply: (b, l) => (b.extraCastAmmo += l),
-  },
-  {
+  }),
+  upgrade({
     id: 'fortune',
-    name: "Charon's Favour",
-    desc: (n) => `+${n * 20}% obols earned.`,
+    desc: (n) => t('meta.fortune.desc', { n: n * 20 }),
     maxLevel: 3,
     cost: ramp(50, 40),
     apply: () => {
       /* read directly by the payout, not a combat stat */
     },
-  },
-  {
+  }),
+  upgrade({
     id: 'zeal',
-    name: 'Zeal',
-    desc: (n) => `Begin each run with the Call gauge ${n * 25}% full.`,
+    desc: (n) => t('meta.zeal.desc', { n: n * 25 }),
     maxLevel: 2,
     cost: ramp(60, 50),
     apply: (b, l) => (b.metaStartCall += l * 0.25),
-  },
-  {
+  }),
+  upgrade({
     id: 'hunter',
-    name: "Hunter's Eye",
-    desc: (n) => `+${n * 5}% critical chance.`,
+    desc: (n) => t('meta.hunter.desc', { n: n * 5 }),
     maxLevel: 3,
     cost: ramp(55, 42),
     apply: (b, l) => (b.critChance += l * 0.05),
-  },
-  {
+  }),
+  upgrade({
     id: 'secondwind',
-    name: 'Second Wind',
-    desc: () => 'Once per run, survive a killing blow at 35% health.',
+    desc: () => t('meta.secondwind.desc'),
     maxLevel: 1,
     cost: () => 220,
     apply: (b, l) => (b.secondWind += l),
-  },
+  }),
 ];
 
 export const upgradeById = (id: string) => UPGRADES.find((u) => u.id === id);

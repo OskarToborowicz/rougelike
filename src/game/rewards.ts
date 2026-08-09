@@ -1,5 +1,6 @@
-import { GODS, randomGod, type God } from './boons';
+import { godOf, GODS, randomGod, type God } from './boons';
 import { pick, shuffle } from '../core/math';
+import { t } from '../ui/i18n';
 
 export type RewardKind = 'boon' | 'pom' | 'vitality' | 'hammer';
 
@@ -14,13 +15,38 @@ export interface RoomStyle {
   strength: number;
 }
 
+// Labels are getters so a language change is picked up wherever they are read.
 export const ROOMS: Record<RoomKind, RoomStyle> = {
-  combat: { label: 'CHAMBER', density: 1, strength: 1 },
+  combat: {
+    get label() {
+      return t('rooms.combat');
+    },
+    density: 1,
+    strength: 1,
+  },
   // Fewer bodies, each one a real threat — space to fight, no room to be sloppy.
-  elite: { label: 'ELITE', density: 0.55, strength: 1.9 },
+  elite: {
+    get label() {
+      return t('rooms.elite');
+    },
+    density: 0.55,
+    strength: 1.9,
+  },
   // The opposite pressure: weak individually, overwhelming as a crowd.
-  horde: { label: 'HORDE', density: 1.9, strength: 0.7 },
-  boss: { label: 'BOSS', density: 1, strength: 1 },
+  horde: {
+    get label() {
+      return t('rooms.horde');
+    },
+    density: 1.9,
+    strength: 0.7,
+  },
+  boss: {
+    get label() {
+      return t('rooms.boss');
+    },
+    density: 1,
+    strength: 1,
+  },
 };
 
 export interface Reward {
@@ -51,18 +77,41 @@ export function rollReward(kind: RewardKind): Reward {
     return {
       kind,
       god,
-      label: `BOON OF ${god.toUpperCase()}`,
+      get label() {
+        return t('reward.boon', { god: godOf(god) });
+      },
       color: GODS[god].color,
       css: GODS[god].css,
     };
   }
   if (kind === 'pom') {
-    return { kind, label: 'EMPOWER A BOON', color: 0xd6a6ff, css: '#d6a6ff' };
+    return {
+      kind,
+      get label() {
+        return t('reward.pom');
+      },
+      color: 0xd6a6ff,
+      css: '#d6a6ff',
+    };
   }
   if (kind === 'vitality') {
-    return { kind, label: 'VITALITY', color: 0xff4d6a, css: '#ff4d6a' };
+    return {
+      kind,
+      get label() {
+        return t('reward.vitality');
+      },
+      color: 0xff4d6a,
+      css: '#ff4d6a',
+    };
   }
-  return { kind, label: 'WEAPON HAMMER', color: 0xffb04a, css: '#ffb04a' };
+  return {
+    kind,
+    get label() {
+      return t('reward.hammer');
+    },
+    color: 0xffb04a,
+    css: '#ffb04a',
+  };
 }
 
 /**

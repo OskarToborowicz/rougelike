@@ -3,6 +3,7 @@ import type { Actor } from './actor';
 import { angleDelta, clamp, damp, rand, TAU } from '../core/math';
 import { addOutline } from '../render/outline';
 import { hexString, makeBodySkin, makeBoneSkin } from '../render/skin';
+import { t } from '../ui/i18n';
 
 export type EnemyKind = 'wretch' | 'lobber' | 'brute' | 'erinys' | 'hydra' | 'champion';
 
@@ -75,7 +76,9 @@ export const ARCHETYPES: Record<EnemyKind, Archetype> = {
     attackRange: 3.6,
     cooldown: 1.2,
     boss: true,
-    title: 'ERINYS · SCOURGE OF TARTARUS',
+    get title() {
+      return t('boss.erinys');
+    },
   },
 
   hydra: {
@@ -91,7 +94,9 @@ export const ARCHETYPES: Record<EnemyKind, Archetype> = {
     attackRange: 30,
     cooldown: 1.5,
     boss: true,
-    title: 'BONE HYDRA · JAWS OF ASPHODEL',
+    get title() {
+      return t('boss.hydra');
+    },
   },
 
   champion: {
@@ -107,7 +112,9 @@ export const ARCHETYPES: Record<EnemyKind, Archetype> = {
     attackRange: 3.2,
     cooldown: 1.0,
     boss: true,
-    title: 'CHAMPIONS OF ELYSIUM',
+    get title() {
+      return t('boss.champion');
+    },
   },
 };
 

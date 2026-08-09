@@ -4,6 +4,7 @@ import type { Frame } from "../core/input";
 import { angleDelta, clamp, damp } from "../core/math";
 import type { BoonSet } from "./boons";
 import { addOutline } from "../render/outline";
+import { fitToHeight, instance, loadModel } from "../render/models";
 import {
   CLASSES,
   type AttackShape,
@@ -23,6 +24,23 @@ export type PlayerState =
   | "down";
 
 export const DASH = { dist: 4.6, time: 0.16, cooldown: 0.26, iframes: 0.22 };
+
+/** The sword's resting guard angle, and the pose every swing returns to. */
+const REST_SWORD_Y = -0.5;
+
+// Easing shared by the weapon rig. Attack animation is all about *where* the
+// time goes: a linear sweep reads as a machine, and the eye reads acceleration
+// as force.
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+/** Fast start, gentle finish. */
+const easeOut = (t: number) => 1 - (1 - clamp(t, 0, 1)) ** 2;
+/** Harder version, for the strike itself. */
+const easeOutCubic = (t: number) => 1 - (1 - clamp(t, 0, 1)) ** 3;
+/** Eased at both ends, for settling. */
+const smoothstep = (t: number) => {
+  const x = clamp(t, 0, 1);
+  return x * x * (3 - 2 * x);
+};
 
 export class Player implements Actor {
   team = "player" as const;
@@ -63,6 +81,29 @@ export class Player implements Actor {
   private bodyMat!: THREE.MeshStandardMaterial;
   private weapon!: THREE.Mesh;
   private weaponPivot = new THREE.Group();
+  /**
+   * The procedural body, kept in its own group so the authored mesh can replace
+   * the whole thing in one move once it finishes loading.
+   */
+  private bodyRig = new THREE.Group();
+  /** Every material the hit flash drives — swapped out with the rig. */
+  private flashMats: THREE.MeshStandardMaterial[] = [];
+  /**
+   * Joint nodes of the authored mesh, each with its origin on the joint it turns
+   * around. Null until the model lands, and for classes that don't have one.
+   */
+  private rig: {
+    pelvis: THREE.Object3D;
+    torso: THREE.Object3D;
+    head: THREE.Object3D;
+    armL: THREE.Object3D;
+    armR: THREE.Object3D;
+    legL: THREE.Object3D;
+    legR: THREE.Object3D;
+  } | null = null;
+  /** Eased 0..1 walk weight, so the gait grows and dies instead of popping on. */
+  private gaitAmp = 0;
+  private idleT = 0;
   private bob = 0;
 
   /** True while the special is running, so the swing resolver knows which shape to use. */
@@ -178,7 +219,7 @@ export class Player implements Actor {
       pauldron.scale.set(1, 0.7, 1);
       pauldron.position.set(s * 0.4, 1.4, 0);
       pauldron.castShadow = true;
-      this.mesh.add(pauldron);
+      this.bodyRig.add(pauldron);
     }
 
     const belt = new THREE.Mesh(
@@ -201,7 +242,7 @@ export class Player implements Actor {
       );
       leg.position.set(s * 0.15, 0.24, 0);
       leg.castShadow = true;
-      this.mesh.add(leg);
+      this.bodyRig.add(leg);
     }
 
     this.buildWeapon(trim);
@@ -221,19 +262,93 @@ export class Player implements Actor {
     const hero = new THREE.PointLight(tint, 6, 5.5, 2);
     hero.position.set(0, 2.6, 0.8);
 
-    this.mesh.add(
-      torso,
-      chest,
-      neck,
-      head,
-      hair,
-      belt,
-      skirt,
-      this.weaponPivot,
-      shadow,
-      hero,
-    );
+    this.bodyRig.add(torso, chest, neck, head, hair, belt, skirt);
+    this.mesh.add(this.bodyRig, this.weaponPivot, shadow, hero);
+    this.flashMats = [this.bodyMat];
     addOutline(this.mesh, 0.03);
+
+    // The authored mesh arrives a frame or many later; until then the primitives
+    // above are the character, exactly as before.
+    void this.loadAuthoredRig(tint);
+  }
+
+  /**
+   * Swap the primitive rig for the mesh authored in Blender.
+   *
+   * Only the warrior has one, and only the body comes from the file — the blade
+   * loads separately and goes under `weaponPivot`, so the swing animation keeps
+   * driving it. A baked-in sword would be a static prop hanging off the hip.
+   */
+  private async loadAuthoredRig(tint: number) {
+    if (this.cls !== "warrior") return;
+
+    const [bodySrc, swordSrc] = await Promise.all([
+      loadModel("/models/warrior.glb"),
+      loadModel("/models/warrior_sword.glb"),
+    ]).catch(() => [null, null] as const);
+    // No asset, no swap: the primitive rig is a complete character on its own.
+    if (!bodySrc || !swordSrc) return;
+
+    const body = instance(bodySrc);
+    fitToHeight(body, 2.1);
+
+    // Materials come off a shared cached model, so every player would flash and
+    // tint together unless each rig gets its own copies.
+    const mats: THREE.MeshStandardMaterial[] = [];
+    body.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const src = m.material as THREE.MeshStandardMaterial;
+      const mine = src.clone();
+      // The plume is the seat colour — the one part of the armour that says
+      // which of the four players this is, from the top-down camera.
+      if (/crest/i.test(src.name)) mine.color.setHex(tint);
+      m.material = mine;
+      mats.push(mine);
+    });
+
+    this.mesh.remove(this.bodyRig);
+    this.bodyRig.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh && !m.userData.sharedGeometry) m.geometry.dispose();
+    });
+
+    addOutline(body, 0.03);
+    this.mesh.add(body);
+    this.bodyRig = body as THREE.Group;
+    this.flashMats = mats;
+
+    // The joints are just named nodes — no skinning. Hard-edged plate armour has
+    // nothing to deform anyway, and segmented limbs read cleanly from this far up.
+    const node = (n: string) => body.getObjectByName(n);
+    const [pelvis, torso, head, armL, armR, legL, legR] = [
+      "Pelvis",
+      "Torso",
+      "Head",
+      "ArmL",
+      "ArmR",
+      "LegL",
+      "LegR",
+    ].map(node);
+    if (pelvis && torso && head && armL && armR && legL && legR) {
+      this.rig = { pelvis, torso, head, armL, armR, legL, legR };
+    }
+
+    // The blade rides the same offset the primitive one did, so every pose in
+    // animateWeapon lands where it always did.
+    const sword = instance(swordSrc);
+    sword.position.set(0.55, 0, 0);
+    sword.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) this.weapon = m;
+    });
+    addOutline(sword, 0.03);
+    for (const child of [...this.weaponPivot.children]) {
+      this.weaponPivot.remove(child);
+      const m = child as THREE.Mesh;
+      if (m.isMesh && !m.userData.sharedGeometry) m.geometry.dispose();
+    }
+    this.weaponPivot.add(sword);
   }
 
   /**
@@ -396,7 +511,18 @@ export class Player implements Actor {
     if (this.dead) {
       this.mesh.rotation.z = damp(this.mesh.rotation.z, Math.PI / 2.2, 8, dt);
       this.mesh.position.copy(this.pos);
-      this.bodyMat.emissive.setScalar(0);
+      for (const m of this.flashMats) m.emissive.setScalar(0);
+      // Going down is a collapse, not a plank tipping over: the body folds while
+      // the whole rig rotates.
+      if (this.rig) {
+        const r = this.rig;
+        r.torso.rotation.x = damp(r.torso.rotation.x, 0.5, 6, dt);
+        r.head.rotation.x = damp(r.head.rotation.x, -0.35, 6, dt);
+        r.legL.rotation.x = damp(r.legL.rotation.x, -0.5, 6, dt);
+        r.legR.rotation.x = damp(r.legR.rotation.x, -0.25, 6, dt);
+        r.armL.rotation.x = damp(r.armL.rotation.x, -0.6, 6, dt);
+        r.armR.rotation.x = damp(r.armR.rotation.x, -0.4, 6, dt);
+      }
       return;
     }
     this.mesh.rotation.z = damp(this.mesh.rotation.z, 0, 10, dt);
@@ -426,38 +552,142 @@ export class Player implements Actor {
     }
 
     this.animateWeapon(dt);
-    this.bodyMat.emissive.setRGB(
-      this.flash,
-      this.flash * 0.85,
-      this.flash * 0.8,
-    );
-    if (this.iframes > 0 && this.state === "dash") {
-      this.bodyMat.emissive.addScalar(0.25);
+    // Body after the weapon: the sword arm reads its pose off weaponPivot, so
+    // the hand has to be told where the hilt already went, not the frame after.
+    this.animateBody(dt, speed);
+    for (const m of this.flashMats) {
+      m.emissive.setRGB(this.flash, this.flash * 0.85, this.flash * 0.8);
+      if (this.iframes > 0 && this.state === "dash") m.emissive.addScalar(0.25);
     }
   }
 
+  /**
+   * Which way the current swing travels.
+   *
+   * Combo steps alternate, so a chain reads as one continuous flurry instead of
+   * the blade teleporting back to the same shoulder before every hit. The heavy
+   * always goes the same way — it is a committed, readable wind-up, not part of
+   * the rhythm.
+   */
+  private get swingDir() {
+    if (this.usingSpecial) return 1;
+    return this.comboIndex % 2 === 0 ? 1 : -1;
+  }
+
+  /**
+   * Pose the body.
+   *
+   * Everything here is driven off state the rig already has — the bob phase that
+   * fires footsteps, and the weapon pivot the swing writes to — so the walk stays
+   * locked to the actual speed and the shoulder can never disagree with the
+   * blade. No clips to blend, nothing to keep in sync with gameplay timings.
+   */
+  private animateBody(dt: number, speed: number) {
+    const r = this.rig;
+    if (!r) return;
+    this.idleT += dt;
+
+    // Walk weight, eased. Without it a tap of the stick snaps the legs to full
+    // stride for one frame and back.
+    const gait = clamp(speed / (this.speed * 0.7), 0, 1);
+    this.gaitAmp = damp(this.gaitAmp, gait, 9, dt);
+    const g = this.gaitAmp;
+    const stride = Math.sin(this.bob);
+    // Breathing only surfaces as the walk dies out, or it fights the stride.
+    const breath = Math.sin(this.idleT * 2.1) * (1 - g);
+
+    // How far the blade has travelled from its guard position. The torso turns
+    // into the swing and the shoulder chases the hilt — that rotation *is* the
+    // wind-up, which is what makes an attack readable before it lands.
+    const swung = this.weaponPivot.rotation.y - REST_SWORD_Y;
+    const attacking = this.state === "attack";
+    const dashing = this.state === "dash";
+
+    const lean = 0.13 * g + (dashing ? 0.3 : 0);
+    r.torso.rotation.x = lean + breath * 0.025 - this.flash * 0.22;
+    r.torso.rotation.y = stride * 0.12 * g + swung * 0.3;
+    r.torso.rotation.z = -stride * 0.04 * g;
+
+    r.pelvis.rotation.y = -stride * 0.14 * g;
+    r.pelvis.rotation.z = Math.cos(this.bob) * 0.05 * g;
+
+    // The head holds its line while the shoulders turn under it — the eyes stay
+    // on the target, which is the whole reason a turn reads as intent.
+    r.head.rotation.y = -(r.torso.rotation.y + r.pelvis.rotation.y) * 0.65;
+    r.head.rotation.x = -lean * 0.55 + breath * 0.03;
+
+    if (dashing) {
+      // Tuck: lead knee up, trailing leg trailing.
+      r.legL.rotation.x = damp(r.legL.rotation.x, -0.6, 16, dt);
+      r.legR.rotation.x = damp(r.legR.rotation.x, 0.35, 16, dt);
+    } else {
+      const swing = stride * 0.62 * g;
+      r.legL.rotation.x = swing;
+      r.legR.rotation.x = -swing;
+    }
+
+    // Shield arm counter-swings with the legs, and comes across the body during
+    // an attack instead of flapping behind the swing.
+    r.armL.rotation.x = -stride * 0.5 * g + (dashing ? -0.4 : 0);
+    r.armL.rotation.y = damp(r.armL.rotation.y, attacking ? -0.3 : 0, 10, dt);
+
+    // Sword arm is slaved to the blade, plus a little arm swing when it's idle
+    // enough to have one.
+    r.armR.rotation.x =
+      this.weaponPivot.rotation.x * 0.8 + stride * 0.3 * g * (attacking ? 0 : 1);
+    r.armR.rotation.y = swung * 0.6;
+  }
+
   private animateWeapon(dt: number) {
-    const rest =
-      this.def.weapon === "sword"
-        ? -0.5
-        : this.def.weapon === "crossbow"
-          ? -0.05
-          : -0.05;
+    const rest = this.def.weapon === "sword" ? REST_SWORD_Y : -0.05;
     let targetY = rest;
     let targetX = this.def.weapon === "staff" ? 0 : 0.1;
 
     if (this.state === "attack") {
       const a = this.currentAttack;
-      const total = a.wind + a.active + a.recover;
 
       if (this.def.weapon === "sword") {
-        const t = clamp(this.stateT / total, 0, 1);
-        // Wind up back, then whip through the arc, then settle.
-        const swing = t < a.wind / total ? -0.9 * (t / (a.wind / total)) : 1;
-        const through = clamp((this.stateT - a.wind) / a.active, 0, 1);
-        this.weaponPivot.rotation.y =
-          swing < 1 ? -0.5 + swing * 0.8 : -1.3 + through * (a.arc + 0.6);
-        this.weaponPivot.rotation.x = this.usingSpecial ? -0.35 : 0.05;
+        // The blade travels the wedge the hit test actually uses, centred on
+        // facing. The old sweep started at a fixed -1.3 while its end scaled
+        // with the arc, so every attack wider than the first combo step drifted
+        // right — the heavy finished a full radian past the shoulder while the
+        // damage had landed symmetrically in front.
+        const dir = this.swingDir;
+        const half = a.arc / 2;
+        // A little past the wedge on both sides: lead-in to load the swing,
+        // follow-through so it decelerates instead of stopping dead.
+        const from = -dir * (half + 0.35);
+        const to = dir * (half + 0.2);
+        const raised = this.usingSpecial ? -0.6 : -0.3;
+        const chopped = this.usingSpecial ? 0.4 : 0.2;
+
+        if (this.stateT < a.wind) {
+          // Wind-up: pull back and lift. Eased out, so the load is readable at
+          // the start and the blade hangs at the top for a beat.
+          const k = easeOut(this.stateT / a.wind);
+          this.weaponPivot.rotation.y = lerp(REST_SWORD_Y, from, k);
+          this.weaponPivot.rotation.x = lerp(0.1, raised, k);
+          return;
+        }
+
+        const activeEnd = a.wind + a.active;
+        if (this.stateT < activeEnd) {
+          // The strike. Cubic ease-out puts most of the arc in the first third
+          // of the active frames, which is where the hit resolves — the blade
+          // is where the damage is, not trailing behind it.
+          const k = easeOutCubic((this.stateT - a.wind) / a.active);
+          this.weaponPivot.rotation.y = lerp(from, to, k);
+          this.weaponPivot.rotation.x = lerp(raised, chopped, k);
+          return;
+        }
+
+        // Recover: settle back to guard. Smoothstepped rather than left parked
+        // at the end of the arc for the whole recovery.
+        const k = smoothstep(
+          clamp((this.stateT - activeEnd) / Math.max(0.0001, a.recover), 0, 1),
+        );
+        this.weaponPivot.rotation.y = lerp(to, REST_SWORD_Y, k);
+        this.weaponPivot.rotation.x = lerp(chopped, 0.1, k);
         return;
       }
 
@@ -480,12 +710,47 @@ export class Player implements Actor {
         return;
       }
 
-      // Staff: raise it overhead through the wind-up, then thrust it down.
-      const raise = clamp(this.stateT / a.wind, 0, 1);
-      const released = this.stateT >= a.wind;
-      this.weaponPivot.rotation.x = released ? 0.5 : -raise * 0.85;
-      this.weaponPivot.rotation.y = released ? 0.2 : -0.05;
+      // Staff: raise it overhead through the wind-up, then drive it down. The
+      // release used to snap between two fixed poses in a single frame, which
+      // is why the thrust had no weight — now it drives through and settles.
+      if (this.stateT < a.wind) {
+        const k = easeOut(this.stateT / a.wind);
+        this.weaponPivot.rotation.x = lerp(0, -0.9, k);
+        this.weaponPivot.rotation.y = lerp(-0.05, -0.25, k);
+        return;
+      }
+      const staffEnd = a.wind + a.active;
+      if (this.stateT < staffEnd) {
+        const k = easeOutCubic((this.stateT - a.wind) / a.active);
+        this.weaponPivot.rotation.x = lerp(-0.9, 0.62, k);
+        this.weaponPivot.rotation.y = lerp(-0.25, 0.24, k);
+        return;
+      }
+      const settle = smoothstep(
+        clamp((this.stateT - staffEnd) / Math.max(0.0001, a.recover), 0, 1),
+      );
+      this.weaponPivot.rotation.x = lerp(0.62, 0, settle);
+      this.weaponPivot.rotation.y = lerp(0.24, -0.05, settle);
       return;
+    }
+
+    // Cast had no pose at all: the weapon simply hung at rest while a bolt
+    // appeared out of nowhere. A short shove forward gives the bolt a source.
+    if (this.state === "cast") {
+      const k = clamp(this.stateT / 0.18, 0, 1);
+      // Out hard, back soft — one sine hump over the whole cast.
+      const push = Math.sin(k * Math.PI);
+      const reach = this.def.weapon === "staff" ? 0.75 : 0.5;
+      this.weaponPivot.rotation.x = lerp(targetX, -reach, easeOutCubic(push));
+      this.weaponPivot.rotation.y = lerp(rest, rest * 0.2, push);
+      return;
+    }
+
+    // Dash: tuck the weapon in behind the shoulder so the silhouette leads with
+    // the body. A blade left swinging out front reads as an attack.
+    if (this.state === "dash") {
+      targetY = rest - 0.55;
+      targetX = 0.42;
     }
 
     this.weaponPivot.rotation.y = damp(

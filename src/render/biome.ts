@@ -1,3 +1,5 @@
+import { t } from '../ui/i18n';
+
 export interface Biome {
   id: string;
   name: string;
@@ -29,7 +31,9 @@ export interface Biome {
 export const BIOMES: Biome[] = [
   {
     id: 'tartarus',
-    name: 'TARTARUS',
+    get name() {
+      return t('biome.tartarus');
+    },
     floorBase: '#4a3346',
     warmHue: [22, 38],
     coolHue: [268, 292],
@@ -47,7 +51,9 @@ export const BIOMES: Biome[] = [
   },
   {
     id: 'asphodel',
-    name: 'ASPHODEL',
+    get name() {
+      return t('biome.asphodel');
+    },
     floorBase: '#3a2018',
     warmHue: [8, 26],
     coolHue: [340, 358],
@@ -65,7 +71,9 @@ export const BIOMES: Biome[] = [
   },
   {
     id: 'elysium',
-    name: 'ELYSIUM',
+    get name() {
+      return t('biome.elysium');
+    },
     floorBase: '#1f4448',
     warmHue: [150, 175],
     coolHue: [185, 210],

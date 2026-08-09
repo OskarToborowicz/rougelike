@@ -19,7 +19,20 @@ body {
   color: var(--ink);
   font-family: 'Trebuchet MS', 'Gill Sans', 'Optima', serif;
   user-select: none;
-  cursor: crosshair;
+
+  /* A small black ring, drawn as an SVG data URI so it stays crisp at any DPR.
+     The hotspot is the ring's centre (9 9), so the point you aim at is the hole,
+     not the corner of a bitmap.
+
+     The black ring carries a 1px translucent white outer edge: on the darkest
+     parts of the arena a pure black outline disappears entirely, and a cursor
+     you cannot find is worse than one that is slightly less black. Drop the
+     second <circle> below to make it pure black. `crosshair` is the fallback
+     for anything that refuses the image. */
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18'%3E%3Ccircle cx='9' cy='9' r='6.2' fill='none' stroke='rgba(255,255,255,0.55)' stroke-width='3.2'/%3E%3Ccircle cx='9' cy='9' r='6.2' fill='none' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E")
+      9 9,
+    crosshair;
 }
 
 #app,
@@ -29,6 +42,10 @@ body {
   display: block;
   width: 100vw !important;
   height: 100vh !important;
+  /* Mobile browsers count the collapsing URL bar inside 100vh, which leaves the
+     bottom of the arena — where the health bars live — under the chrome. dvh
+     tracks the actually-visible viewport; the vh above stays as the fallback. */
+  height: 100dvh !important;
 }
 
 #ui {
@@ -873,4 +890,211 @@ body {
   color: var(--gold);
   opacity: 0.9;
   margin-top: 4px;
+}
+
+/* ------------------------------------------------------------------ touch
+   Hidden entirely until a finger actually touches the screen: many laptops
+   report a touchscreen and are played with a mouse, and a thumbstick drawn
+   over those is pure clutter. `body.touching` is set on first real touch. */
+
+#touch {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: none;
+  pointer-events: none;
+}
+body.touching #touch {
+  display: block;
+}
+/* The sticks sit above the HUD, so they must get out of the way whenever a
+   screen owns the input — otherwise the fire buttons float over the cards you
+   are being asked to choose between. */
+body:has(#lobby.show) #touch,
+body:has(#choice.show) #touch {
+  display: none;
+}
+/* Nothing on the page should pan, zoom, or show a text caret under a thumb. */
+body.touching {
+  touch-action: none;
+  cursor: none;
+  overscroll-behavior: none;
+}
+/* The keyboard hint is a lie on a phone; the thumbsticks are the tutorial. */
+body.touching #hint {
+  display: none;
+}
+
+.tstick {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+.tstick.show {
+  opacity: 1;
+}
+.tring,
+.tknob {
+  position: absolute;
+  border-radius: 50%;
+  transform-origin: center;
+}
+.tring {
+  width: 124px;
+  height: 124px;
+  margin: -62px 0 0 -62px;
+  border: 1px solid var(--edge);
+  background: rgba(0, 0, 0, 0.28);
+}
+.tknob {
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 240, 200, 0.5), rgba(232, 187, 107, 0.28));
+  border: 1px solid var(--gold);
+  box-shadow: 0 0 18px rgba(232, 187, 107, 0.35);
+}
+
+/* Bottom-right cluster, above the right thumb but clear of the aim stick's
+   usual resting area. Buttons are fixed because they are targets, not axes. */
+.tbuttons {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(22px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 10px;
+  pointer-events: auto;
+}
+.tbtn {
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  border: 1px solid var(--edge);
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  opacity: 0.72;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.08s ease, opacity 0.08s ease, background 0.08s ease;
+}
+.tbtn.on {
+  transform: scale(0.92);
+  opacity: 1;
+  background: rgba(232, 187, 107, 0.26);
+}
+.b-dash {
+  border-color: #6fd0ff;
+  color: #bfe8ff;
+}
+.b-call {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* ------------------------------------------------------------------ phones
+   The HUD is built around four 300px seat panels. On a phone there is room for
+   one, so it shrinks and the corners tuck in rather than overlapping. */
+
+@media (max-width: 760px) {
+  .seat {
+    width: min(46vw, 220px);
+    bottom: 14px;
+    transform: scale(0.78);
+  }
+  .seat.p0 {
+    left: 10px;
+    transform-origin: bottom left;
+  }
+  .seat.p1 {
+    right: 10px;
+    transform-origin: bottom right;
+  }
+  .seat.p2,
+  .seat.p3 {
+    bottom: 118px;
+    transform: scale(0.62);
+  }
+  .seat .name {
+    font-size: 11px;
+  }
+  .bar {
+    height: 18px;
+  }
+  .pip {
+    width: 15px;
+    height: 15px;
+  }
+
+  #roominfo .depth {
+    font-size: 10px;
+    letter-spacing: 0.3em;
+  }
+  #roominfo .wave {
+    font-size: 19px;
+  }
+
+  /* Cards stack instead of squeezing into three unreadable columns. */
+  #choice .cards {
+    flex-direction: column;
+    gap: 8px;
+    width: 92vw;
+    max-height: 66vh;
+    overflow-y: auto;
+  }
+  .card {
+    max-width: none;
+  }
+  .card .cdesc {
+    font-size: 12px;
+  }
+  #choice .head {
+    margin-bottom: 14px;
+  }
+  #choice .head .god {
+    font-size: 27px;
+  }
+  #choice .head .sub {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+  }
+  /* "press 1" is meaningless without a keyboard. */
+  body.touching .card .key {
+    display: none;
+  }
+
+  .tbtn {
+    width: 58px;
+    height: 58px;
+    font-size: 9px;
+  }
+  .tring {
+    width: 104px;
+    height: 104px;
+    margin: -52px 0 0 -52px;
+  }
+}
+
+/* Landscape phones are short, not narrow: the vertical budget is what breaks. */
+@media (max-height: 460px) {
+  .seat {
+    bottom: 8px;
+    transform: scale(0.68);
+  }
+  #choice .cards {
+    max-height: 78vh;
+  }
+  #roominfo {
+    top: 8px;
+  }
+  .lpanel {
+    max-height: 94vh;
+    overflow-y: auto;
+  }
 }

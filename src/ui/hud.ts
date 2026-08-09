@@ -144,7 +144,7 @@ export class Hud {
     this.roomWave.textContent = waveLabel;
     // Stays blank until the first obol drops, so a brand new player is never
     // shown a counter for a system they have not met yet.
-    this.purse.textContent = runObols > 0 ? `${runObols} ⛁` : '';
+    this.purse.textContent = runObols > 0 ? `${runObols} ◆` : '';
 
     let worst = 1;
     players.forEach((p) => {

@@ -11,6 +11,7 @@ export interface RunSummary {
   won: boolean;
 }
 import { DEFAULTS, saveSettings, settings } from './settings';
+import { LANG_LABEL, LANGS, language, setLanguage, t, type Key, type Lang } from './i18n';
 
 export type MenuChoice =
   | { mode: 'solo'; cls: ClassId }
@@ -30,16 +31,18 @@ function defaultRelay() {
   return `${proto}//${location.hostname}:8787`;
 }
 
-const CONTROLS: [string, string][] = [
-  ['Move', 'W A S D  ·  left stick'],
-  ['Aim', 'Mouse  ·  right stick'],
-  ['Attack', 'Left mouse  ·  A'],
-  ['Special', 'Right mouse  ·  X'],
-  ['Cast', 'Q  ·  Y'],
-  ['Call', 'F  ·  RB — when the gauge is full'],
-  ['Dash', 'Space  ·  B'],
-  ['Pause', 'Escape  ·  Start'],
-  ['Player two', 'Connect a second gamepad — joins instantly'],
+/** Key pairs, resolved when the screen is built so a language switch takes. */
+const CONTROLS: [Key, Key][] = [
+  ['controls.move', 'controls.move.how'],
+  ['controls.aim', 'controls.aim.how'],
+  ['controls.attack', 'controls.attack.how'],
+  ['controls.special', 'controls.special.how'],
+  ['controls.cast', 'controls.cast.how'],
+  ['controls.call', 'controls.call.how'],
+  ['controls.dash', 'controls.dash.how'],
+  ['controls.pause', 'controls.pause.how'],
+  ['controls.touch', 'controls.touch.how'],
+  ['controls.p2', 'controls.p2.how'],
 ];
 
 /**
@@ -54,7 +57,7 @@ export class Menu {
   private panel = el('div', 'lpanel');
   private status = el('div', 'lstatus', '');
   private roster = el('div', 'lroster', '');
-  private startBtn = el('button', 'lbtn primary', 'DESCEND') as HTMLButtonElement;
+  private startBtn = el('button', 'lbtn primary', t('menu.descend')) as HTMLButtonElement;
 
   /** Set while the pause overlay owns the screen. */
   private paused = false;
@@ -124,16 +127,16 @@ export class Menu {
     return new Promise((resolve) => {
       const titleScreen = () => {
         this.backTo = null;
-        const play = el('button', 'lbtn primary', 'PLAY');
-        const shrine = el('button', 'lbtn', `THE SHORE · ${meta.obols} ⛁`);
-        const options = el('button', 'lbtn', 'OPTIONS');
-        const controls = el('button', 'lbtn', 'CONTROLS');
+        const play = el('button', 'lbtn primary', t('menu.play'));
+        const shrine = el('button', 'lbtn', t('menu.shore', { obols: meta.obols }));
+        const options = el('button', 'lbtn', t('menu.options'));
+        const controls = el('button', 'lbtn', t('menu.controls'));
         play.onclick = () => setupScreen();
         shrine.onclick = () => this.showShrine(titleScreen);
         options.onclick = () => this.showOptions(titleScreen);
         controls.onclick = () => this.showControls(titleScreen);
         this.show([
-          ...this.title('a co-op descent · up to four shades'),
+          ...this.title(t('menu.sub.title')),
           play,
           // Only offered once there is something to spend or something spent —
           // a first-time player has no idea what an obol is yet.
@@ -155,7 +158,7 @@ export class Menu {
 
         const code = el('input', 'lfield code') as HTMLInputElement;
         code.maxLength = 6;
-        code.placeholder = 'CODE';
+        code.placeholder = t('menu.code.placeholder');
         code.oninput = () => (code.value = code.value.toUpperCase());
 
         let cls: ClassId = (localStorage.getItem('styx.class') as ClassId) || 'warrior';
@@ -178,16 +181,16 @@ export class Menu {
         tiles.get(cls)!.classList.add('on');
 
         const remember = () => {
-          settings.playerName = name.value.trim() || 'Shade';
+          settings.playerName = name.value.trim() || t('menu.defaultName');
           settings.relayUrl = url.value.trim();
           saveSettings();
           localStorage.setItem('styx.class', cls);
         };
 
-        const solo = el('button', 'lbtn primary', 'PLAY SOLO');
-        const hostBtn = el('button', 'lbtn', 'HOST ONLINE');
-        const joinBtn = el('button', 'lbtn', 'JOIN WITH CODE');
-        const back = el('button', 'lbtn ghost', 'BACK');
+        const solo = el('button', 'lbtn primary', t('menu.playSolo'));
+        const hostBtn = el('button', 'lbtn', t('menu.host'));
+        const joinBtn = el('button', 'lbtn', t('menu.join'));
+        const back = el('button', 'lbtn ghost', t('menu.back'));
 
         solo.onclick = () => {
           remember();
@@ -201,13 +204,13 @@ export class Menu {
             mode: 'host',
             room: makeRoomCode(),
             url: url.value.trim(),
-            name: name.value.trim() || 'Shade',
+            name: name.value.trim() || t('menu.defaultName'),
             cls,
           });
         };
         joinBtn.onclick = () => {
           if (code.value.trim().length < 4) {
-            this.setStatus('Enter the four-letter code from your host.');
+            this.setStatus(t('menu.needCode'));
             return;
           }
           remember();
@@ -223,15 +226,15 @@ export class Menu {
         back.onclick = titleScreen;
 
         this.show([
-          ...this.title('choose your shade'),
-          row('name', name),
+          ...this.title(t('menu.sub.setup')),
+          row(t('menu.field.name'), name),
           picker,
           blurb,
           solo,
-          el('div', 'ldiv', 'online'),
-          row('relay', url),
+          el('div', 'ldiv', t('menu.online')),
+          row(t('menu.field.relay'), url),
           hostBtn,
-          row('code', code),
+          row(t('menu.field.code'), code),
           joinBtn,
           back,
           this.status,
@@ -258,15 +261,19 @@ export class Menu {
       if (summary) {
         const card = el('div', 'lsummary');
         card.append(
-          el('div', 'lsumhead', summary.won ? 'THE DESCENT ENDS' : 'YOU HAVE DIED'),
-          statLine('Chamber reached', String(summary.depth)),
-          statLine('Foes felled', String(summary.kills)),
-          statLine('Obols earned', `${summary.earned} ⛁`),
+          el('div', 'lsumhead', t(summary.won ? 'shrine.won' : 'shrine.died')),
+          statLine(t('shrine.depth'), String(summary.depth)),
+          statLine(t('shrine.kills'), String(summary.kills)),
+          statLine(t('shrine.earned'), `${summary.earned} ◆`),
         );
         rows.push(card);
       }
 
-      const purse = el('div', 'lpurse', `${meta.obols} ⛁  ·  deepest ${meta.deepest}  ·  ${meta.runs} runs`);
+      const purse = el(
+        'div',
+        'lpurse',
+        t('shrine.purse', { obols: meta.obols, deepest: meta.deepest, runs: meta.runs })
+      );
       rows.push(purse);
 
       const list = el('div', 'lupgrades');
@@ -287,7 +294,7 @@ export class Menu {
           el('span', 'un', u.name),
           el('span', 'ud', u.desc(lvl + (maxed ? 0 : 1))),
           el('span', 'ul', pips),
-          el('span', 'uc', maxed ? 'MAX' : `${cost} ⛁`),
+          el('span', 'uc', maxed ? t('shrine.max') : `${cost} ◆`),
         );
         item.disabled = maxed || !afford;
         item.onclick = () => {
@@ -299,11 +306,15 @@ export class Menu {
       }
       rows.push(list);
 
-      const done = el('button', 'lbtn primary', summary ? 'DESCEND AGAIN' : 'BACK');
+      const done = el(
+        'button',
+        'lbtn primary',
+        summary ? t('shrine.again') : t('menu.back')
+      );
       done.onclick = back;
       rows.push(done);
 
-      this.show([...this.title('the shore'), ...rows]);
+      this.show([...this.title(t('shrine.sub')), ...rows]);
     };
 
     render();
@@ -318,7 +329,7 @@ export class Menu {
     // Volume first: it is the setting a player reaches for soonest, and the one
     // they want to change without hunting.
     rows.push(
-      sliderRow('Sound', settings.sfxVolume, 0, 1, 0.05, (v) => {
+      sliderRow(t('options.sound'), settings.sfxVolume, 0, 1, 0.05, (v) => {
         settings.sfxVolume = v;
         this.audio?.applyVolumes();
         this.audio?.play('uiClick');
@@ -326,53 +337,73 @@ export class Menu {
       })
     );
     rows.push(
-      sliderRow('Music', settings.musicVolume, 0, 1, 0.05, (v) => {
+      sliderRow(t('options.music'), settings.musicVolume, 0, 1, 0.05, (v) => {
         settings.musicVolume = v;
         this.audio?.applyVolumes();
         saveSettings();
       })
     );
     rows.push(
-      toggleRow('Damage numbers', settings.damageNumbers, (v) => {
+      toggleRow(t('options.damageNumbers'), settings.damageNumbers, (v) => {
         settings.damageNumbers = v;
         saveSettings();
       })
     );
     rows.push(
-      toggleRow('Shadows', settings.shadows, (v) => {
+      toggleRow(t('options.shadows'), settings.shadows, (v) => {
         settings.shadows = v;
         saveSettings();
       })
     );
     rows.push(
-      choiceRow('Quality', ['low', 'medium', 'high'], settings.quality, (v) => {
-        settings.quality = v as typeof settings.quality;
-        saveSettings();
-      })
+      choiceRow(
+        t('options.quality'),
+        ['low', 'medium', 'high'],
+        settings.quality,
+        (q) => t(`options.quality.${q}` as Key),
+        (v) => {
+          settings.quality = v as typeof settings.quality;
+          saveSettings();
+        }
+      )
     );
     rows.push(
-      sliderRow('Screen shake', settings.shake, 0, 2, 0.1, (v) => {
+      sliderRow(t('options.shake'), settings.shake, 0, 2, 0.1, (v) => {
         settings.shake = v;
         saveSettings();
       })
     );
     rows.push(
-      sliderRow('Camera distance', settings.zoom, 0.7, 1.6, 0.05, (v) => {
+      sliderRow(t('options.zoom'), settings.zoom, 0.7, 1.6, 0.05, (v) => {
         settings.zoom = v;
         saveSettings();
       })
     );
 
-    const reset = el('button', 'lbtn ghost', 'RESET TO DEFAULTS');
+    // Last of the settings, and the only one that redraws the screen it sits on.
+    rows.push(
+      choiceRow(
+        t('options.language'),
+        LANGS,
+        language(),
+        (l) => LANG_LABEL[l as Lang],
+        (v) => {
+          setLanguage(v as Lang);
+          this.showOptions(back);
+        }
+      )
+    );
+
+    const reset = el('button', 'lbtn ghost', t('options.reset'));
     reset.onclick = () => {
       Object.assign(settings, { ...DEFAULTS, playerName: settings.playerName, relayUrl: settings.relayUrl });
       saveSettings();
       this.showOptions(back);
     };
-    const done = el('button', 'lbtn primary', 'BACK');
+    const done = el('button', 'lbtn primary', t('menu.back'));
     done.onclick = back;
 
-    this.show([...this.title('options'), ...rows, reset, done]);
+    this.show([...this.title(t('options.sub')), ...rows, reset, done]);
   }
 
   showControls(back: () => void) {
@@ -380,12 +411,12 @@ export class Menu {
     const list = el('div', 'lkeys');
     for (const [what, how] of CONTROLS) {
       const r = el('div', 'lkey');
-      r.append(el('span', 'kw', what), el('span', 'kh', how));
+      r.append(el('span', 'kw', t(what)), el('span', 'kh', t(how)));
       list.appendChild(r);
     }
-    const done = el('button', 'lbtn primary', 'BACK');
+    const done = el('button', 'lbtn primary', t('menu.back'));
     done.onclick = back;
-    this.show([...this.title('controls'), list, done]);
+    this.show([...this.title(t('controls.sub')), list, done]);
   }
 
   // ---------------------------------------------------------------- pause
@@ -403,10 +434,10 @@ export class Menu {
 
   private pauseScreen() {
     this.backTo = null;
-    const resume = el('button', 'lbtn primary', 'RESUME');
-    const options = el('button', 'lbtn', 'OPTIONS');
-    const controls = el('button', 'lbtn', 'CONTROLS');
-    const abandon = el('button', 'lbtn danger', 'ABANDON RUN');
+    const resume = el('button', 'lbtn primary', t('pause.resume'));
+    const options = el('button', 'lbtn', t('menu.options'));
+    const controls = el('button', 'lbtn', t('menu.controls'));
+    const abandon = el('button', 'lbtn danger', t('pause.abandon'));
     resume.onclick = () => this.resume();
     options.onclick = () => this.showOptions(() => this.pauseScreen());
     controls.onclick = () => this.showControls(() => this.pauseScreen());
@@ -414,7 +445,7 @@ export class Menu {
       this.paused = false;
       this.onAbandon?.();
     };
-    this.show([...this.title('paused'), resume, options, controls, abandon]);
+    this.show([...this.title(t('pause.sub')), resume, options, controls, abandon]);
   }
 
   private resume() {
@@ -430,7 +461,7 @@ export class Menu {
     this.onStart = onStart;
     this.backTo = null;
     const codeBox = el('div', 'lcode', room);
-    codeBox.title = 'click to copy';
+    codeBox.title = t('room.copy');
     codeBox.onclick = () => navigator.clipboard?.writeText(room);
 
     this.startBtn.onclick = () => {
@@ -439,10 +470,10 @@ export class Menu {
     };
 
     this.show([
-      ...this.title(isHost ? 'share this code' : 'joined room'),
+      ...this.title(t(isHost ? 'room.sub.host' : 'room.sub.guest')),
       codeBox,
       this.roster,
-      isHost ? this.startBtn : el('div', 'lstatus', 'waiting for the host to begin…'),
+      isHost ? this.startBtn : el('div', 'lstatus', t('room.waiting')),
       this.status,
     ]);
   }
@@ -450,7 +481,11 @@ export class Menu {
   setRoster(names: string[]) {
     this.roster.innerHTML = '';
     for (let i = 0; i < 4; i++) {
-      const slot = el('div', 'lslot' + (names[i] ? ' filled' : ''), names[i] || 'open');
+      const slot = el(
+        'div',
+        'lslot' + (names[i] ? ' filled' : ''),
+        names[i] || t('room.slot.open')
+      );
       this.roster.appendChild(slot);
     }
   }
@@ -476,11 +511,15 @@ function row(label: string, input: HTMLElement) {
 
 function toggleRow(label: string, value: boolean, onChange: (v: boolean) => void) {
   const r = el('div', 'lopt');
-  const btn = el('button', 'ltoggle' + (value ? ' on' : ''), value ? 'ON' : 'OFF');
+  const btn = el(
+    'button',
+    'ltoggle' + (value ? ' on' : ''),
+    t(value ? 'options.on' : 'options.off')
+  );
   let v = value;
   btn.onclick = () => {
     v = !v;
-    btn.textContent = v ? 'ON' : 'OFF';
+    btn.textContent = t(v ? 'options.on' : 'options.off');
     btn.classList.toggle('on', v);
     onChange(v);
   };
@@ -488,11 +527,18 @@ function toggleRow(label: string, value: boolean, onChange: (v: boolean) => void
   return r;
 }
 
-function choiceRow(label: string, options: string[], value: string, onChange: (v: string) => void) {
+/** `text` turns each option id into what its button says. */
+function choiceRow(
+  label: string,
+  options: string[],
+  value: string,
+  text: (v: string) => string,
+  onChange: (v: string) => void
+) {
   const r = el('div', 'lopt');
   const group = el('div', 'lseg');
   const btns = options.map((o) => {
-    const b = el('button', 'lsegbtn' + (o === value ? ' on' : ''), o.toUpperCase());
+    const b = el('button', 'lsegbtn' + (o === value ? ' on' : ''), text(o));
     b.onclick = () => {
       btns.forEach((x) => x.classList.remove('on'));
       b.classList.add('on');

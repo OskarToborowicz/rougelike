@@ -1,4 +1,5 @@
 import { clamp } from './math';
+import { TouchControls } from './touch';
 
 export type Action = 'attack' | 'special' | 'cast' | 'dash' | 'call' | 'interact';
 
@@ -50,8 +51,12 @@ export class Input {
   /** World-space point the mouse currently hovers on the arena floor; set by the renderer. */
   mouseWorld = { x: 0, z: 0 };
   private padDeadzone = 0.22;
+  /** On-screen sticks. Hidden until the screen is actually touched. */
+  readonly touch: TouchControls;
 
   constructor(private canvasHost: HTMLElement) {
+    this.touch = new TouchControls(document.body);
+
     addEventListener('keydown', (e) => {
       if (e.repeat) return;
       this.keys.add(e.code);
@@ -114,6 +119,24 @@ export class Input {
       const len = Math.hypot(dx, dz) || 1;
       f.aimX = dx / len;
       f.aimY = dz / len;
+
+      // Touch overrides the mouse rather than blending with it: a stale cursor
+      // position sitting in the corner of a tablet would otherwise fight the
+      // thumb for the aim direction on every frame.
+      if (this.touch.active) {
+        const m = this.touch.moveVector;
+        if (m.x || m.y) {
+          f.moveX = m.x;
+          f.moveY = m.y;
+        }
+        const a = this.touch.aimVector;
+        if (a) {
+          f.aimX = a.x;
+          f.aimY = a.y;
+        }
+        for (const act of this.touch.heldActions) f.held.add(act);
+        for (const act of this.touch.pressedActions) f.pressed.add(act);
+      }
     }
 
     if (pad) {
@@ -160,6 +183,7 @@ export class Input {
 
   endFrame() {
     this.keysDown.clear();
+    this.touch.endFrame();
   }
 
   /** True if a second gamepad-driven seat should exist. */

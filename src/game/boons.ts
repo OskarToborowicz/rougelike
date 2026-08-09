@@ -1,7 +1,14 @@
 import { pick, shuffle } from '../core/math';
 import type { StatusKind } from './enemy';
+import { t, type Key } from '../ui/i18n';
 
 export type God = 'Aphrodite' | 'Ares' | 'Zeus' | 'Poseidon' | 'Artemis';
+
+/** The god's name as the player reads it. The id stays English everywhere else. */
+export const godName = (g: God) => t(`god.${g}` as Key);
+
+/** The same name in whatever case "boon of ___" needs, upper-cased. */
+export const godOf = (g: God) => t(`god.of.${g}` as Key);
 
 export interface GodStyle {
   color: number;
@@ -97,83 +104,82 @@ export class BoonSet {
   }
 }
 
+/**
+ * Name and description are live getters keyed off the boon's id, so a language
+ * change reaches boons already sitting in a player's `taken` list rather than
+ * only new offers. See ui/i18n.ts.
+ */
+const boon = (spec: Omit<Boon, 'name' | 'desc'>): Boon => ({
+  ...spec,
+  get name() {
+    return t(`boon.${spec.id}.name` as Key);
+  },
+  get desc() {
+    return t(`boon.${spec.id}.desc` as Key);
+  },
+});
+
 export const ALL_BOONS: Boon[] = [
-  {
+  boon({
     id: 'zeus-attack',
     god: 'Zeus',
     slot: 'attack',
-    name: 'Lightning Strike',
-    desc: 'Your Attack deals +40% damage and Shocks: a jolt arcs to nearby foes.',
     apply: (b) => {
       b.attackMul += 0.4;
       b.statusOnAttack = 'shock';
     },
-  },
-  {
+  }),
+  boon({
     id: 'poseidon-dash',
     god: 'Poseidon',
     slot: 'dash',
-    name: 'Tidal Dash',
-    desc: 'Your Dash damages and knocks back foes you pass through.',
     apply: (b) => {
       b.dashDamage += 18;
       b.dashKnockback += 14;
     },
-  },
-  {
+  }),
+  boon({
     id: 'artemis-crit',
     god: 'Artemis',
     slot: 'passive',
-    name: "Hunter's Mark",
-    desc: '+15% critical chance on everything.',
     apply: (b) => (b.critChance += 0.15),
-  },
-  {
+  }),
+  boon({
     id: 'ares-special',
     god: 'Ares',
     slot: 'special',
-    name: 'Slicing Shot',
-    desc: 'Your Special deals +55% damage and inflicts Doom: it detonates a beat later.',
     apply: (b) => {
       b.specialMul += 0.55;
       b.statusOnSpecial = 'doom';
     },
-  },
-  {
+  }),
+  boon({
     id: 'aphro-cast',
     god: 'Aphrodite',
     slot: 'cast',
-    name: 'Crush Shot',
-    desc: 'Your Cast deals +60% damage and makes foes Weak: they hit for 40% less.',
     apply: (b) => {
       b.castMul += 0.6;
       b.statusOnCast = 'weak';
     },
-  },
-  {
+  }),
+  boon({
     id: 'zeus-passive',
     god: 'Zeus',
     slot: 'passive',
-    name: 'Storm Sandals',
-    desc: '+12% movement speed.',
     apply: (b) => (b.moveMul += 0.12),
-  },
-  {
+  }),
+  boon({
     id: 'ares-life',
     god: 'Ares',
     slot: 'passive',
-    name: 'Blood Frenzy',
-    desc: 'Heal 4% of damage you deal.',
     apply: (b) => (b.lifesteal += 0.04),
-  },
-  {
+  }),
+  boon({
     id: 'artemis-ammo',
     god: 'Artemis',
     slot: 'cast',
-    name: 'Deadly Volley',
-    desc: '+2 Cast ammo.',
     apply: (b) => (b.extraCastAmmo += 2),
-  },
+  }),
 ];
 
 /** Three distinct offers, never repeating a boon the player already holds. */

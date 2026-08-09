@@ -407,6 +407,7 @@ const runPomRound = () =>
 // line away from the console with this. Stripped from production builds.
 if (import.meta.env.DEV) {
   (window as any).styx = {
+    stage,
     world,
     hud,
     fx,
@@ -415,6 +416,7 @@ if (import.meta.env.DEV) {
     meta,
     remote,
     net,
+    input,
     runBoonRound,
     runHammerRound,
     runPomRound,

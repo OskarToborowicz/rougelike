@@ -2,7 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- No user zoom: a double-tap that zooms the arena mid-fight is a lost run,
+         and viewport-fit lets the sticks reach into the notch area. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#07050c" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>STYX — co-op descent</title>
     <link rel="stylesheet" href="/src/ui/hud.css" />
   </head>
