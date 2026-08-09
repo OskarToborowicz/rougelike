@@ -15,7 +15,7 @@ import { arenaRadius, makeGlowTexture } from '../render/arena';
 import type { FxBus } from '../render/fxbus';
 import type { Frame } from '../core/input';
 import { angleDelta, clamp, damp, rand, TAU } from '../core/math';
-import { GODS } from './boons';
+import { PANTHEONS } from './pantheons';
 
 /**
  * A bolt: solid core, additive glow shell, and its own light. A bare sphere at
@@ -246,8 +246,8 @@ export class World {
 
     // --- intent --------------------------------------------------------
     if (f && !p.isBusy) {
-      if (f.pressed.has('call') && p.callGauge >= 1) {
-        this.fireCall(p);
+      if (this.stepConcord(p, f, dt)) {
+        // The Call — solo or shared — resolved this frame and owns the shade.
       } else if (f.pressed.has('dash') && p.dashCd <= 0) {
         // Dash goes where you're moving if you're moving, else where you aim.
         if (f.moveX || f.moveY) p.facing = Math.atan2(f.moveX, f.moveY);
@@ -492,7 +492,11 @@ export class World {
   }
 
   private fireCast(p: Player) {
-    const color = GODS.Aphrodite.color;
+    // The bolt wears whichever throne has claimed this shade's Cast. Before any
+    // of them has, it is the shade's own violet — the cast is a class ability
+    // first and a god's instrument second.
+    const claimed = p.boons.taken.find((b) => b.slot === 'cast');
+    const color = claimed ? PANTHEONS[claimed.pantheon].color : 0xb07cff;
     const speed = 20;
     const mesh = makeBolt(color, 0.26, '#ff9fd0', 0xffc8e4);
     mesh.position.set(p.pos.x, 1.0, p.pos.z);
@@ -515,6 +519,116 @@ export class World {
     });
     this.fx.shake(0.1);
   }
+
+  /**
+   * The Call, and what it becomes when there is someone to hold it with.
+   *
+   * Alone, it is the panic button it always was: pressed, spent, done. In a
+   * party it is a question — hold F and wait, and if someone holds it back you
+   * spend both gauges on something neither of you could have paid for. That
+   * pause is the whole mechanic. It costs you the half-second you least want to
+   * give up, which is exactly when a Concord is worth the most.
+   *
+   * Returns true when it consumed the frame.
+   */
+  private stepConcord(p: Player, f: Frame, dt: number): boolean {
+    const partyOf = this.livePlayers.length;
+    const ready = p.callGauge >= 1;
+
+    // Nobody to wait for. Keep the old feel exactly: press, fire.
+    if (partyOf < 2) {
+      p.concordHold = 0;
+      if (ready && f.pressed.has('call')) {
+        this.fireCall(p);
+        return true;
+      }
+      return false;
+    }
+
+    if (!ready || !f.held.has('call')) {
+      p.concordHold = 0;
+      return false;
+    }
+
+    p.concordHold += dt;
+
+    // Someone else is standing there with their hand up. Range is generous —
+    // this is a moment of agreement, not a positioning puzzle.
+    const partner = this.livePlayers.find(
+      (o) => o !== p && o.concordHold > 0 && o.callGauge >= 1 && dist2(o.pos, p.pos) < 144
+    );
+    if (partner) {
+      this.fireConcord(p, partner);
+      return true;
+    }
+
+    // Held long enough with no answer: take the lesser thing rather than
+    // stranding a full gauge because the party was busy.
+    if (p.concordHold >= 0.5) {
+      p.concordHold = 0;
+      this.fireCall(p);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Two shades spend together. Centred between them so the blast belongs to the
+   * pair rather than to whoever pressed first, and every status either build
+   * carries lands on everything inside it.
+   */
+  private fireConcord(a: Player, b: Player) {
+    const mx = (a.pos.x + b.pos.x) / 2;
+    const mz = (a.pos.z + b.pos.z) / 2;
+    // Reaches far enough to always cover both, however far apart they agreed.
+    const radius = 9.5 + Math.hypot(a.pos.x - b.pos.x, a.pos.z - b.pos.z) / 2;
+
+    for (const p of [a, b]) {
+      p.callGauge = 0;
+      p.concordHold = 0;
+      p.state = 'cast';
+      p.stateT = 0;
+      // Longer than a solo Call's second: the pair bought room to reposition.
+      p.iframes = Math.max(p.iframes, 1.5);
+      p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.25);
+    }
+
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      const dx = e.pos.x - mx;
+      const dz = e.pos.z - mz;
+      const d = Math.hypot(dx, dz);
+      if (d > radius + e.radius) continue;
+      const nx = dx / (d || 1);
+      const nz = dz / (d || 1);
+      // Each half of the pair contributes its own scaling, so a Concord between
+      // two built shades is worth more than one between two fresh ones.
+      const hit = 70 * (a.boons.attackMul + b.boons.attackMul);
+      this.damage(e, hit, a, nx, nz, 34);
+      if (e.dead) continue;
+      for (const source of [a, b]) {
+        for (const status of [
+          source.boons.statusOnAttack,
+          source.boons.statusOnSpecial,
+          source.boons.statusOnCast,
+        ]) {
+          if (status) this.afflict(e, status, hit / 2, source);
+        }
+      }
+    }
+
+    this.fx.sfx('call', mx, mz);
+    this.fx.ring(mx, mz, 0xfff4cd, radius, 0.9);
+    this.fx.ring(mx, mz, a.def.accent, radius * 0.72, 0.6);
+    this.fx.ring(mx, mz, b.def.accent, radius * 0.44, 0.5);
+    this.fx.bloodBurst(mx, mz, '#ffe9b0', 3.2);
+    this.fx.shake(1.6);
+    this.freeze(0.24);
+    this.onConcord?.(a, b);
+  }
+
+  /** Fired when a Concord lands, so the run can put a banner up. */
+  onConcord?: (a: Player, b: Player) => void;
 
   /**
    * The Call: what the gauge under the health bar has been filling toward.
@@ -872,6 +986,7 @@ export class World {
     const dealt = Math.round(amount * (from ? this.weakMul(from) : 1));
     if (!p.hurt(dealt)) return false;
     this.sellSecondWind(p);
+    this.payScales(p, from);
     this.fx.sfx(p.dead ? 'down' : 'hurt', p.pos.x, p.pos.z);
     this.fx.bloodBurst(p.pos.x, p.pos.z, '#ff4d5e', 0.8);
     this.damageEvents.push({
@@ -1004,6 +1119,7 @@ export class World {
       if (Math.abs(angleDelta(e.facing, to)) > 1.3) continue;
       if (p.hurt(contact)) {
         this.sellSecondWind(p);
+        this.payScales(p, e);
         this.fx.sfx(p.dead ? 'down' : 'hurt', p.pos.x, p.pos.z);
         this.fx.shake(0.4);
         this.freeze(0.06);
@@ -1056,6 +1172,7 @@ export class World {
             if (pr.burst) this.splash(pr, t.id);
           } else if ((t as Player).hurt(pr.damage)) {
             this.sellSecondWind(t as Player);
+            this.payScales(t as Player);
             this.fx.sfx((t as Player).dead ? 'down' : 'hurt', t.pos.x, t.pos.z);
             this.fx.shake(0.32);
             this.fx.bloodBurst(t.pos.x, t.pos.z, '#ff4d5e', 0.7);
@@ -1097,7 +1214,14 @@ export class World {
     if (e.dead) return;
     const b = source?.boons;
     const crit = !!b && Math.random() < b.critChance;
-    const final = Math.round(amount * (crit ? b!.critMul : 1));
+    // Worth More Fallen. Counted live rather than banked at pickup, so the boon
+    // swings with the fight — it is strongest in exactly the moment the legion
+    // wants you to enjoy, and worth nothing while the party is whole.
+    const fallen =
+      b && b.perDownedAlly > 0
+        ? 1 + b.perDownedAlly * this.players.filter((x) => x !== source && x.dead).length
+        : 1;
+    const final = Math.round(amount * fallen * (crit ? b!.critMul : 1));
     e.hurt(final);
     e.vel.x += nx * push;
     e.vel.z += nz * push;
@@ -1171,9 +1295,87 @@ export class World {
     this.freeze(0.18);
   }
 
+  /**
+   * Hand back what the Scales spared.
+   *
+   * With a known attacker the debt lands on it, which is what the card promises.
+   * A bolt from off-screen has no body to charge, so it pays out as a short ring
+   * around the shade instead — the damage is never quietly dropped, and the
+   * player always sees the boon do something.
+   */
+  private payScales(p: Player, from?: Enemy) {
+    const owed = p.reflectOwed;
+    if (owed <= 0) return;
+    p.reflectOwed = 0;
+
+    this.fx.ring(p.pos.x, p.pos.z, 0xfff4cd, 2.6, 0.45);
+    this.fx.sfx('crit', p.pos.x, p.pos.z, 0.8);
+
+    if (from && !from.dead) {
+      const dx = from.pos.x - p.pos.x;
+      const dz = from.pos.z - p.pos.z;
+      const d = Math.hypot(dx, dz) || 1;
+      this.damage(from, owed, p, dx / d, dz / d, 6);
+      return;
+    }
+
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      if (dist2(e.pos, p.pos) > 12.25) continue;
+      this.damage(e, owed, p, 0, 0, 0);
+    }
+  }
+
   /** Weak's whole effect: this foe's outgoing damage, scaled. 1 when unafflicted. */
   private weakMul(e: Enemy) {
     return e.status.weak > 0 ? 0.6 : 1;
+  }
+
+  /**
+   * One foe's burn: damage on a beat, and a chance to light whatever it touches.
+   *
+   * The spread is the whole point of the status — anunna's boons are weaker per
+   * hit than the legion's on purpose, and pay off when the room is crowded.
+   */
+  private tickBurn(e: Enemy, dt: number) {
+    e.status.burn -= dt;
+    if (e.status.burn <= 0) {
+      e.status.burn = 0;
+      e.burnDps = 0;
+      e.burnSourceId = -1;
+      return;
+    }
+
+    e.burnTick -= dt;
+    if (e.burnTick > 0) return;
+    e.burnTick = 0.5;
+
+    const owed = this.players.find((x) => x.id === e.burnSourceId);
+    this.fx.hitSpark(e.pos.x, e.pos.z, 0, 1, '#ff8a3c', 0.45);
+    // No slot passed: a burn tick must never apply the status that caused it.
+    this.damage(e, e.burnDps, owed, 0, 0, 0);
+    if (e.dead) return;
+
+    // Light the neighbours. One at a time, on a cooldown, so a pack catches
+    // gradually and the player can watch it travel.
+    if (e.burnSpreadCd > 0) return;
+    const near = this.enemies.find(
+      (o) => !o.dead && o !== e && o.status.burn <= 0 && dist2(o.pos, e.pos) < 6.25
+    );
+    if (!near) return;
+    e.burnSpreadCd = 1.0;
+    near.status.burn = 2.6;
+    near.burnDps = e.burnDps * 0.8;
+    near.burnSourceId = e.burnSourceId;
+    near.burnTick = 0.5;
+    this.fx.hitSpark(
+      (e.pos.x + near.pos.x) / 2,
+      (e.pos.z + near.pos.z) / 2,
+      near.pos.x - e.pos.x,
+      near.pos.z - e.pos.z,
+      '#ff8a3c',
+      0.8
+    );
   }
 
   private afflict(e: Enemy, status: StatusKind, hit: number, source: Player) {
@@ -1191,6 +1393,18 @@ export class World {
       e.doomSourceId = source.id;
       if (e.status.doom <= 0) e.status.doom = 1.1;
       this.fx.ring(e.pos.x, e.pos.z, STATUS_COLOR.doom, e.radius * 2.2, 0.35);
+      return;
+    }
+
+    if (status === 'burn') {
+      // Refreshes the clock and takes the strongest source rather than stacking:
+      // burn's damage is meant to come from *time on fire*, and letting it stack
+      // would make anunna the only throne worth taking.
+      e.status.burn = 3.2;
+      e.burnDps = Math.max(e.burnDps, hit * 0.22);
+      e.burnSourceId = source.id;
+      if (e.burnTick <= 0) e.burnTick = 0.5;
+      this.fx.hitSpark(e.pos.x, e.pos.z, 0, 1, '#ff8a3c', 0.6);
       return;
     }
 
@@ -1230,13 +1444,16 @@ export class World {
   private tickStatuses(dt: number) {
     for (const e of this.enemies) {
       if (e.dead) {
-        e.status.weak = e.status.shock = e.status.doom = 0;
+        e.status.weak = e.status.shock = e.status.doom = e.status.burn = 0;
         e.doomPayload = 0;
         e.doomSourceId = -1;
+        e.burnDps = 0;
+        e.burnSourceId = -1;
         continue;
       }
       e.status.weak = Math.max(0, e.status.weak - dt);
       e.status.shock = Math.max(0, e.status.shock - dt);
+      if (e.status.burn > 0) this.tickBurn(e, dt);
       if (e.status.doom > 0) {
         e.status.doom -= dt;
         if (e.status.doom <= 0) {

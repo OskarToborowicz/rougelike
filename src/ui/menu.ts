@@ -12,6 +12,8 @@ export interface RunSummary {
 }
 import { DEFAULTS, saveSettings, settings } from './settings';
 import { LANG_LABEL, LANGS, language, setLanguage, t, type Key, type Lang } from './i18n';
+import { PANTHEON_ORDER, PANTHEONS, pantheonName, roundel } from '../game/pantheons';
+import { titleArt } from './art';
 
 export type MenuChoice =
   | { mode: 'solo'; cls: ClassId }
@@ -39,6 +41,7 @@ const CONTROLS: [Key, Key][] = [
   ['controls.special', 'controls.special.how'],
   ['controls.cast', 'controls.cast.how'],
   ['controls.call', 'controls.call.how'],
+  ['controls.concord', 'controls.concord.how'],
   ['controls.dash', 'controls.dash.how'],
   ['controls.pause', 'controls.pause.how'],
   ['controls.touch', 'controls.touch.how'],
@@ -55,6 +58,11 @@ const CONTROLS: [Key, Key][] = [
 export class Menu {
   private root = el('div');
   private panel = el('div', 'lpanel');
+  /**
+   * The title screen is full-bleed art, not a centred panel, so it gets its own
+   * layer. Exactly one of the two is ever populated.
+   */
+  private bleed = el('div');
   private status = el('div', 'lstatus', '');
   private roster = el('div', 'lroster', '');
   private startBtn = el('button', 'lbtn primary', t('menu.descend')) as HTMLButtonElement;
@@ -69,7 +77,7 @@ export class Menu {
 
   constructor(host: HTMLElement, private audio?: Audio) {
     this.root.id = 'lobby';
-    this.root.appendChild(this.panel);
+    this.root.append(this.bleed, this.panel);
     host.appendChild(this.root);
 
     // The menu is where the first click of the session lands, which makes it the
@@ -106,8 +114,18 @@ export class Menu {
   }
 
   private show(children: HTMLElement[]) {
+    this.bleed.innerHTML = '';
+    this.panel.style.display = '';
     this.panel.innerHTML = '';
     this.panel.append(...children);
+    this.root.classList.add('show');
+  }
+
+  /** Hand the whole screen to one element. Used only by the title. */
+  private showBleed(node: HTMLElement) {
+    this.panel.innerHTML = '';
+    this.panel.style.display = 'none';
+    this.bleed.replaceChildren(node);
     this.root.classList.add('show');
   }
 
@@ -117,7 +135,7 @@ export class Menu {
   }
 
   private title(sub: string) {
-    return [el('div', 'ltitle', 'STYX'), el('div', 'lsub', sub)];
+    return [el('div', 'ltitle', t('brand')), el('div', 'lsub', sub)];
   }
 
   // ------------------------------------------------------------ main menu
@@ -127,23 +145,49 @@ export class Menu {
     return new Promise((resolve) => {
       const titleScreen = () => {
         this.backTo = null;
-        const play = el('button', 'lbtn primary', t('menu.play'));
-        const shrine = el('button', 'lbtn', t('menu.shore', { obols: meta.obols }));
-        const options = el('button', 'lbtn', t('menu.options'));
-        const controls = el('button', 'lbtn', t('menu.controls'));
-        play.onclick = () => setupScreen();
-        shrine.onclick = () => this.showShrine(titleScreen);
-        options.onclick = () => this.showOptions(titleScreen);
-        controls.onclick = () => this.showControls(titleScreen);
-        this.show([
-          ...this.title(t('menu.sub.title')),
-          play,
-          // Only offered once there is something to spend or something spent —
-          // a first-time player has no idea what an obol is yet.
-          ...(meta.obols > 0 || meta.runs > 0 ? [shrine] : []),
-          options,
-          controls,
-        ]);
+
+        const screen = el('div', 'e-title');
+        const art = el('div', 'e-title-art');
+        art.appendChild(titleArt());
+        screen.append(art, el('div', 'e-title-scrim'), el('div', 'e-title-glow'));
+
+        const body = el('div', 'e-title-body');
+        body.append(
+          el('div', 'e-rule'),
+          el('div', 'e-kicker', t('menu.kicker')),
+          el('div', 'e-wordmark e-leaf', t('brand')),
+          el('div', 'e-subtitle', t('menu.sub.title'))
+        );
+
+        const menu = el('div', 'e-menu');
+        const row = (label: string, onClick: () => void, primary = false) => {
+          const r = el('button', 'e-menu-row' + (primary ? ' primary' : ''));
+          r.append(
+            el('span', 'e-diamond'),
+            el('span', 'e-menu-label', label),
+            el('span')
+          );
+          r.onclick = onClick;
+          menu.appendChild(r);
+          return r;
+        };
+
+        row(t('menu.play'), () => setupScreen(), true);
+        // The reliquary is only offered once there is something to spend or
+        // something spent — a first-time player has no idea what an obol is yet.
+        if (meta.obols > 0 || meta.runs > 0) {
+          const r = row(t('menu.shore'), () => this.showShrine(titleScreen));
+          const aside = el('span', 'e-menu-aside');
+          aside.append(el('span', 'e-obol'), el('span', '', String(meta.obols)));
+          r.replaceChild(aside, r.lastChild as HTMLElement);
+        }
+        row(t('menu.options'), () => this.showOptions(titleScreen));
+        row(t('menu.controls'), () => this.showControls(titleScreen));
+        body.appendChild(menu);
+        screen.appendChild(body);
+
+        screen.append(thronesRow(), el('div', 'e-tagline', t('menu.tagline')));
+        this.showBleed(screen);
       };
 
       const setupScreen = () => {
@@ -493,6 +537,25 @@ export class Menu {
   setStatus(text: string) {
     this.status.textContent = text;
   }
+}
+
+/**
+ * The seven thrones along the foot of the title. Struck-metal roundels carrying
+ * their numeral; `spurned` greys out the ones that have stopped speaking to the
+ * party, which is only ever non-empty mid-run.
+ */
+export function thronesRow(spurned?: ReadonlySet<string>) {
+  const row = el('div', 'e-thrones');
+  for (const id of PANTHEON_ORDER) {
+    const p = PANTHEONS[id];
+    const cell = el('div', 'e-throne' + (spurned?.has(id) ? ' spurned' : ''));
+    const disc = el('span', 'e-roundel', p.numeral);
+    disc.style.background = roundel(id);
+    disc.style.color = p.ink;
+    cell.append(disc, el('span', 'e-throne-name', pantheonName(id)));
+    row.appendChild(cell);
+  }
+  return row;
 }
 
 // --------------------------------------------------------------- widgets

@@ -102,9 +102,33 @@ export interface WireCard {
   id: string;
   name: string;
   desc: string;
-  /** Small label above the name — a god, a slot, a rarity. */
+  /** Small label above the name — a throne, a slot, a rival's interruption. */
   kicker: string;
   accent: string;
+  /** A rival answering over the offering throne. Drawn in its own colour. */
+  rival?: boolean;
+  /** Levels held, and levels on the track, for a boon being stacked. */
+  pips?: number;
+  pipsOf?: number;
+}
+
+/**
+ * The offer screen's furniture — everything except the cards. Mirrors OfferView
+ * in ui/hud.ts; the guest hands it straight to the same chooser the host uses,
+ * so a remote seat and a local seat are the same screen built from one shape.
+ */
+export interface WireView {
+  /** Heading — a god's name, 'HAMMER', 'EMPOWER'. */
+  title: string;
+  accent: string;
+  subtitle: string;
+  epithet?: string;
+  quote?: string;
+  numeral?: string;
+  roundel?: string;
+  ink?: string;
+  throne?: string;
+  art?: string;
 }
 
 /**
@@ -115,10 +139,7 @@ export interface WireCard {
 export interface WireOffer {
   /** Which player must choose. */
   pid: number;
-  /** Heading — a god's name, 'HAMMER', 'EMPOWER'. */
-  title: string;
-  accent: string;
-  subtitle: string;
+  view: WireView;
   cards: WireCard[];
 }
 

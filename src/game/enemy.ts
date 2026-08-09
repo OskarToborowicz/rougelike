@@ -127,15 +127,16 @@ export const ARCHETYPES: Record<EnemyKind, Archetype> = {
  *   doom  — a delayed lump of damage (burst, rewards moving on)
  *   shock — a jolt that arcs to whatever is standing nearby (crowds)
  */
-export type StatusKind = 'weak' | 'doom' | 'shock';
+export type StatusKind = 'weak' | 'doom' | 'shock' | 'burn';
 
 /** Bit per status, for the HUD tint and the wire. Order matches STATUS_KINDS. */
-export const STATUS_KINDS: StatusKind[] = ['weak', 'doom', 'shock'];
+export const STATUS_KINDS: StatusKind[] = ['weak', 'doom', 'shock', 'burn'];
 
 export const STATUS_COLOR: Record<StatusKind, number> = {
   weak: 0xff6f9c,
   doom: 0xe2384a,
   shock: 0xffe066,
+  burn: 0xff8a3c,
 };
 
 export type EnemyState =
@@ -186,7 +187,14 @@ export class Enemy implements Actor {
    * Seconds left on each status. Zero means not afflicted; the World owns what
    * they *do*, the Enemy only owns how long they last and how they look.
    */
-  status: Record<StatusKind, number> = { weak: 0, doom: 0, shock: 0 };
+  status: Record<StatusKind, number> = { weak: 0, doom: 0, shock: 0, burn: 0 };
+  /** Damage a burn deals each beat, and who is owed the credit for it. */
+  burnDps = 0;
+  burnSourceId = -1;
+  /** Counts down to the next beat of burn damage. */
+  burnTick = 0;
+  /** Gate on burn spreading, so a crowd does not relight itself every frame. */
+  burnSpreadCd = 0;
   /** Damage banked by Doom, paid out in one lump when the timer runs out. */
   doomPayload = 0;
   /** Player id owed the credit (crit, lifesteal, call gauge) for that payout. */
@@ -510,6 +518,7 @@ export class Enemy implements Actor {
   /** The status that gets to own the body tint. Doom first — it's the one on a clock. */
   get worstStatus(): StatusKind | null {
     if (this.status.doom > 0) return 'doom';
+    if (this.status.burn > 0) return 'burn';
     if (this.status.shock > 0) return 'shock';
     if (this.status.weak > 0) return 'weak';
     return null;
@@ -530,6 +539,7 @@ export class Enemy implements Actor {
     this.flash = Math.max(0, this.flash - dt * 5);
     this.stagger = Math.max(0, this.stagger - dt);
     this.shockCd = Math.max(0, this.shockCd - dt);
+    this.burnSpreadCd = Math.max(0, this.burnSpreadCd - dt);
 
     this.mesh.position.x = this.pos.x;
     this.mesh.position.z = this.pos.z;

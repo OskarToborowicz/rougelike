@@ -8,10 +8,20 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#07050c" />
+    <meta name="theme-color" content="#15100c" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <title>STYX — co-op descent</title>
+    <!-- Overwritten at boot with the player's language; here for the first paint
+         and for anything that reads the document before the module runs. -->
+    <title>ECUMENE — the last council of the dead</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Marcellus&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Karla:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/src/ui/hud.css" />
+    <!-- Second: the ECUMENE pass restyles what the base sheet lays out. -->
+    <link rel="stylesheet" href="/src/ui/ecumene.css" />
   </head>
   <body>
     <div id="app"></div>

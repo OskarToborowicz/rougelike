@@ -65,6 +65,11 @@ export class Player implements Actor {
   castReload = 0;
   callGauge = 0;
   /**
+   * How long this shade has been holding Call with a full gauge, waiting for
+   * someone to hold it back. Zero the moment the key comes up. See World.
+   */
+  concordHold = 0;
+  /**
    * Fired on each footfall. Steps are the one cue deliberately kept off the
    * wire: they are continuous rather than an event, so every client generates
    * its own from the rig it is already animating.
@@ -466,8 +471,27 @@ export class Player implements Actor {
     );
   }
 
+  /**
+   * Damage the Scales spared this frame, owed back to whatever struck. The World
+   * collects it — Player has no way to reach the attacker, and putting the
+   * reflection here would mean every caller of `hurt` had to know about it.
+   */
+  reflectOwed = 0;
+
   hurt(amount: number) {
     if (this.iframes > 0 || this.dead) return false;
+
+    // The Scales. A blow that costs more than the threshold is halved, and the
+    // half that was spared becomes a debt against whatever swung. Deliberately
+    // only the *large* hits: chip damage stays chip damage, so the boon reads as
+    // protection against the thing that was about to end the run.
+    const bar = this.boons.scalesThreshold;
+    if (bar > 0 && amount > this.maxHp * bar) {
+      const spared = amount / 2;
+      amount -= spared;
+      this.reflectOwed += spared;
+    }
+
     this.hp = Math.max(0, this.hp - amount);
     this.iframes = 0.45;
     this.flash = 1;

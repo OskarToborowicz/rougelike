@@ -7,18 +7,28 @@ import { Input, type Frame } from "./core/input";
 import { World } from "./game/world";
 import type { Enemy } from "./game/enemy";
 import { Player, PLAYER_TINTS } from "./game/player";
-import { BoonSet, offer, randomGod, type Boon, type God } from "./game/boons";
-import type { WireCard, WireOffer } from "./net/protocol";
+import { BoonSet, offerFrom, rivalOffer, type Boon } from "./game/boons";
+import type { WireCard, WireOffer, WireView } from "./net/protocol";
 import { CLASSES, type ClassId } from "./game/classes";
 import { biomeForDepth } from "./render/biome";
 import { Director } from "./game/director";
 import { Gate } from "./game/gate";
 import { offerDoors, type Reward } from "./game/rewards";
 import { hammerColor, hammerSlotLabel, offerHammers } from "./game/hammers";
-import { godName, GODS } from "./game/boons";
+import {
+  godEpithet,
+  godName,
+  godOfPantheon,
+  godQuote,
+  PANTHEON_ORDER,
+  PANTHEONS,
+  roundel,
+  throneLine,
+  type PantheonId,
+} from "./game/pantheons";
 import { onLanguageChange, t } from "./ui/i18n";
 import { shuffle } from "./core/math";
-import { Hud } from "./ui/hud";
+import { Hud, type OfferView } from "./ui/hud";
 import { Menu, type RunSummary } from "./ui/menu";
 import { pixelRatioFor, settings } from "./ui/settings";
 import { Net } from "./net/net";
@@ -160,7 +170,7 @@ function addSeat(
   const a = (seat / MAX_PLAYERS) * Math.PI * 2;
   p.pos.set(Math.cos(a) * 2, 0, 3 + Math.sin(a) * 2);
   world.addPlayer(p);
-  hud.addSeat(seat, seatLabel(seat, cls));
+  hud.addSeat(seat, seatLabel(seat, cls), cls);
   return p;
 }
 
@@ -214,6 +224,8 @@ const seatMeta = new Map<number, MetaState>();
 /** Obols a corpse is worth. Bosses pay for the fight they actually were. */
 const bounty = (e: Enemy) =>
   e.a.boss ? 60 + director.depth * 8 : Math.round(4 + e.a.hp / 24 + director.depth * 0.6);
+
+world.onConcord = () => hud.showBanner(t("banner.concord"));
 
 world.onKill = (e) => {
   runKills++;
@@ -280,9 +292,8 @@ net.onPickHandler = (netId, boonId) => {
  * wrong is exactly why remote players used to be handed random hammers.
  */
 interface CardRound<T extends { id: string }> {
-  title: (p: Player) => string;
-  accent: (p: Player) => string;
-  subtitle: (p: Player) => string;
+  /** Everything the offer screen shows besides the cards. */
+  view: (p: Player) => OfferView;
   /** Up to three options for this seat. Empty skips the seat entirely. */
   choices: (p: Player) => T[];
   card: (p: Player, choice: T) => WireCard;
@@ -310,9 +321,7 @@ async function runCardRound<T extends { id: string }>(round: CardRound<T>) {
 
   openOffers = remoteRolls.map((r) => ({
     pid: r.p.id,
-    title: round.title(r.p),
-    accent: round.accent(r.p),
-    subtitle: round.subtitle(r.p),
+    view: round.view(r.p) as WireView,
     cards: r.choices.map((c) => round.card(r.p, c)),
   }));
 
@@ -333,9 +342,7 @@ async function runCardRound<T extends { id: string }>(round: CardRound<T>) {
   const localPicks: { p: Player; choice: T }[] = [];
   for (const r of localRolls) {
     const picked = await hud.offerCards(
-      round.title(r.p),
-      round.accent(r.p),
-      round.subtitle(r.p),
+      round.view(r.p),
       r.choices.map((c) => round.card(r.p, c)),
     );
     localPicks.push({ p: r.p, choice: r.choices.find((c) => c.id === picked.id)! });
@@ -352,29 +359,79 @@ async function runCardRound<T extends { id: string }>(round: CardRound<T>) {
   }
 }
 
-const runBoonRound = (god: God) =>
-  runCardRound<Boon>({
-    title: () => godName(god),
-    accent: () => GODS[god].css,
-    subtitle: (p) => t("round.sub.boon", { seat: seatLabel(p.seat, p.cls) }),
-    choices: (p) => offer(p.boons, 3),
-    card: (_p, b) => ({
+/**
+ * A throne comes to the door.
+ *
+ * Two of its own boons, and — when it has a live quarrel with someone — a third
+ * card from a rival, answering over its head. The rival's card is not better on
+ * paper; what it costs is the throne that was offering, which will not come back
+ * this descent. That is the whole decision.
+ */
+const runBoonRound = (pantheon: PantheonId, god: string) => {
+  // The rival wears one face for the whole round. `godOfPantheon` rolls, so
+  // calling it per card would rename the speaker between the kicker and the log.
+  const faces = new Map<PantheonId, string>();
+  const faceOf = (p: PantheonId) => {
+    const known = faces.get(p);
+    if (known) return known;
+    const fresh = godOfPantheon(p);
+    faces.set(p, fresh);
+    return fresh;
+  };
+
+  return runCardRound<Boon>({
+    view: (p) => ({
+      title: godName(god),
+      accent: PANTHEONS[pantheon].css,
+      subtitle: t("round.sub.boon", { seat: seatLabel(p.seat, p.cls) }),
+      epithet: godEpithet(god),
+      quote: godQuote(god),
+      numeral: PANTHEONS[pantheon].numeral,
+      roundel: roundel(pantheon),
+      ink: PANTHEONS[pantheon].ink,
+      throne: throneLine(pantheon),
+      art: god,
+    }),
+    choices: (p) => {
+      const own = offerFrom(p.boons, pantheon, 3);
+      // Only leave room for a rival when the throne can still fill two cards of
+      // its own — a lone card plus an interruption reads as a bug, not a choice.
+      const rival = own.length >= 2 ? rivalOffer(p.boons, pantheon) : null;
+      return rival ? [...own.slice(0, 2), rival] : own;
+    },
+    card: (p, b) => ({
       id: b.id,
       name: b.name,
       desc: b.desc,
-      kicker: godName(b.god),
-      accent: GODS[b.god].css,
+      kicker:
+        b.pantheon === pantheon
+          ? throneLine(pantheon)
+          : t("round.answersOver", { god: godName(faceOf(b.pantheon)) }),
+      accent: PANTHEONS[b.pantheon].css,
+      rival: b.pantheon !== pantheon,
+      // A boon already held shows how far along the track it is, so a repeat
+      // offer reads as levelling rather than as the same card coming back.
+      ...(p.boons.levelOf(b.id) > 0
+        ? { pips: p.boons.levelOf(b.id), pipsOf: p.boons.levelOf(b.id) + 1 }
+        : {}),
     }),
-    apply: (p, b) => p.boons.add(b),
-    ring: 0xffd27f,
+    apply: (p, b) => {
+      p.boons.add(b);
+      // Taken over the offering throne's head. It is done with this shade.
+      if (b.pantheon !== pantheon) p.boons.spurned.add(pantheon);
+    },
+    ring: PANTHEONS[pantheon].color,
   });
+};
 
 /** Weapon hammer: pick one of three upgrades to a slot. */
 const runHammerRound = () =>
   runCardRound({
-    title: () => t("round.hammer"),
-    accent: () => "#ffb04a",
-    subtitle: (p) => t("round.sub.hammer", { seat: seatLabel(p.seat, p.cls) }),
+    view: (p) => ({
+      title: t("round.hammer"),
+      accent: "#ffb04a",
+      subtitle: t("round.sub.hammer", { seat: seatLabel(p.seat, p.cls) }),
+    }),
     choices: (p) => offerHammers(p.boons, p.cls, 3),
     card: (_p, h) => ({
       id: h.id,
@@ -393,18 +450,20 @@ const runHammerRound = () =>
 /** Pom: empower a boon already held, raising its level. */
 const runPomRound = () =>
   runCardRound<Boon>({
-    title: () => t("round.empower"),
-    accent: () => "#d6a6ff",
-    subtitle: (p) => t("round.sub.pom", { seat: seatLabel(p.seat, p.cls) }),
+    view: (p) => ({
+      title: t("round.empower"),
+      accent: "#d6a6ff",
+      subtitle: t("round.sub.pom", { seat: seatLabel(p.seat, p.cls) }),
+    }),
     choices: (p) => shuffle(p.boons.taken.slice()).slice(0, 3),
     card: (p, b) => ({
       id: b.id,
-      name: `${b.name}  ${"I".repeat(Math.min(5, p.boons.levelOf(b.id)))}→${"I".repeat(
-        Math.min(5, p.boons.levelOf(b.id) + 1),
-      )}`,
+      name: b.name,
       desc: b.desc,
-      kicker: godName(b.god),
-      accent: GODS[b.god].css,
+      kicker: throneLine(b.pantheon),
+      accent: PANTHEONS[b.pantheon].css,
+      pips: p.boons.levelOf(b.id),
+      pipsOf: p.boons.levelOf(b.id) + 1,
     }),
     apply: (p, b) => p.boons.upgrade(b),
     ring: 0xd6a6ff,
@@ -437,8 +496,8 @@ if (import.meta.env.DEV) {
 
 /** Pay out whatever the chosen door promised. */
 async function grantReward(reward: Reward) {
-  if (reward.kind === "boon" && reward.god) {
-    await runBoonRound(reward.god);
+  if (reward.kind === "boon" && reward.pantheon) {
+    await runBoonRound(reward.pantheon, reward.god ?? godOfPantheon(reward.pantheon));
     return;
   }
 
@@ -476,10 +535,16 @@ async function onChamberCleared() {
   // agrees on a door — not when the last enemy falls.
   paused = false;
   const anyBoons = world.players.some((p) => p.boons.taken.length > 0);
+  // A throne spurned by everyone still standing has nothing left to offer, so
+  // it is kept off the doors entirely rather than promising an empty room.
+  const courted = PANTHEON_ORDER.filter((t) =>
+    world.livePlayers.some((p) => !p.boons.spurned.has(t)),
+  );
   const doors = offerDoors(
     director.depth,
     Math.random() < 0.25 ? 3 : 2,
     anyBoons,
+    courted.length ? courted : PANTHEON_ORDER,
   );
   doors.forEach((door, i) => gates[i].show(door, i, doors.length));
   hud.showBanner(t("banner.choosePath"));
@@ -561,13 +626,11 @@ function checkGuestOffer() {
     shownOffer = "";
     return;
   }
-  const key = `${mine.pid}:${mine.title}:${mine.cards.map((c) => c.id).join(",")}`;
+  const key = `${mine.pid}:${mine.view.title}:${mine.cards.map((c) => c.id).join(",")}`;
   if (key === shownOffer) return;
   shownOffer = key;
 
-  hud
-    .offerCards(mine.title, mine.accent, mine.subtitle, mine.cards)
-    .then((picked) => net.sendPick(picked.id));
+  hud.offerCards(mine.view, mine.cards).then((picked) => net.sendPick(picked.id));
 }
 
 /**
@@ -754,10 +817,14 @@ function loop(now: number) {
     remote.predictLocal(dt, f, seq);
     remote.update(dt);
 
+    // A guest does not know which body is its own until the roster lands, and
+    // the big portrait plate belongs to whoever is actually holding the pad.
+    if (me) hud.setLocalSeat(me.seat);
+
     // Seats appear on a guest as the host's roster arrives, not up front.
     for (const p of remote.playerList) {
       if (!hud.hasSeat(p.seat)) {
-        hud.addSeat(p.seat, seatLabel(p.seat, p.cls));
+        hud.addSeat(p.seat, seatLabel(p.seat, p.cls), p.cls);
       }
     }
 
