@@ -1002,73 +1002,13 @@ body.touching #hint {
    The HUD is built around four 300px seat panels. On a phone there is room for
    one, so it shrinks and the corners tuck in rather than overlapping. */
 
+/*
+ * What is left here after the ECUMENE pass: the touch pad and the menu panel.
+ * The old rules in this block targeted .seat, .bar, .pip, #roominfo and the
+ * pre-ECUMENE .card markup — all of which is either gone or hidden by
+ * ecumene.css, which now owns every responsive decision about the HUD itself.
+ */
 @media (max-width: 760px) {
-  .seat {
-    width: min(46vw, 220px);
-    bottom: 14px;
-    transform: scale(0.78);
-  }
-  .seat.p0 {
-    left: 10px;
-    transform-origin: bottom left;
-  }
-  .seat.p1 {
-    right: 10px;
-    transform-origin: bottom right;
-  }
-  .seat.p2,
-  .seat.p3 {
-    bottom: 118px;
-    transform: scale(0.62);
-  }
-  .seat .name {
-    font-size: 11px;
-  }
-  .bar {
-    height: 18px;
-  }
-  .pip {
-    width: 15px;
-    height: 15px;
-  }
-
-  #roominfo .depth {
-    font-size: 10px;
-    letter-spacing: 0.3em;
-  }
-  #roominfo .wave {
-    font-size: 19px;
-  }
-
-  /* Cards stack instead of squeezing into three unreadable columns. */
-  #choice .cards {
-    flex-direction: column;
-    gap: 8px;
-    width: 92vw;
-    max-height: 66vh;
-    overflow-y: auto;
-  }
-  .card {
-    max-width: none;
-  }
-  .card .cdesc {
-    font-size: 12px;
-  }
-  #choice .head {
-    margin-bottom: 14px;
-  }
-  #choice .head .god {
-    font-size: 27px;
-  }
-  #choice .head .sub {
-    font-size: 11px;
-    letter-spacing: 0.18em;
-  }
-  /* "press 1" is meaningless without a keyboard. */
-  body.touching .card .key {
-    display: none;
-  }
-
   .tbtn {
     width: 58px;
     height: 58px;
@@ -1083,16 +1023,6 @@ body.touching #hint {
 
 /* Landscape phones are short, not narrow: the vertical budget is what breaks. */
 @media (max-height: 460px) {
-  .seat {
-    bottom: 8px;
-    transform: scale(0.68);
-  }
-  #choice .cards {
-    max-height: 78vh;
-  }
-  #roominfo {
-    top: 8px;
-  }
   .lpanel {
     max-height: 94vh;
     overflow-y: auto;

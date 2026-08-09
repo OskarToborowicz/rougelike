@@ -1,69 +1,74 @@
-# Mobile layout — known gaps
+# Mobile layout
 
-The ECUMENE pass (`ecumene.css`, `hud.ts`, `menu.ts`) implements the design doc,
-which is a fixed **1600×900 desktop frame**. It says nothing about touch, and the
-game does ship a touch build (`core/touch.ts`, `body.touching`).
+The ECUMENE pass implements a design doc that is a fixed **1600×900 desktop
+frame** and says nothing about touch. This file records what changed to make it
+work on a phone, and what is still open.
 
-Verified at **375×812** with the touch pad forced on. The visual language itself
-carries over fine — amber on smoke, Marcellus/Garamond/Karla, the struck-metal
-roundels and the shadow-rising-up-a-portrait health all read at phone size. What
-does not carry over is the **blocking**. Three real problems, in priority order.
+The visual language is unchanged across every size — same palette, type,
+materials and components. Only the **blocking** differs.
 
-## 1. The portrait plate sits under the left thumb
+## What the phone layout does
 
-The design puts the local shade bottom-left and allies bottom-right. The touch
-controls put the movement stick bottom-left and the DASH/SPEC/CAST/CALL cluster
-bottom-right. At 375px the plate (132×168 below the 1100px breakpoint) covers
-roughly a fifth of the screen exactly where the moving thumb goes.
+**Both bottom corners belong to the thumbs.** The design puts the local shade
+bottom-left and the allies bottom-right; the touch controls put the movement
+stick and the four action buttons in exactly those two places. On a phone the
+local plate docks to the **top-left** as a 56×72 thumbnail and the allies sit
+**top-right** under the obol counter, at 44×56. Health still reads as shadow
+rising up the plate at that size.
 
-Input still works — `#ui` is `pointer-events: none`, so touches pass straight
-through — but you steer with your thumb on top of your own portrait. In co-op the
-ally plates land directly on the four action buttons.
+**The build readout survives.** An earlier pass hid `.e-shade-meta` wholesale,
+which took the cast pips and the boon roundels with it — both are information
+the player needs, not decoration. The name, the sworn line and the lore are the
+parts that go; the pips and roundels stay, shrunk, beside the thumbnail.
 
-**Proposed:** shrink the local plate to a ~64px thumbnail docked under the top
-banner, keeping the shadow-health idea at small scale; allies become a row of
-small plates along the top edge. Both bottom corners go back to being thumbs.
+**Ally plates carry a short label.** `P3 · MARKSMAN` does not fit a 44px column,
+and truncating it to `P3 · M…` is worse than dropping the class, which the
+plate's tint and portrait already carry. `addSeat` writes both forms and CSS
+picks one.
 
-## 2. The build readout disappears entirely
+**Portrait stacks the offer, landscape does not.** A landscape phone has width
+to spare and almost no height, so stacking there would push the terms into a
+150px slot and throw away the one dimension the frame has. Portrait gets the
+sheet: god block as a header with top-aligned content, terms scrolling beneath.
+Landscape keeps two columns and shrinks everything inside them.
 
-`ecumene.css` `@media (max-width: 700px)` hides `.e-shade-meta`, which takes the
-name, the sworn line, **the cast pips and the boon roundels** with it. The pips
-are load-bearing — they are the only display of remaining Cast ammo — and the
-roundels are the only display of what boons are held. Dropping them bought space
-at the cost of information the player needs.
+**The terms always scroll** below 780px of height. Centring fixed-height content
+in a fixed-height column is what used to push the third card — the rival, the
+whole point of the round — off the bottom with no way to reach it.
 
-**Proposed:** bring both back as a compact strip beside the docked thumbnail. The
-name and sworn line can stay hidden on a phone; the pips and roundels cannot.
+Breakpoints, all in `ecumene.css`:
 
-## 3. The offer screen clips at both ends
+| Query | What it governs |
+| --- | --- |
+| `max-width: 1100px` | Desktop, but not roomy: smaller plates, shorter banner |
+| `max-width: 900px` and `orientation: portrait` | Offer stacks into a sheet; title art fades behind the type |
+| `max-width: 820px`, `max-height: 520px` | Phone HUD: plates move to the top, meta strip shrinks |
+| `orientation: landscape` and `max-height: 560px` | Short frame: two-column offer, compressed title |
+| `max-height: 780px` | Terms scroll |
+| `body.touching` | Drops instructions a phone cannot follow (card numerals, "press 1 · 2 · 3") |
 
-Below the 900px breakpoint `.e-offer` stacks vertically: `.e-offer-god` at 34%
-height, `.e-offer-terms` beneath. Two failures:
+## Touch aiming
 
-- `.e-god-body` is anchored `bottom: 56px` inside a short box, so it overflows
-  *upward* — the throne line above the god's name is cut off above the fold.
-- `.e-offer-terms` is `justify-content: center` at a fixed height with no
-  `overflow`, so content taller than the column bleeds past both edges instead of
-  scrolling. Measured: three cards at 155 / 200 / 158px in a 671px column, and
-  the third card still ran off the bottom.
+On touch the aim used to come from the **mouse position**, which on a phone is
+wherever the cursor happened to land — so a shade driven with one thumb walked
+sideways staring at a corner of the screen. Two changes:
 
-On a rival round the clipped card is the third one — which is the rival, the
-whole point of the mechanic.
+- **Aim follows movement** when the right thumb is not down (`core/input.ts`).
+  The right stick still overrides it, and still fires.
+- **Aim assist** bends that aim onto whatever is already roughly in front
+  (`core/aim.ts`), because a thumb points at about a third of the screen and for
+  the ranged classes "a little wrong" is a clean miss. It is a cone, not a lock:
+  point somewhere empty and nothing happens. Melee gets a 60% nudge inside 6.5m;
+  ranged snaps inside 20m and a 49° cone. Never runs for mouse or gamepad.
 
-**Proposed:** make it a sheet. God block as a fixed header at ~28vh with its own
-content top-aligned, terms scrolling under it (`overflow-y: auto`, no centring),
-cards full-width, `.e-card-kicker` forced to one line.
+## Still open
 
-## Also worth clearing while in there
-
-`hud.css` still carries `@media (max-width: 760px)` and `@media (max-height:
-460px)` blocks written for the old bar-based HUD. Most of what they target
-(`.seat`, `.bar`, `.pips`, `.callbar`, `.boons`) is either gone or now hidden by
-`ecumene.css`. They are dead weight and will mislead whoever touches this next.
-
-## Not a second design
-
-Everything above is re-blocking, not re-styling. Tokens, type, materials and
-component looks stay exactly as they are — the work lands almost entirely in
-`ecumene.css` media queries plus a couple of markup hooks in `hud.ts` so the
-plate and the meta strip can be reparented for small screens.
+- **Portrait was built and verified, then deprioritised** in favour of landscape.
+  It works, but it has had less exercise — the ally row in particular has only
+  been checked with three seats, not four.
+- The **concord prompt** sits at 42% height on phones to clear both thumbs. It
+  has not been tested with a real second player on a touch device.
+- No **safe-area insets**. A notched phone in landscape will put the local plate
+  and the ally row under the notch; `viewport-fit=cover` is already set in
+  `index.html`, so this wants `env(safe-area-inset-*)` on `.e-shades`,
+  `.e-allies` and `#e-purse`.

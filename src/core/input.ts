@@ -133,6 +133,14 @@ export class Input {
         if (a) {
           f.aimX = a.x;
           f.aimY = a.y;
+        } else if (m.x || m.y) {
+          // No right thumb down: face where you are going. The aim above came
+          // from the mouse, which on a phone is wherever the cursor happened to
+          // land — so without this the shade walks sideways staring at a corner
+          // of the screen. Matches what the second gamepad already does.
+          const l = Math.hypot(m.x, m.y);
+          f.aimX = m.x / l;
+          f.aimY = m.y / l;
         }
         for (const act of this.touch.heldActions) f.held.add(act);
         for (const act of this.touch.pressedActions) f.pressed.add(act);
@@ -184,6 +192,11 @@ export class Input {
   endFrame() {
     this.keysDown.clear();
     this.touch.endFrame();
+  }
+
+  /** True once this device has actually been touched. Gates aim assist. */
+  get usingTouch() {
+    return this.touch.active;
   }
 
   /** True if a second gamepad-driven seat should exist. */

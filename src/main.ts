@@ -4,6 +4,7 @@ import { Arena } from "./render/arena";
 import { Vfx } from "./render/vfx";
 import { FxBus } from "./render/fxbus";
 import { Input, type Frame } from "./core/input";
+import { ASSIST, assistAim } from "./core/aim";
 import { World } from "./game/world";
 import type { Enemy } from "./game/enemy";
 import { Player, PLAYER_TINTS } from "./game/player";
@@ -268,6 +269,24 @@ function checkLocalJoin() {
   const p = addSeat(1);
   fx.ring(p.pos.x, p.pos.z, PLAYER_TINTS[1], 2.2, 0.6);
   hud.showBanner(t("banner.playerTwo"));
+}
+
+/**
+ * Aim assist, applied to whichever frame this machine produced locally.
+ *
+ * Only on touch — a mouse is already precise and a stick has its own feel, and
+ * silently bending either would be a bug rather than a feature. The profile
+ * comes from how the class delivers damage: a swing has an arc to spare, a bolt
+ * does not. See core/aim.ts.
+ */
+function withAssist(
+  f: Frame,
+  at: { pos: { x: number; z: number }; cls: ClassId },
+  targets: Iterable<{ pos: { x: number; z: number }; dead: boolean }>,
+): Frame {
+  if (!input.usingTouch) return f;
+  const melee = CLASSES[at.cls].attack === "melee";
+  return assistAim(f, at.pos, targets, melee ? ASSIST.melee : ASSIST.ranged);
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -811,7 +830,13 @@ function loop(now: number) {
     // immediately, ship it, and render everyone else from the host's snapshots.
     const me = remote.players.get(remote.myPlayerId) ?? remote.playerList[0];
 
-    const f = input.sample(0, me?.pos.x ?? 0, me?.pos.z ?? 0);
+    const f = me
+      ? withAssist(
+          input.sample(0, me.pos.x, me.pos.z),
+          me,
+          remote.enemies.values(),
+        )
+      : input.sample(0, 0, 0);
 
     const seq = net.sendInput(f, now);
     remote.predictLocal(dt, f, seq);
@@ -855,7 +880,7 @@ function loop(now: number) {
         frames.set(
           p.id,
           owner === undefined
-            ? input.sample(p.seat, p.pos.x, p.pos.z)
+            ? withAssist(input.sample(p.seat, p.pos.x, p.pos.z), p, world.enemies)
             : (net.remoteFrames.get(owner) ?? null),
         );
       }
