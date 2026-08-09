@@ -42,6 +42,42 @@ const BUTTONS: { action: Action; key: Key; cls: string }[] = [
   { action: 'call', key: 'touch.call', cls: 'b-call' },
 ];
 
+/**
+ * Take pinch and double-tap zoom away.
+ *
+ * Three layers, because no single one covers every engine:
+ *
+ *   · `touch-action: none` in hud.css handles pinch and double-tap wherever it
+ *     is honoured, and is what stops the browser stealing a pointer stream
+ *     mid-gesture
+ *   · `user-scalable=no` in the viewport meta handles the rest — except iOS,
+ *     which has ignored that attribute since iOS 10
+ *   · and these three Safari-only gesture events are what is actually left on
+ *     an iPhone
+ *
+ * A zoomed-in arena mid-fight is a lost run, and there is no in-game control to
+ * zoom back out — the only way back is a page reload, which ends the descent.
+ *
+ * Deliberately not touching keyboard zoom: ctrl+scroll and ctrl+plus are how a
+ * player with poor eyesight reads a desktop screen, and nothing about a mouse
+ * makes the arena scroll away by accident.
+ */
+function blockZoomGestures() {
+  for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
+    addEventListener(type, (e) => e.preventDefault(), { passive: false });
+  }
+
+  // Belt and braces for engines that honour neither the meta tag nor
+  // touch-action: a second finger is never anything this game needs.
+  addEventListener(
+    'touchmove',
+    (e) => {
+      if (e.touches.length > 1) e.preventDefault();
+    },
+    { passive: false }
+  );
+}
+
 export class TouchControls {
   /** True once this device has actually been touched, not merely capable of it. */
   active = false;
@@ -59,6 +95,10 @@ export class TouchControls {
   private buttonEls = new Map<Action, HTMLElement>();
 
   constructor(host: HTMLElement) {
+    // Before anything else, and regardless of whether this device turns out to
+    // have a touchscreen at all — the cost is three listeners that never fire.
+    blockZoomGestures();
+
     this.root.id = 'touch';
     this.root.append(this.moveEl.wrap, this.aimEl.wrap);
 

@@ -914,11 +914,33 @@ body:has(#lobby.show) #touch,
 body:has(#choice.show) #touch {
   display: none;
 }
-/* Nothing on the page should pan, zoom, or show a text caret under a thumb. */
-body.touching {
+/*
+ * Nothing on the page pans or zooms — and this is deliberately NOT gated on
+ * `.touching`, which is only set after the first touch has already landed. The
+ * pinch that matters is the one before the game knows it is on a phone.
+ *
+ * `user-scalable=no` in the viewport meta does not cover this: iOS has ignored
+ * it since iOS 10. See blockZoomGestures() in core/touch.ts for the Safari
+ * gesture events this cannot reach.
+ */
+html,
+body {
   touch-action: none;
-  cursor: none;
   overscroll-behavior: none;
+  /* Stop iOS inflating type when the phone turns landscape. */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* The few things that genuinely scroll get their axis back. */
+.lpanel,
+.lupgrades,
+.e-offer-terms {
+  touch-action: pan-y;
+}
+
+/* A caret or a mouse cursor under a thumb is noise. */
+body.touching {
+  cursor: none;
 }
 /* The keyboard hint is a lie on a phone; the thumbsticks are the tutorial. */
 body.touching #hint {
