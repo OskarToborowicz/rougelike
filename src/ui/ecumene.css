@@ -1,47 +1,89 @@
 /*
- * ECUMENE — second pass.
+ * ECUMENE — the marble pass.
  *
- * Amber and smoke rather than cold slate. Loaded after hud.css, and deliberately
- * on its own `e-` prefix: the screens the design covers emit new markup, so
- * nothing here has to out-specify the old rules. What hud.css still owns is the
- * stuff underneath the design — the canvas, the touch pad, floating numbers,
- * the vignette — and the handful of overrides for those sit at the bottom.
+ * Marble, charcoal and sanguine chalk. No noise, no craquelure, no gold-leaf
+ * gradients: every surface is one stone under one light, and the type is cut
+ * into it rather than printed on it. Loaded after hud.css, on its own `e-`
+ * prefix, so nothing here has to out-specify the base sheet.
  *
- * Three ideas carry the whole look:
- *   · gold is a *material*, not a colour — every gold surface is a gradient with
- *     a light edge and a dark bottom, so it reads as struck metal under a torch
- *   · health is shadow rising up a portrait, never a bar draining sideways
- *   · nothing is a rounded rectangle; the frame is a hairline and a shadow
+ * Four rules carry the whole look:
+ *   · one light, from above-left. Every slab is a 168deg ramp with a bright top
+ *     edge and a dark under-edge, which is what makes flat colour read as stone
+ *   · letters are *cut*, not drawn — a white highlight below the glyph and a
+ *     soft dark above it, the inverse of a drop shadow
+ *   · one accent. Sanguine (#b04a30) means rival, danger, or the other side of
+ *     a bargain, and nothing else in the palette competes with it
+ *   · squares, never circles. A struck coin was the amber pass; this is a
+ *     mason's mark
+ *
+ * Health still reads as shadow climbing a portrait — that survived from the
+ * amber pass because it was never about the colour.
  */
 
 :root {
-  --e-ground: #15100c;
-  --e-ground-deep: #100d0b;
-  --e-ground-hud: #0d0b09;
-  --e-ink: #f0e3c8;
-  --e-gold: #f4e3ae;
-  --e-gold-mid: #d9b25e;
-  --e-gold-deep: #a8831f;
-  --e-muted: #9c8a72;
-  --e-faint: #6b5c48;
-  --e-ember: #e4802f;
+  --e-ground: #0a0908;
+  --e-ground-deep: #0a0908;
+  --e-ground-hud: #0a0908;
+  /* The panel behind the offer terms: charcoal, a shade off the ground. */
+  --e-ground-panel: #0d0c0a;
 
-  --e-display: 'Marcellus', 'Trajan Pro', Georgia, serif;
+  /* Marble, light to dark. */
+  --e-marble-lit: #f0eade;
+  --e-marble: #e0d8c6;
+  --e-marble-mid: #c8bfac;
+  --e-marble-dim: #b8af9c;
+  --e-marble-deep: #a49b8a;
+
+  /* Stone, for everything that is not a lit face. */
+  --e-stone: #8d8474;
+  --e-stone-mid: #6e6558;
+  --e-stone-deep: #4e4740;
+  --e-stone-dark: #2a2320;
+
+  /* Ink cut into a lit face, and ink laid on a dark one. */
+  --e-cut: #4c443b;
+  --e-cut-deep: #413a32;
+  --e-ink: #e6dfd0;
+  --e-ink-bright: #efe9dc;
+  --e-muted: #8b8375;
+  --e-faint: #6c6558;
+
+  /* The one accent. */
+  --e-sanguine: #b04a30;
+  --e-sanguine-lit: #c07456;
+
+  --e-display: 'Cinzel', 'Trajan Pro', Georgia, serif;
   --e-body: 'EB Garamond', Georgia, 'Times New Roman', serif;
-  --e-ui: 'Karla', 'Inter', 'Helvetica Neue', sans-serif;
+  /* No sans in the marble pass — labels are small caps of the same cut stone. */
+  --e-ui: 'Cinzel', Georgia, serif;
 
-  /* The wordmark's struck-gold ramp. Reused anywhere a name has to feel cast. */
-  --e-leaf: linear-gradient(
-    172deg,
-    #6d5214 0%,
-    #a8831f 15%,
-    #e6c866 31%,
-    #fff4cd 47%,
-    #d8b04a 57%,
-    #8a6c14 76%,
-    #d9b25e 94%,
-    #f4e3ae 100%
-  );
+  /* One stone under one light. Every slab in the game is this ramp. */
+  --e-slab: linear-gradient(168deg, #e6dfd0, #d2c9b6 34%, #e0d8c6 52%, #bcb3a0 76%, #d8cfbc);
+  --e-slab-lit: linear-gradient(168deg, #f0eade, #d7cebb 50%, #e2dac8);
+  --e-slab-dim: linear-gradient(168deg, #cfc6b3, #b8af9c 52%, #c5bca9);
+  --e-slab-dark: linear-gradient(168deg, #2a2320, #191413 55%, #231c19);
+
+  /*
+   * Two hairline veins across a slab, at the angles a saw leaves. Layered under
+   * the stone ramp so they sit *in* the marble rather than on it.
+   */
+  --e-vein: linear-gradient(101deg, transparent 30%, rgba(110, 103, 90, 0.2) 31.4%, transparent 33%),
+    linear-gradient(72deg, transparent 58%, rgba(110, 103, 90, 0.14) 59.4%, transparent 61%);
+
+  /* A slab's edges: lit top, shadowed underside, and its weight on the floor. */
+  --e-relief: 0 1px 0 rgba(255, 253, 246, 0.55) inset,
+    0 -3px 0 rgba(90, 84, 74, 0.35) inset, 0 30px 60px rgba(0, 0, 0, 0.75);
+  --e-relief-soft: 0 1px 0 rgba(255, 253, 246, 0.5) inset, 0 14px 30px rgba(0, 0, 0, 0.7);
+}
+
+/*
+ * Letters cut into stone. The highlight goes *below* the glyph and the shadow
+ * above it — the inverse of type sitting on a surface, and the whole reason
+ * this reads as carved rather than printed.
+ */
+.e-engraved {
+  color: var(--e-cut);
+  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.92), 0 -2px 2px rgba(0, 0, 0, 0.34);
 }
 
 @keyframes e-ember {
@@ -65,14 +107,14 @@
   }
 }
 
-/* Gold that reads as metal rather than as yellow text. */
+/*
+ * Was the gilded wordmark; now a name standing proud of a dark ground. Kept on
+ * the same class name so every call site reads the same, but there is no metal
+ * in it any more — just a hard shadow under the letter.
+ */
 .e-leaf {
-  background: var(--e-leaf);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.9))
-    drop-shadow(0 0 52px rgba(210, 162, 92, 0.4));
+  color: var(--e-ink-bright);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.85);
 }
 
 /* ------------------------------------------------------------- art surfaces */
@@ -86,14 +128,20 @@
 .e-art {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(160deg, #241a12, #0f0b08 70%);
+  background: linear-gradient(168deg, #221e1b, #0d0b0a 70%);
 }
 
+/*
+ * Desaturated hard, on purpose. Full-colour art next to grey marble reads as a
+ * photograph pasted into a carving; pulled down to near-monochrome with the
+ * contrast raised, it reads as the relief it is supposed to be.
+ */
 .e-art > img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  filter: grayscale(0.88) contrast(1.22) brightness(0.82);
 }
 
 .e-art.missing::after {
@@ -102,7 +150,7 @@
   inset: 0;
   background: radial-gradient(
     ellipse at 50% 38%,
-    rgba(210, 162, 92, 0.14),
+    rgba(230, 223, 208, 0.09),
     transparent 68%
   );
 }
@@ -116,7 +164,7 @@
   font-family: var(--e-display);
   font-size: 54px;
   letter-spacing: 0.1em;
-  color: rgba(240, 227, 200, 0.16);
+  color: rgba(230, 223, 208, 0.14);
 }
 
 /* ============================================================ 01 · THE TITLE */
@@ -203,50 +251,64 @@
   animation: e-rise 0.5s ease-out both;
 }
 
+/*
+ * The tablet the wordmark is cut into. Veins first, stone over them, and the
+ * lit/shadowed edges last — the order is what makes it a block rather than a
+ * rectangle with a gradient.
+ */
+.e-tablet {
+  position: relative;
+  padding: 54px 56px 48px;
+  background: var(--e-vein), var(--e-slab);
+  box-shadow: var(--e-relief);
+}
+
+/* The rule under the subtitle: a scored line, lit along its lower edge. */
 .e-rule {
-  width: 210px;
-  height: 2px;
-  background: linear-gradient(90deg, #7a5c22, #f4e3ae 46%, #9b7746 78%, transparent);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
+  margin-top: 22px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(80, 74, 64, 0.5), rgba(80, 74, 64, 0.05));
+  box-shadow: 0 1px 0 rgba(255, 253, 246, 0.7);
 }
 
 .e-kicker {
-  margin-top: 24px;
-  font-family: var(--e-ui);
-  font-size: 11px;
-  letter-spacing: 0.5em;
+  font-family: var(--e-display);
+  font-size: clamp(10px, 0.9vw, 14px);
+  letter-spacing: 0.46em;
   text-transform: uppercase;
-  color: rgba(240, 227, 200, 0.44);
+  color: var(--e-stone-mid);
+  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.8);
 }
 
 .e-wordmark {
-  margin-top: 18px;
+  margin-top: 26px;
   font-family: var(--e-display);
-  font-size: clamp(46px, 5.2vw, 78px);
-  line-height: 1;
-  letter-spacing: 0.22em;
+  font-weight: 600;
+  font-size: clamp(44px, 6vw, 92px);
+  line-height: 0.92;
+  letter-spacing: 0.14em;
 }
 
 .e-subtitle {
-  margin-top: 16px;
-  font-size: clamp(17px, 1.5vw, 22px);
+  margin-top: 20px;
+  font-size: clamp(17px, 1.6vw, 24px);
   font-style: italic;
-  color: rgba(240, 227, 200, 0.6);
+  color: #5f5751;
 }
 
 .e-menu {
-  margin-top: 46px;
+  margin-top: 52px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .e-menu-row {
   display: grid;
-  grid-template-columns: 26px 1fr auto;
+  grid-template-columns: 34px 1fr auto;
   align-items: center;
-  gap: 16px;
-  padding: 11px 0;
+  gap: 14px;
+  padding: 13px 0;
   background: none;
   border: 0;
   text-align: left;
@@ -258,38 +320,40 @@
 
 .e-menu-row .e-menu-label {
   font-family: var(--e-display);
-  font-size: 21px;
-  letter-spacing: 0.3em;
-  color: rgba(240, 227, 200, 0.62);
+  font-size: clamp(17px, 1.5vw, 22px);
+  letter-spacing: 0.28em;
+  color: rgba(230, 223, 208, 0.5);
   transition: color 0.16s ease;
 }
 
 /* The diamond only exists on the row under the cursor, and on the first row at
    rest — so there is always exactly one, and it tracks the eye. */
+/* A stroke of sanguine chalk against the row, not a jewel. */
 .e-menu-row .e-diamond {
-  justify-self: center;
-  width: 9px;
-  height: 9px;
-  background: linear-gradient(160deg, #f4e3ae, #a8831f);
-  transform: rotate(45deg) scale(0);
-  box-shadow: 0 0 12px rgba(217, 178, 94, 0.7);
+  justify-self: end;
+  width: 16px;
+  height: 3px;
+  background: var(--e-sanguine);
+  transform: scaleX(0);
+  transform-origin: right center;
   transition: transform 0.16s ease;
 }
 
 .e-menu-row:hover .e-diamond,
 .e-menu-row:focus-visible .e-diamond,
 .e-menu-row.primary .e-diamond {
-  transform: rotate(45deg) scale(1);
+  transform: scaleX(1);
 }
 
 .e-menu-row.primary .e-menu-label {
-  font-size: 25px;
-  color: var(--e-gold);
+  font-weight: 600;
+  font-size: clamp(20px, 1.9vw, 27px);
+  color: var(--e-ink-bright);
 }
 
 .e-menu-row:hover .e-menu-label,
 .e-menu-row:focus-visible .e-menu-label {
-  color: var(--e-gold);
+  color: var(--e-ink-bright);
 }
 
 .e-menu-row:focus-visible {
@@ -300,21 +364,20 @@
 .e-obol {
   width: 15px;
   height: 15px;
-  border-radius: 50%;
-  background: linear-gradient(160deg, #f4e3ae, #a8831f 55%, #6d5214);
+  background: #ded6c5;
   box-shadow:
-    0 1px 0 rgba(255, 244, 205, 0.5) inset,
-    0 2px 5px rgba(0, 0, 0, 0.7);
+    0 1px 0 rgba(255, 253, 246, 0.6) inset,
+    0 2px 4px rgba(0, 0, 0, 0.7);
 }
 
 .e-menu-aside {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-family: var(--e-ui);
-  font-size: 13px;
-  letter-spacing: 0.1em;
-  color: var(--e-gold-mid);
+  gap: 9px;
+  font-family: var(--e-display);
+  font-size: 15px;
+  letter-spacing: 0.16em;
+  color: #9d9484;
 }
 
 /* ----------------------------------------------------------- the seven thrones */
@@ -336,28 +399,26 @@
   gap: 7px;
 }
 
+/* A mason's mark: a square of the throne's own stone, numeral cut into it. */
 .e-roundel {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   font-family: var(--e-display);
-  font-size: 14px;
-  /* Light catch on top, shadow pooled at the bottom, contact shadow beneath —
-     the three things that make a flat disc read as a struck coin. */
+  font-size: 12px;
+  letter-spacing: 0.06em;
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.5) inset,
-    0 -2px 3px rgba(0, 0, 0, 0.7) inset,
-    0 3px 8px rgba(0, 0, 0, 0.8);
+    0 1px 0 rgba(255, 253, 246, 0.45) inset,
+    0 2px 5px rgba(0, 0, 0, 0.8);
 }
 
 .e-throne-name {
-  font-family: var(--e-ui);
+  font-family: var(--e-display);
   font-size: 8px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(240, 227, 200, 0.4);
+  color: rgba(230, 223, 208, 0.34);
 }
 
 /* A throne that has been spurned this descent goes dark and stays dark. */
@@ -372,13 +433,23 @@
 
 .e-tagline {
   position: absolute;
-  right: 56px;
+  right: 60px;
   bottom: 48px;
-  font-family: var(--e-ui);
-  font-size: 10px;
-  letter-spacing: 0.3em;
+  font-family: var(--e-display);
+  font-size: 11px;
+  letter-spacing: 0.34em;
   text-transform: uppercase;
-  color: rgba(240, 227, 200, 0.4);
+  color: rgba(230, 223, 208, 0.34);
+}
+
+/* Sits beside the seven marks along the foot of the title. */
+.e-thrones-note {
+  font-family: var(--e-display);
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: rgba(230, 223, 208, 0.34);
+  align-self: center;
 }
 
 /* ============================================================== 02 · THE HUD */
@@ -392,68 +463,74 @@
   pointer-events: none;
 }
 
+/*
+ * A tablet hung at the top of the frame, its foot cut to a chevron. Replaces
+ * the amber pass's flanking hairlines: a slab needs no rules drawn beside it to
+ * say where it ends.
+ */
 #e-top .e-top-line {
-  display: flex;
-  align-items: center;
-  gap: 22px;
+  display: block;
+  padding: 20px 46px 18px;
+  background: var(--e-slab-dim);
+  box-shadow: var(--e-relief-soft);
+  clip-path: polygon(0 0, 100% 0, 100% 74%, 50% 100%, 0 74%);
 }
 
+/* The rules the amber pass flanked the chamber name with. The slab replaced
+   them; the elements stay in the markup so the HUD builder is unchanged. */
 #e-top .e-hair {
-  width: 130px;
-  height: 1px;
-}
-
-#e-top .e-hair.left {
-  background: linear-gradient(90deg, transparent, rgba(217, 178, 94, 0.6));
-}
-
-#e-top .e-hair.right {
-  background: linear-gradient(90deg, rgba(217, 178, 94, 0.6), transparent);
+  display: none;
 }
 
 #e-top .e-camera {
   font-family: var(--e-display);
-  font-size: 26px;
-  letter-spacing: 0.4em;
+  font-weight: 600;
+  font-size: 24px;
+  letter-spacing: 0.34em;
   /* The tracking pushes the last glyph off-centre; nudge the whole line back. */
-  margin-left: 0.4em;
-  color: #f0dcae;
-  text-shadow: 0 2px 14px #000;
+  margin-left: 0.34em;
+  color: var(--e-cut);
+  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.85);
   white-space: nowrap;
 }
 
+/* Inside the tablet, above its chevron foot — so the count belongs to the
+   chamber name rather than floating under it. */
 #e-waves {
-  margin-top: 14px;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 46px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 11px;
+  gap: 9px;
 }
 
 #e-waves i {
-  width: 13px;
-  height: 13px;
-  transform: rotate(45deg);
-  border: 1px solid rgba(217, 178, 94, 0.45);
+  width: 11px;
+  height: 11px;
+  box-shadow: 0 0 0 1px rgba(76, 68, 59, 0.5) inset;
 }
 
 #e-waves i.on {
-  border-color: transparent;
-  background: linear-gradient(160deg, #f4e3ae, #a8831f);
+  box-shadow: none;
+  background: var(--e-cut);
 }
 
 #e-purse {
   position: absolute;
-  top: 40px;
-  right: 52px;
+  top: 44px;
+  right: 56px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   pointer-events: none;
-  font-family: var(--e-ui);
-  font-size: 17px;
-  letter-spacing: 0.12em;
-  color: #f0dcae;
+  font-family: var(--e-display);
+  font-size: 18px;
+  letter-spacing: 0.14em;
+  color: var(--e-ink-bright);
+  text-shadow: 0 2px 8px #000;
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -495,30 +572,44 @@
  * sideways and reads as a resource; a portrait going under reads as the person
  * going under, which is the thing the player actually cares about.
  */
+/*
+ * The plate is now a marble frame with the relief set into it: the padding is
+ * the stone, and the art sits in a recess with its own inner shadow. The amber
+ * pass drew the frame as stacked outlines; a real frame has thickness.
+ */
 .e-plate {
   --hp: 1;
   position: relative;
   flex: 0 0 auto;
-  width: 186px;
-  height: 236px;
+  width: 196px;
+  height: 248px;
+  padding: 7px;
+  background: var(--e-slab);
   box-shadow:
-    0 0 0 1px rgba(217, 178, 94, 0.55),
-    0 0 0 5px #14100c,
-    0 0 0 6px rgba(217, 178, 94, 0.28),
-    0 22px 50px rgba(0, 0, 0, 0.8),
-    0 0 60px rgba(210, 162, 92, 0.22);
+    0 1px 0 rgba(255, 253, 246, 0.5) inset,
+    0 22px 48px rgba(0, 0, 0, 0.8);
 }
 
+/* The recess the relief sits in. */
+.e-plate > .e-art {
+  position: absolute;
+  inset: 7px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6) inset;
+}
+
+/*
+ * Shadow climbing the relief. The waterline is a 1px chalk rule — no glow,
+ * because nothing in this palette glows.
+ */
 .e-plate .e-shadow {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: calc((1 - var(--hp)) * 100%);
+  left: 7px;
+  right: 7px;
+  bottom: 7px;
+  height: calc((1 - var(--hp)) * (100% - 14px));
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(10, 8, 6, 0.35), rgba(10, 8, 6, 0.94) 22%);
-  border-top: 1px solid rgba(217, 178, 94, 0.8);
-  box-shadow: 0 -1px 10px rgba(217, 178, 94, 0.35);
+  background: linear-gradient(180deg, rgba(6, 6, 5, 0.4), rgba(6, 6, 5, 0.95) 26%);
+  border-top: 1px solid rgba(230, 223, 208, 0.55);
   transition: height 0.22s ease-out;
 }
 
@@ -526,69 +617,75 @@
 .e-plate[style*='--hp: 1'] .e-shadow,
 .e-plate[style*='--hp:1'] .e-shadow {
   border-top-color: transparent;
-  box-shadow: none;
 }
 
 .e-plate .e-hp {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 7px;
+  right: 7px;
+  bottom: 7px;
   padding: 8px 10px;
   pointer-events: none;
-  font-family: var(--e-ui);
-  font-size: 12px;
-  letter-spacing: 0.16em;
-  color: #f0dcae;
+  font-family: var(--e-display);
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: var(--e-ink-bright);
   text-align: right;
   text-shadow: 0 1px 4px #000;
 }
 
 .e-plate .e-hp span {
-  opacity: 0.45;
+  opacity: 0.42;
 }
 
 /* The call gauge: a thin filament down the plate's right edge. */
+/*
+ * The Call gauge. The doc drops it from the plate entirely; it is kept here
+ * because Concord is unreachable without knowing the bar is full, and a
+ * mechanic the player cannot see is a mechanic they will not use. Recut as a
+ * chalk mark down the frame's edge so it belongs to the marble.
+ */
 .e-plate .e-call {
   position: absolute;
-  right: -9px;
+  right: -7px;
   bottom: 0;
-  width: 4px;
+  width: 3px;
   height: calc(var(--call, 0) * 100%);
   pointer-events: none;
-  background: linear-gradient(180deg, #f4e3ae, #c9a227 60%, #7a5c22);
-  box-shadow: 0 0 12px rgba(217, 178, 94, 0.7);
+  background: var(--e-marble);
   transition: height 0.14s linear;
 }
 
 .e-plate .e-call-track {
   position: absolute;
-  right: -9px;
+  right: -7px;
   top: 0;
   bottom: 0;
-  width: 4px;
+  width: 3px;
   pointer-events: none;
-  background: rgba(240, 227, 200, 0.09);
+  background: rgba(230, 223, 208, 0.1);
 }
 
+/* Full: it turns sanguine, the colour that everywhere else means "a bargain is
+   on the table". */
 .e-plate.ready .e-call {
+  background: var(--e-sanguine);
   animation: e-ember 1.1s ease-in-out infinite;
 }
 
 /* ------------------------------------------------------------- downed plate */
 
+/* A downed shade's frame goes to dead stone. */
 .e-plate.downed {
-  box-shadow:
-    0 0 0 1px rgba(240, 227, 200, 0.14),
-    0 0 0 4px #0c0a08,
-    0 14px 34px rgba(0, 0, 0, 0.8);
+  background: linear-gradient(168deg, #6e6558, #4e4740 60%, #5d554a);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.8);
 }
 
 .e-plate .e-out {
   position: absolute;
-  inset: 0;
+  inset: 7px;
   pointer-events: none;
-  background: rgba(6, 5, 4, 0.9);
+  background: rgba(5, 5, 4, 0.92);
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -601,14 +698,12 @@
 .e-plate .e-spark {
   position: absolute;
   left: 50%;
-  top: 50%;
+  top: 44%;
   transform: translate(-50%, -50%);
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
+  width: 8px;
+  height: 8px;
   pointer-events: none;
-  background: var(--e-ember);
-  box-shadow: 0 0 16px rgba(228, 128, 47, 0.9);
+  background: var(--e-sanguine);
   animation: e-ember 1.8s ease-in-out infinite;
   opacity: 0;
 }
@@ -626,16 +721,15 @@
 
 .e-plate .e-revive {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 7px;
+  right: 7px;
+  bottom: 7px;
   padding: 6px 8px;
   pointer-events: none;
-  font-family: var(--e-ui);
-  font-size: 9px;
+  font-family: var(--e-display);
+  font-size: 11px;
   letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: #c58a6a;
+  color: var(--e-sanguine-lit);
   text-align: center;
   opacity: 0;
 }
@@ -653,19 +747,20 @@
 
 .e-shade-name {
   font-family: var(--e-display);
-  font-size: 30px;
+  font-weight: 600;
+  font-size: 31px;
   letter-spacing: 0.16em;
-  color: var(--e-gold);
+  color: var(--e-ink-bright);
   text-shadow: 0 2px 10px #000;
 }
 
 .e-shade-sworn {
-  margin-top: 4px;
-  font-family: var(--e-ui);
-  font-size: 10px;
-  letter-spacing: 0.26em;
+  margin-top: 6px;
+  font-family: var(--e-display);
+  font-size: 11px;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
-  color: rgba(240, 227, 200, 0.48);
+  color: rgba(230, 223, 208, 0.44);
 }
 
 .e-pips {
@@ -676,27 +771,26 @@
 }
 
 .e-pips i {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: #231d16;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.8) inset;
+  width: 19px;
+  height: 19px;
+  background: none;
+  box-shadow: 0 0 0 1px rgba(230, 223, 208, 0.24) inset;
 }
 
 .e-pips i.on {
-  background: linear-gradient(160deg, #f4e3ae, #c9a227 50%, #6d5214);
+  background: #ded6c5;
   box-shadow:
-    0 1px 0 rgba(255, 244, 205, 0.5) inset,
-    0 2px 5px rgba(0, 0, 0, 0.7);
+    0 1px 0 rgba(255, 253, 246, 0.6) inset,
+    0 2px 5px rgba(0, 0, 0, 0.8);
 }
 
 .e-pips .e-pips-label {
-  margin-left: 6px;
-  font-family: var(--e-ui);
+  margin-left: 8px;
+  font-family: var(--e-display);
   font-size: 10px;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: rgba(240, 227, 200, 0.34);
+  color: rgba(230, 223, 208, 0.3);
 }
 
 /* Boons held, as the roundel of whichever throne granted them. */
@@ -708,25 +802,29 @@
 }
 
 .e-boons i {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  font-family: var(--e-display);
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.04em;
   box-shadow:
-    0 1px 0 rgba(255, 250, 220, 0.5) inset,
-    0 2px 6px rgba(0, 0, 0, 0.75);
+    0 1px 0 rgba(255, 253, 246, 0.5) inset,
+    0 3px 6px rgba(0, 0, 0, 0.8);
 }
 
 .e-boons i.empty {
   background: none;
-  border: 1px dashed rgba(240, 227, 200, 0.18);
-  box-shadow: none;
+  box-shadow: 0 0 0 1px rgba(230, 223, 208, 0.16) inset;
 }
 
 .e-lore {
   margin-top: 16px;
   font-size: 17px;
   font-style: italic;
-  color: rgba(240, 227, 200, 0.36);
+  color: rgba(230, 223, 208, 0.34);
   text-wrap: pretty;
 }
 
@@ -737,24 +835,42 @@
 }
 
 .e-ally .e-plate {
-  width: 118px;
-  height: 150px;
+  width: 124px;
+  height: 158px;
+  padding: 5px;
+  background: var(--e-slab-dim);
   box-shadow:
-    0 0 0 1px var(--tint, rgba(217, 178, 94, 0.6)),
-    0 0 0 4px #0f1216,
-    0 14px 34px rgba(0, 0, 0, 0.8);
+    0 1px 0 rgba(255, 253, 246, 0.4) inset,
+    0 14px 32px rgba(0, 0, 0, 0.8);
+}
+
+.e-ally .e-plate > .e-art {
+  inset: 5px;
+}
+
+.e-ally .e-plate .e-shadow,
+.e-ally .e-plate .e-hp,
+.e-ally .e-plate .e-out,
+.e-ally .e-plate .e-revive {
+  left: 5px;
+  right: 5px;
+  bottom: 5px;
+}
+
+.e-ally .e-plate .e-out {
+  inset: 5px;
 }
 
 .e-ally .e-plate .e-shadow {
-  border-top-color: var(--tint, rgba(217, 178, 94, 0.8));
-  box-shadow: none;
+  height: calc((1 - var(--hp)) * (100% - 10px));
+  border-top-color: rgba(230, 223, 208, 0.5);
 }
 
 .e-ally .e-plate .e-hp {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   padding: 6px 8px;
-  color: #c8b295;
+  color: #cdc4b1;
 }
 
 .e-ally .e-plate .e-hp span {
@@ -762,11 +878,11 @@
 }
 
 .e-ally-name {
-  margin-top: 9px;
+  margin-top: 10px;
   font-family: var(--e-display);
   font-size: 15px;
-  letter-spacing: 0.14em;
-  color: var(--tint, var(--e-gold));
+  letter-spacing: 0.16em;
+  color: #cdc4b1;
   text-align: center;
 }
 
@@ -776,7 +892,7 @@
 }
 
 .e-ally.downed .e-ally-name {
-  color: rgba(240, 227, 200, 0.44);
+  color: rgba(230, 223, 208, 0.4);
 }
 
 .e-ally .e-boons {
@@ -788,15 +904,18 @@
 .e-ally .e-boons i {
   width: 16px;
   height: 16px;
+  /* No room for a numeral at this size; an ally's build is not something the
+     player has to read mid-fight anyway. */
+  font-size: 0;
 }
 
 .e-ally .e-fallen {
   margin-top: 7px;
-  font-family: var(--e-ui);
+  font-family: var(--e-display);
   font-size: 9px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #c58a6a;
+  color: var(--e-sanguine-lit);
   text-align: center;
 }
 
@@ -824,26 +943,28 @@
 }
 
 #e-concord .e-link i {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  width: 26px;
+  height: 26px;
+  box-shadow:
+    0 1px 0 rgba(255, 253, 246, 0.6) inset,
+    0 2px 6px rgba(0, 0, 0, 0.8);
 }
 
 #e-concord .e-link .e-thread {
-  width: 44px;
+  width: 52px;
   height: 2px;
-  border-radius: 0;
   box-shadow: none;
-  background: linear-gradient(90deg, #c9a227, #e4802f);
+  background: var(--e-sanguine);
 }
 
 #e-concord .e-call-to {
-  margin-top: 12px;
+  margin-top: 14px;
   font-family: var(--e-display);
+  font-weight: 600;
   font-size: 17px;
-  letter-spacing: 0.32em;
-  color: var(--e-gold);
+  letter-spacing: 0.3em;
+  color: var(--e-ink-bright);
+  text-shadow: 0 2px 10px #000;
   animation: e-ember 2.2s ease-in-out infinite;
 }
 
@@ -853,7 +974,7 @@
   position: absolute;
   inset: 0;
   display: flex;
-  background: var(--e-ground-hud);
+  background: var(--e-ground);
   color: var(--e-ink);
   font-family: var(--e-body);
   animation: e-rise 0.35s ease-out both;
@@ -874,21 +995,13 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background:
-    linear-gradient(
-      90deg,
-      rgba(13, 11, 9, 0.5),
-      transparent 24%,
-      transparent 72%,
-      rgba(13, 11, 9, 0.85)
-    ),
-    linear-gradient(
-      180deg,
-      rgba(13, 11, 9, 0.5),
-      transparent 22%,
-      transparent 52%,
-      rgba(13, 11, 9, 0.94)
-    );
+  background: linear-gradient(
+    180deg,
+    rgba(10, 9, 8, 0.55),
+    transparent 26%,
+    transparent 48%,
+    rgba(10, 9, 8, 0.95)
+  );
 }
 
 .e-offer-god .e-god-body {
@@ -912,35 +1025,36 @@
 }
 
 .e-god-throne span {
-  font-family: var(--e-ui);
-  font-size: 11px;
-  letter-spacing: 0.4em;
+  font-family: var(--e-display);
+  font-size: 12px;
+  letter-spacing: 0.42em;
   text-transform: uppercase;
-  color: rgba(240, 227, 200, 0.6);
+  color: rgba(230, 223, 208, 0.55);
 }
 
 .e-god-name {
-  margin-top: 16px;
+  margin-top: 18px;
   font-family: var(--e-display);
-  font-size: clamp(38px, 4.2vw, 66px);
+  font-weight: 600;
+  font-size: clamp(38px, 4.6vw, 74px);
   line-height: 1;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
 }
 
 .e-god-epithet {
-  margin-top: 10px;
-  font-size: clamp(17px, 1.6vw, 23px);
+  margin-top: 14px;
+  font-size: clamp(17px, 1.6vw, 24px);
   font-style: italic;
-  color: rgba(240, 227, 200, 0.68);
+  color: rgba(230, 223, 208, 0.62);
 }
 
 .e-god-quote {
-  margin-top: 20px;
-  max-width: 600px;
+  margin-top: 22px;
+  max-width: 580px;
   font-size: clamp(15px, 1.3vw, 19px);
   line-height: 1.6;
   font-style: italic;
-  color: rgba(240, 227, 200, 0.5);
+  color: rgba(230, 223, 208, 0.46);
   text-wrap: pretty;
 }
 
@@ -949,26 +1063,31 @@
 .e-offer-terms {
   flex: 1;
   min-width: 0;
-  padding: clamp(32px, 5vw, 76px) clamp(28px, 4.4vw, 68px);
+  padding: clamp(32px, 5vw, 72px) clamp(28px, 4.2vw, 64px);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 20px;
-  background: linear-gradient(180deg, #100d0b, #16110c 50%, #0e0b09);
+  gap: 22px;
+  background: var(--e-ground-panel);
 }
 
 .e-terms-kicker {
-  font-family: var(--e-ui);
+  font-family: var(--e-display);
   font-size: 11px;
-  letter-spacing: 0.38em;
+  letter-spacing: 0.36em;
   text-transform: uppercase;
-  color: rgba(240, 227, 200, 0.42);
+  color: rgba(230, 223, 208, 0.4);
   margin-bottom: 6px;
 }
 
+/*
+ * Each term is a tablet. The taken one is brighter, veined and set slightly
+ * proud; the rest are plain stone. What used to be a seal disc is now a bar of
+ * stone down the left edge — a mason's mark against the text.
+ */
 .e-card {
   position: relative;
-  padding: 24px 28px;
+  padding: 26px 30px;
   cursor: pointer;
   pointer-events: auto;
   /* It is a <button>, so the UA centres its text and gives it a chrome border
@@ -979,10 +1098,11 @@
   border: 0;
   color: inherit;
   font: inherit;
-  background: linear-gradient(180deg, rgba(217, 178, 94, 0.13), rgba(20, 16, 12, 0.9));
+  background: var(--e-slab-dim);
   box-shadow:
-    0 0 0 1px rgba(217, 178, 94, 0.4),
-    0 14px 34px rgba(0, 0, 0, 0.6);
+    0 1px 0 rgba(255, 253, 246, 0.45) inset,
+    0 -3px 0 rgba(90, 84, 74, 0.3) inset,
+    0 12px 28px rgba(0, 0, 0, 0.6);
   transition:
     box-shadow 0.16s ease,
     background 0.16s ease;
@@ -990,18 +1110,17 @@
 
 .e-card-row {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  align-items: flex-start;
+  gap: 18px;
 }
 
+/* The throne's bar, not its coin. */
 .e-card .e-seal {
-  width: 38px;
-  height: 38px;
+  width: 8px;
+  height: 64px;
   flex: 0 0 auto;
-  border-radius: 50%;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.7) inset,
-    0 2px 6px rgba(0, 0, 0, 0.8);
+  border-radius: 0;
+  box-shadow: 0 1px 0 rgba(255, 253, 246, 0.35);
 }
 
 .e-card-text {
@@ -1011,33 +1130,36 @@
 
 .e-card-name {
   font-family: var(--e-display);
-  font-size: clamp(20px, 1.8vw, 27px);
+  font-weight: 600;
+  font-size: clamp(19px, 1.7vw, 26px);
   letter-spacing: 0.1em;
-  color: var(--e-gold);
+  text-transform: uppercase;
+  color: var(--e-cut);
+  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.85);
 }
 
 .e-card-desc {
-  margin-top: 7px;
+  margin-top: 9px;
   font-size: clamp(15px, 1.25vw, 18px);
   line-height: 1.5;
-  color: rgba(240, 227, 200, 0.72);
+  color: #57504a;
   text-wrap: pretty;
 }
 
 .e-card-kicker {
-  font-family: var(--e-ui);
-  font-size: 10px;
+  font-family: var(--e-display);
+  font-size: 11px;
   letter-spacing: 0.3em;
   text-transform: uppercase;
-  color: rgba(240, 227, 200, 0.45);
-  margin-bottom: 6px;
+  color: rgba(76, 68, 59, 0.75);
+  margin-bottom: 8px;
 }
 
 .e-card-index {
   font-family: var(--e-display);
-  font-size: 22px;
+  font-size: 20px;
   letter-spacing: 0.1em;
-  color: rgba(240, 227, 200, 0.32);
+  color: rgba(76, 68, 59, 0.5);
 }
 
 /* Levels already held, shown as pips under a boon you are stacking. */
@@ -1048,36 +1170,42 @@
 }
 
 .e-card-pips i {
-  width: 9px;
-  height: 9px;
-  transform: rotate(45deg);
-  border: 1px solid rgba(217, 178, 94, 0.5);
+  width: 10px;
+  height: 10px;
+  box-shadow: 0 0 0 1px rgba(65, 58, 50, 0.45) inset;
 }
 
 .e-card-pips i.on {
-  border-color: transparent;
-  background: linear-gradient(160deg, #f4e3ae, #a8831f);
+  box-shadow: none;
+  background: var(--e-cut-deep);
 }
 
+/* Lifted, lit and veined — the tablet you are about to take. */
 .e-card:hover,
 .e-card:focus-visible {
-  background: linear-gradient(180deg, rgba(217, 178, 94, 0.22), rgba(24, 18, 12, 0.92));
+  background: var(--e-vein), var(--e-slab-lit);
   box-shadow:
-    0 0 0 2px rgba(244, 227, 174, 0.6),
-    0 0 0 6px rgba(217, 178, 94, 0.1),
-    0 18px 44px rgba(0, 0, 0, 0.7),
-    0 0 50px rgba(210, 162, 92, 0.18);
+    0 1px 0 rgba(255, 255, 250, 0.8) inset,
+    0 -3px 0 rgba(90, 84, 74, 0.28) inset,
+    0 20px 46px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(240, 234, 222, 0.5);
   outline: none;
 }
 
 .e-card:hover .e-card-name,
 .e-card:focus-visible .e-card-name {
-  color: #fff4cd;
+  color: var(--e-cut-deep);
+  text-shadow: 0 1px 0 rgba(255, 255, 250, 0.95), 0 -1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.e-card:hover .e-card-desc,
+.e-card:focus-visible .e-card-desc {
+  color: #4f4841;
 }
 
 .e-card:hover .e-card-index,
 .e-card:focus-visible .e-card-index {
-  color: rgba(240, 227, 200, 0.5);
+  color: rgba(65, 58, 50, 0.6);
 }
 
 /*
@@ -1090,45 +1218,66 @@
  * is also what the design doc happens to show, since Belial is the rival it
  * illustrates.
  */
+/*
+ * The rival does not get a lit tablet. It inverts: dark stone, a sanguine bar
+ * and a sanguine edge, so the interruption reads as coming from outside the
+ * room the rest of the screen is in.
+ */
 .e-card.rival {
-  --rival: #e8a49c;
-  background: linear-gradient(180deg, rgba(184, 51, 47, 0.14), rgba(20, 13, 12, 0.9));
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--rival) 16%, transparent),
-    rgba(20, 13, 12, 0.9)
-  );
+  --rival: var(--e-sanguine);
+  background: var(--e-slab-dark);
   box-shadow:
-    0 0 0 1px rgba(184, 51, 47, 0.45),
-    0 14px 34px rgba(0, 0, 0, 0.6);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--rival) 50%, transparent),
-    0 14px 34px rgba(0, 0, 0, 0.6);
+    0 0 0 1px rgba(176, 74, 48, 0.45),
+    0 12px 28px rgba(0, 0, 0, 0.7);
+}
+
+.e-card.rival .e-seal {
+  background: var(--e-sanguine) !important;
+  box-shadow: none;
 }
 
 .e-card.rival .e-card-kicker {
-  color: rgba(232, 164, 156, 0.8);
-  color: color-mix(in srgb, var(--rival) 85%, #fff);
+  color: var(--e-sanguine-lit);
+}
+
+.e-card.rival .e-card-name {
+  color: #e2d6cf;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+}
+
+.e-card.rival .e-card-desc {
+  color: rgba(230, 223, 208, 0.6);
+}
+
+.e-card.rival .e-card-index {
+  color: rgba(230, 223, 208, 0.35);
+}
+
+.e-card.rival .e-card-pips i {
+  box-shadow: 0 0 0 1px rgba(230, 223, 208, 0.35) inset;
+}
+
+.e-card.rival .e-card-pips i.on {
+  background: var(--e-sanguine);
 }
 
 .e-card.rival:hover,
 .e-card.rival:focus-visible {
-  background: linear-gradient(180deg, rgba(184, 51, 47, 0.24), rgba(26, 14, 13, 0.94));
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--rival) 28%, transparent),
-    rgba(26, 14, 13, 0.94)
-  );
+  background: linear-gradient(168deg, #362b26, #221a18 55%, #2e2420);
   box-shadow:
-    0 0 0 2px rgba(232, 138, 128, 0.7),
-    0 0 0 6px rgba(184, 51, 47, 0.12),
-    0 18px 44px rgba(0, 0, 0, 0.7),
-    0 0 50px rgba(184, 51, 47, 0.22);
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--rival) 75%, transparent),
-    0 0 0 6px color-mix(in srgb, var(--rival) 14%, transparent),
-    0 18px 44px rgba(0, 0, 0, 0.7),
-    0 0 50px color-mix(in srgb, var(--rival) 24%, transparent);
+    0 0 0 1px rgba(192, 116, 86, 0.75),
+    0 20px 46px rgba(0, 0, 0, 0.75);
+}
+
+.e-card.rival:hover .e-card-name,
+.e-card.rival:focus-visible .e-card-name {
+  color: #f2e8e2;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+}
+
+.e-card.rival:hover .e-card-desc,
+.e-card.rival:focus-visible .e-card-desc {
+  color: rgba(230, 223, 208, 0.72);
 }
 
 .e-offer-foot {
@@ -1137,7 +1286,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  font-family: var(--e-ui);
+  font-family: var(--e-display);
   font-size: 11px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -1152,26 +1301,26 @@
 .e-offer-foot .e-who {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: rgba(240, 227, 200, 0.5);
+  gap: 9px;
+  color: rgba(230, 223, 208, 0.45);
 }
 
 .e-offer-foot .e-who.done {
-  color: var(--e-gold-mid);
+  color: #c9c0ad;
 }
 
 .e-offer-foot .e-who i {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
+  width: 11px;
+  height: 11px;
+  border-radius: 0;
 }
 
 .e-offer-foot .e-hint {
-  color: rgba(240, 227, 200, 0.42);
+  color: rgba(230, 223, 208, 0.4);
 }
 
 .e-offer-foot .e-hint b {
-  color: var(--e-gold);
+  color: var(--e-ink-bright);
   font-weight: inherit;
 }
 
@@ -1185,173 +1334,215 @@
  */
 
 .lpanel {
-  background: linear-gradient(180deg, rgba(21, 16, 12, 0.94), rgba(13, 11, 9, 0.97));
-  border: 1px solid rgba(217, 178, 94, 0.28);
+  background: linear-gradient(180deg, rgba(16, 15, 13, 0.96), rgba(10, 9, 8, 0.98));
+  border: 1px solid rgba(230, 223, 208, 0.16);
   border-radius: 0;
   box-shadow:
-    0 0 0 5px #14100c,
-    0 0 0 6px rgba(217, 178, 94, 0.16),
-    0 30px 80px rgba(0, 0, 0, 0.8);
+    0 0 0 5px #0a0908,
+    0 0 0 6px rgba(230, 223, 208, 0.1),
+    0 30px 80px rgba(0, 0, 0, 0.85);
   font-family: var(--e-body);
 }
 
 .ltitle {
   font-family: var(--e-display);
-  letter-spacing: 0.22em;
-  background: var(--e-leaf);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.9));
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--e-ink-bright);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.85);
 }
 
 .lsub {
   font-family: var(--e-body);
   font-style: italic;
-  color: rgba(240, 227, 200, 0.55);
+  color: rgba(230, 223, 208, 0.5);
   letter-spacing: 0.04em;
   text-transform: none;
 }
 
+/* Buttons are small slabs: lit top edge, shadowed underside, engraved label. */
 .lbtn {
   font-family: var(--e-display);
-  letter-spacing: 0.26em;
+  letter-spacing: 0.24em;
   border-radius: 0;
-  background: linear-gradient(180deg, rgba(217, 178, 94, 0.1), rgba(20, 16, 12, 0.9));
-  border: 1px solid rgba(217, 178, 94, 0.32);
-  color: rgba(240, 227, 200, 0.72);
+  border: 0;
+  background: var(--e-slab-dim);
+  color: var(--e-cut);
+  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.7);
+  box-shadow:
+    0 1px 0 rgba(255, 253, 246, 0.45) inset,
+    0 -3px 0 rgba(90, 84, 74, 0.3) inset,
+    0 8px 20px rgba(0, 0, 0, 0.55);
 }
 
 .lbtn:hover {
-  background: linear-gradient(180deg, rgba(217, 178, 94, 0.2), rgba(24, 18, 12, 0.92));
-  border-color: rgba(244, 227, 174, 0.6);
-  color: var(--e-gold);
+  background: var(--e-vein), var(--e-slab-lit);
+  color: var(--e-cut-deep);
 }
 
 .lbtn.primary {
-  color: var(--e-gold);
-  border-color: rgba(244, 227, 174, 0.55);
+  background: var(--e-vein), var(--e-slab);
 }
 
+/* The one destructive control, and the only place sanguine appears in a menu. */
 .lbtn.danger {
-  color: #f0c4bd;
-  border-color: rgba(184, 51, 47, 0.5);
+  background: var(--e-slab-dark);
+  color: #e2d6cf;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+  box-shadow:
+    0 0 0 1px rgba(176, 74, 48, 0.5),
+    0 8px 20px rgba(0, 0, 0, 0.6);
 }
 
 .lbtn.danger:hover {
-  border-color: rgba(232, 138, 128, 0.75);
-  background: linear-gradient(180deg, rgba(184, 51, 47, 0.2), rgba(26, 14, 13, 0.94));
+  background: linear-gradient(168deg, #362b26, #221a18 55%, #2e2420);
+  box-shadow:
+    0 0 0 1px rgba(192, 116, 86, 0.8),
+    0 10px 24px rgba(0, 0, 0, 0.7);
 }
 
 .lolabel,
 .lrow > span,
 .ldiv,
 .lkey .kw {
-  font-family: var(--e-ui);
-  color: rgba(240, 227, 200, 0.62);
+  font-family: var(--e-display);
+  font-size: 0.92em;
+  letter-spacing: 0.12em;
+  color: rgba(230, 223, 208, 0.62);
 }
 
 .lkey .kh,
 .lblurb {
   font-family: var(--e-body);
-  color: rgba(240, 227, 200, 0.55);
+  color: rgba(230, 223, 208, 0.55);
 }
 
 .lclass {
   border-radius: 0;
-  border: 1px solid rgba(217, 178, 94, 0.24);
-  background: linear-gradient(180deg, rgba(217, 178, 94, 0.06), rgba(16, 13, 11, 0.9));
+  border: 1px solid rgba(230, 223, 208, 0.14);
+  background: linear-gradient(168deg, rgba(230, 223, 208, 0.05), rgba(10, 9, 8, 0.9));
 }
 
 .lclass.on {
-  border-color: rgba(244, 227, 174, 0.65);
-  background: linear-gradient(180deg, rgba(217, 178, 94, 0.18), rgba(24, 18, 12, 0.92));
+  border-color: rgba(230, 223, 208, 0.45);
+  background: linear-gradient(168deg, rgba(230, 223, 208, 0.14), rgba(16, 15, 13, 0.92));
 }
 
 .lclass .cn {
   font-family: var(--e-display);
-  letter-spacing: 0.18em;
-  color: var(--e-gold);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--e-ink-bright);
 }
 
 .lclass .ct {
   font-family: var(--e-body);
   font-style: italic;
-  color: rgba(240, 227, 200, 0.5);
+  color: rgba(230, 223, 208, 0.5);
 }
 
 .lfield,
 .lcode {
-  font-family: var(--e-ui);
+  font-family: var(--e-display);
   border-radius: 0;
-  border: 1px solid rgba(217, 178, 94, 0.28);
-  background: rgba(10, 8, 6, 0.8);
+  border: 1px solid rgba(230, 223, 208, 0.18);
+  background: rgba(6, 6, 5, 0.85);
   color: var(--e-ink);
 }
 
 .lcode {
-  font-family: var(--e-display);
+  font-weight: 600;
   letter-spacing: 0.4em;
-  color: var(--e-gold);
+  color: var(--e-ink-bright);
 }
 
 .lupgrade {
   border-radius: 0;
-  border: 1px solid rgba(217, 178, 94, 0.24);
-  background: linear-gradient(180deg, rgba(217, 178, 94, 0.08), rgba(16, 13, 11, 0.9));
+  border: 1px solid rgba(230, 223, 208, 0.12);
+  background: linear-gradient(168deg, rgba(230, 223, 208, 0.06), rgba(10, 9, 8, 0.9));
 }
 
 .lupgrade .un {
   font-family: var(--e-display);
-  color: var(--e-gold);
+  color: var(--e-ink-bright);
 }
 
 .lupgrade .ud {
   font-family: var(--e-body);
+  color: rgba(230, 223, 208, 0.6);
 }
 
 .lupgrade .uc,
 .lupgrade .ul,
 .lpurse {
-  font-family: var(--e-ui);
-  color: var(--e-gold-mid);
+  font-family: var(--e-display);
+  letter-spacing: 0.12em;
+  color: #9d9484;
 }
 
 .lsumhead {
   font-family: var(--e-display);
-  letter-spacing: 0.28em;
-  color: var(--e-gold);
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  color: var(--e-ink-bright);
 }
 
 .lslot.filled {
-  border-color: rgba(217, 178, 94, 0.5);
-  color: var(--e-gold);
+  border-color: rgba(230, 223, 208, 0.4);
+  color: var(--e-ink-bright);
+}
+
+/* The segmented toggles in the rites screen. */
+.ltoggle,
+.lsegbtn {
+  font-family: var(--e-display);
+  letter-spacing: 0.14em;
+  border-radius: 0;
+}
+
+.ltoggle.on,
+.lsegbtn.on {
+  background: var(--e-slab-dim);
+  color: var(--e-cut);
+  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.6);
 }
 
 /* ------------------------------------------------- carried over from hud.css */
 
 #banner {
   font-family: var(--e-display);
-  letter-spacing: 0.3em;
-  color: var(--e-gold);
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  color: var(--e-ink-bright);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.85);
 }
 
 #boss .btitle {
   font-family: var(--e-display);
-  letter-spacing: 0.3em;
-  color: #f0dcae;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  color: var(--e-ink-bright);
+}
+
+/* The boss bar is the one place the arena still needs a warning colour. */
+#boss .bbar i.fill,
+#boss .bbar i {
+  background: var(--e-sanguine);
 }
 
 #gateprompt {
-  font-family: var(--e-ui);
-  letter-spacing: 0.24em;
-  color: rgba(240, 227, 200, 0.82);
+  font-family: var(--e-display);
+  letter-spacing: 0.22em;
+  border-radius: 0;
+  border-color: rgba(230, 223, 208, 0.25);
+  background: rgba(6, 6, 5, 0.72);
+  color: rgba(230, 223, 208, 0.82);
 }
 
 #hint {
-  font-family: var(--e-ui);
+  font-family: var(--e-display);
   letter-spacing: 0.18em;
-  color: rgba(240, 227, 200, 0.3);
+  color: rgba(230, 223, 208, 0.28);
 }
 
 /* The old health bars, seat plates and boon chips are replaced wholesale by the

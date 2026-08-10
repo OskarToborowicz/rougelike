@@ -67,15 +67,11 @@ function blockZoomGestures() {
     addEventListener(type, (e) => e.preventDefault(), { passive: false });
   }
 
-  // Belt and braces for engines that honour neither the meta tag nor
-  // touch-action: a second finger is never anything this game needs.
-  addEventListener(
-    'touchmove',
-    (e) => {
-      if (e.touches.length > 1) e.preventDefault();
-    },
-    { passive: false }
-  );
+  // NOTE: do not "harden" this by cancelling multi-touch `touchmove`. Two
+  // fingers is not a pinch here, it is the game being played — left thumb
+  // steering while the right aims and fires — and killing the default on those
+  // events takes the basic attack with it. The two layers above are what block
+  // zoom; a finger count is not a gesture.
 }
 
 export class TouchControls {
