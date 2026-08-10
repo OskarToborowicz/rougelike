@@ -804,6 +804,12 @@
 .e-boons i {
   width: 26px;
   height: 26px;
+  display: grid;
+  place-items: center;
+  font-family: var(--e-display);
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.04em;
   box-shadow:
     0 1px 0 rgba(255, 253, 246, 0.5) inset,
     0 3px 6px rgba(0, 0, 0, 0.8);
@@ -898,6 +904,9 @@
 .e-ally .e-boons i {
   width: 16px;
   height: 16px;
+  /* No room for a numeral at this size; an ally's build is not something the
+     player has to read mid-fight anyway. */
+  font-size: 0;
 }
 
 .e-ally .e-fallen {

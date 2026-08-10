@@ -42,6 +42,13 @@ export interface Pantheon {
    * a single sanguine in it, so the art reads as relief rather than painting.
    * `stone` is the mark's face, `ink` the numeral cut into it, and `css`/`color`
    * the tone anything else tints by.
+   *
+   * The ramp is the design doc's, spread at the dark end and given a touch of
+   * hue — aesir cool, rodnova green — because the doc's own tones put legion
+   * and rodnova 8.2 dE apart, which is one colour at 26px. That only buys a
+   * minimum of about 11, though: seven desaturated stones cannot carry a
+   * seven-way distinction on colour alone, which is why every mark also wears
+   * its numeral. The stone is the mood; the numeral is the information.
    */
   stone: string;
   /** Ink for the numeral struck into that stone. */
@@ -59,20 +66,20 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
   hellenic: {
     id: 'hellenic',
     numeral: 'I',
-    stone: '#ded6c5',
+    stone: '#e2dac6',
     ink: '#3a352e',
-    css: '#ded6c5',
-    color: 0xded6c5,
+    css: '#e2dac6',
+    color: 0xe2dac6,
     rivals: ['aesir', 'legion'],
     gods: ['zeus', 'athena'],
   },
   aesir: {
     id: 'aesir',
     numeral: 'II',
-    stone: '#b6ad9c',
-    ink: '#2f2b25',
-    css: '#b6ad9c',
-    color: 0xb6ad9c,
+    stone: '#a9b2b8',
+    ink: '#2b2f31',
+    css: '#a9b2b8',
+    color: 0xa9b2b8,
     rivals: ['hellenic', 'rodnova'],
     gods: ['odin', 'skadi'],
   },
@@ -80,7 +87,7 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
     id: 'netjer',
     numeral: 'III',
     stone: '#8d8474',
-    ink: '#1e1b17',
+    ink: '#17140f',
     css: '#8d8474',
     color: 0x8d8474,
     rivals: ['anunna', 'choir'],
@@ -90,7 +97,7 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
     id: 'anunna',
     numeral: 'IV',
     stone: '#b04a30',
-    ink: '#2a0f08',
+    ink: '#f6e7e0',
     css: '#b04a30',
     color: 0xb04a30,
     rivals: ['netjer', 'legion'],
@@ -99,30 +106,30 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
   choir: {
     id: 'choir',
     numeral: 'V',
-    stone: '#6a6252',
-    ink: '#e6dfd0',
-    css: '#6a6252',
-    color: 0x6a6252,
+    stone: '#665f52',
+    ink: '#f4efe4',
+    css: '#665f52',
+    color: 0x665f52,
     rivals: ['legion', 'netjer'],
     gods: ['michael', 'raphael'],
   },
   legion: {
     id: 'legion',
     numeral: 'VI',
-    stone: '#4e4740',
+    stone: '#584a40',
     ink: '#e6dfd0',
-    css: '#4e4740',
-    color: 0x4e4740,
+    css: '#584a40',
+    color: 0x584a40,
     rivals: ['choir', 'hellenic', 'anunna'],
     gods: ['belial', 'lilith'],
   },
   rodnova: {
     id: 'rodnova',
     numeral: 'VII',
-    stone: '#3a3530',
+    stone: '#39463a',
     ink: '#e6dfd0',
-    css: '#3a3530',
-    color: 0x3a3530,
+    css: '#39463a',
+    color: 0x39463a,
     rivals: ['aesir'],
     gods: ['perun', 'morana'],
   },

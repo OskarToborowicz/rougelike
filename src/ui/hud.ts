@@ -4,7 +4,7 @@ import type { Enemy } from '../game/enemy';
 import type { DamageEvent } from '../game/world';
 import { clamp } from '../core/math';
 import { ROOMS, type RoomKind } from '../game/rewards';
-import { pantheonName, roundel } from '../game/pantheons';
+import { PANTHEONS, pantheonName, roundel } from '../game/pantheons';
 import type { ClassId } from '../game/classes';
 import { onLanguageChange, roman, t } from './i18n';
 import { godArt, shadeArt } from './art';
@@ -388,9 +388,16 @@ export class Hud {
         // socket, so there is always somewhere for the next one to go.
         const shown = s.lore ? p.boons.taken : p.boons.taken.slice(0, 4);
         for (const b of shown) {
-          const disc = el('i');
+          // The mark wears its throne's numeral. Seven desaturated stones are
+          // not seven distinguishable colours at this size — legion and rodnova
+          // sit 8 dE apart — so the numeral is what actually answers "who gave
+          // me this", and the stone is mood. Every other throne mark in the
+          // design carries its numeral too; these were the only ones without.
+          const throne = PANTHEONS[b.pantheon];
+          const disc = el('i', '', throne.numeral);
           disc.style.background = roundel(b.pantheon);
-          disc.title = b.name;
+          disc.style.color = throne.ink;
+          disc.title = `${b.name} · ${pantheonName(b.pantheon)}`;
           s.boons.appendChild(disc);
         }
         if (s.lore) s.boons.appendChild(el('i', 'empty'));
