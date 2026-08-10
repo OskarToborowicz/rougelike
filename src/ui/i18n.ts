@@ -28,6 +28,7 @@ const EN = {
   'menu.sub.title': 'the last council of the dead',
   'menu.kicker': 'the seven thrones stand empty',
   'menu.tagline': 'four shades · one descent',
+  'menu.pantheons': 'seven pantheons · one table',
   'menu.play': 'DESCEND',
   'menu.shore': 'THE RELIQUARY',
   'menu.options': 'RITES',
@@ -125,13 +126,13 @@ const EN = {
   'banner.cleared': 'Chamber Cleared',
   'banner.choosePath': 'Choose Your Path',
   'banner.died': 'You Have Died',
-  'banner.chamber': 'Camera {n}',
+  'banner.chamber': 'Chamber {n}',
   'banner.concord': 'CONCORD',
 
   // ---------------------------------------------------------------------- hud
   'hud.hint':
     'WASD move · LMB attack · RMB special · Q cast · F call · SPACE dash · pad 2 joins as player two',
-  'hud.room': '{region} · CAMERA {n}',
+  'hud.room': '{region} · {n}',
   'hud.downed': 'the seal breaks',
   'hud.downedPct': '{pct}%',
   'hud.press': 'press {n}',
@@ -393,6 +394,7 @@ const PL: Partial<Record<Key, string>> = {
   'menu.sub.title': 'ostatnia rada umarłych',
   'menu.kicker': 'siedem tronów stoi pustych',
   'menu.tagline': 'cztery cienie · jedno zejście',
+  'menu.pantheons': 'siedem panteonów · jeden stół',
   'menu.play': 'ZEJDŹ',
   'menu.shore': 'RELIKWIARZ',
   'menu.options': 'RYTY',
@@ -496,7 +498,7 @@ const PL: Partial<Record<Key, string>> = {
   // ---------------------------------------------------------------------- hud
   'hud.hint':
     'WASD ruch · LPM atak · PPM specjał · Q czar · F zew · SPACJA unik · pad 2 dołącza jako drugi gracz',
-  'hud.room': '{region} · KOMNATA {n}',
+  'hud.room': '{region} · {n}',
   'hud.downed': 'pieczęć pęka',
   'hud.press': 'wciśnij {n}',
   'hud.boss': 'BOSS',

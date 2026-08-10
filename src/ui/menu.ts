@@ -152,12 +152,16 @@ export class Menu {
         screen.append(art, el('div', 'e-title-scrim'), el('div', 'e-title-glow'));
 
         const body = el('div', 'e-title-body');
-        body.append(
-          el('div', 'e-rule'),
+        // One cut stone: the kicker, the name, the scored rule and the subtitle
+        // are all struck into the same slab rather than floating over the art.
+        const tablet = el('div', 'e-tablet');
+        tablet.append(
           el('div', 'e-kicker', t('menu.kicker')),
-          el('div', 'e-wordmark e-leaf', t('brand')),
+          el('div', 'e-wordmark e-engraved', t('brand')),
+          el('div', 'e-rule'),
           el('div', 'e-subtitle', t('menu.sub.title'))
         );
+        body.appendChild(tablet);
 
         const menu = el('div', 'e-menu');
         const row = (label: string, onClick: () => void, primary = false) => {
@@ -186,7 +190,9 @@ export class Menu {
         body.appendChild(menu);
         screen.appendChild(body);
 
-        screen.append(thronesRow(), el('div', 'e-tagline', t('menu.tagline')));
+        const thrones = thronesRow();
+        thrones.appendChild(el('div', 'e-thrones-note', t('menu.pantheons')));
+        screen.append(thrones, el('div', 'e-tagline', t('menu.tagline')));
         this.showBleed(screen);
       };
 
@@ -552,6 +558,8 @@ export function thronesRow(spurned?: ReadonlySet<string>) {
     const disc = el('span', 'e-roundel', p.numeral);
     disc.style.background = roundel(id);
     disc.style.color = p.ink;
+    disc.style.textShadow =
+      p.ink.startsWith('#e') ? '0 -1px 1px rgba(0,0,0,.5)' : '0 1px 0 rgba(255,253,246,.5)';
     cell.append(disc, el('span', 'e-throne-name', pantheonName(id)));
     row.appendChild(cell);
   }

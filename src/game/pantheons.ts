@@ -35,9 +35,16 @@ export interface Pantheon {
   id: PantheonId;
   /** Which throne it sits on. Shown on the roundel. */
   numeral: string;
-  /** The four stops of the roundel's metal gradient, light to dark. */
-  metal: [string, string, string, string];
-  /** Ink for the numeral struck into that metal. */
+  /**
+   * The throne's stone.
+   *
+   * The marble pass took the seven saturated hues away: a desaturated ramp with
+   * a single sanguine in it, so the art reads as relief rather than painting.
+   * `stone` is the mark's face, `ink` the numeral cut into it, and `css`/`color`
+   * the tone anything else tints by.
+   */
+  stone: string;
+  /** Ink for the numeral struck into that stone. */
   ink: string;
   /** Text and ring colour, as CSS and as a three.js hex. */
   css: string;
@@ -52,70 +59,70 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
   hellenic: {
     id: 'hellenic',
     numeral: 'I',
-    metal: ['#f7e6ad', '#c9a227', '#6d5214', '#a8831f'],
-    ink: '#231a06',
-    css: '#f4e3ae',
-    color: 0xf4e3ae,
+    stone: '#ded6c5',
+    ink: '#3a352e',
+    css: '#ded6c5',
+    color: 0xded6c5,
     rivals: ['aesir', 'legion'],
     gods: ['zeus', 'athena'],
   },
   aesir: {
     id: 'aesir',
     numeral: 'II',
-    metal: ['#dfeaf2', '#8ba9be', '#3f5566', '#6d8698'],
-    ink: '#101a20',
-    css: '#bcd4e6',
-    color: 0xbcd4e6,
+    stone: '#b6ad9c',
+    ink: '#2f2b25',
+    css: '#b6ad9c',
+    color: 0xb6ad9c,
     rivals: ['hellenic', 'rodnova'],
     gods: ['odin', 'skadi'],
   },
   netjer: {
     id: 'netjer',
     numeral: 'III',
-    metal: ['#a9e2d6', '#3ba18f', '#1d4f47', '#2f7f74'],
-    ink: '#08201c',
-    css: '#7fe6c8',
-    color: 0x7fe6c8,
+    stone: '#8d8474',
+    ink: '#1e1b17',
+    css: '#8d8474',
+    color: 0x8d8474,
     rivals: ['anunna', 'choir'],
     gods: ['anubis', 'sekhmet'],
   },
   anunna: {
     id: 'anunna',
     numeral: 'IV',
-    metal: ['#f0bd8c', '#c06a2e', '#653a18', '#8f4d20'],
-    ink: '#241205',
-    css: '#f0bd8c',
-    color: 0xf0bd8c,
+    stone: '#b04a30',
+    ink: '#2a0f08',
+    css: '#b04a30',
+    color: 0xb04a30,
     rivals: ['netjer', 'legion'],
     gods: ['inanna', 'nergal'],
   },
   choir: {
     id: 'choir',
     numeral: 'V',
-    metal: ['#fffdf6', '#e4dcc2', '#9a927b', '#cfc6a8'],
-    ink: '#2a2620',
-    css: '#e4dcc2',
-    color: 0xe4dcc2,
+    stone: '#6a6252',
+    ink: '#e6dfd0',
+    css: '#6a6252',
+    color: 0x6a6252,
     rivals: ['legion', 'netjer'],
     gods: ['michael', 'raphael'],
   },
   legion: {
     id: 'legion',
     numeral: 'VI',
-    metal: ['#e88a80', '#b8332f', '#5c1512', '#8c2622'],
-    ink: '#2a0906',
-    css: '#e8a49c',
-    color: 0xe8a49c,
+    stone: '#4e4740',
+    ink: '#e6dfd0',
+    css: '#4e4740',
+    color: 0x4e4740,
     rivals: ['choir', 'hellenic', 'anunna'],
     gods: ['belial', 'lilith'],
   },
   rodnova: {
     id: 'rodnova',
     numeral: 'VII',
-    metal: ['#c5da9a', '#7d9b52', '#3c4d24', '#5f7a3a'],
-    ink: '#141c0a',
-    css: '#c5da9a',
-    color: 0xc5da9a,
+    stone: '#3a3530',
+    ink: '#e6dfd0',
+    css: '#3a3530',
+    color: 0x3a3530,
     rivals: ['aesir'],
     gods: ['perun', 'morana'],
   },
@@ -138,10 +145,13 @@ export const godName = (g: string) => t(`god.${g}.name` as Key);
 export const godEpithet = (g: string) => t(`god.${g}.epithet` as Key);
 export const godQuote = (g: string) => t(`god.${g}.quote` as Key);
 
-/** The roundel's metal, as a CSS gradient. Used by every screen. */
+/**
+ * The throne's mark, as a CSS background. A single directional light across one
+ * stone — no metal ramp, because the marble pass has no metal in it.
+ */
 export const roundel = (p: PantheonId) => {
-  const [a, b, c, d] = PANTHEONS[p].metal;
-  return `linear-gradient(160deg,${a},${b} 42%,${c} 78%,${d})`;
+  const s = PANTHEONS[p].stone;
+  return `linear-gradient(168deg,${s},color-mix(in srgb,${s} 76%,#000) 60%,${s})`;
 };
 
 /**
