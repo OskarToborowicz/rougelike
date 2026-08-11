@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Actor } from './actor';
 import { angleDelta, clamp, damp, rand, TAU } from '../core/math';
 import { addOutline } from '../render/outline';
+import { fitToHeight, instance, loadModel } from '../render/models';
 import { hexString, makeBodySkin, makeBoneSkin } from '../render/skin';
 import { t } from '../ui/i18n';
 
@@ -119,6 +120,18 @@ export const ARCHETYPES: Record<EnemyKind, Archetype> = {
 };
 
 /**
+ * Foes with a mesh authored in Blender rather than assembled from primitives.
+ *
+ * The primitive rig is still built first and is still a complete enemy on its
+ * own — the file may be slow, may be missing, and the fight has to start on
+ * frame zero regardless. Anything not listed here simply never swaps.
+ */
+const AUTHORED: Partial<Record<EnemyKind, { url: string; height: number }>> = {
+  // Erinys is the first boss, so she is the one worth looking at closest.
+  erinys: { url: '/models/minotaur.glb', height: 2.2 },
+};
+
+/**
  * The three statuses a god's boon can actually inflict.
  *
  * Each one has to be a different *kind* of effect, not a different number, or
@@ -217,12 +230,21 @@ export class Enemy implements Actor {
   private wings: THREE.Group[] = [];
   /** Hydra necks, swayed in idle and snapped forward on a strike. */
   private heads: THREE.Group[] = [];
+  /** The disc on the floor. Kept when an authored mesh replaces the rig. */
+  private shadow?: THREE.Object3D;
   targetId = -1;
   mesh = new THREE.Group();
   a: Archetype;
   /** Slight per-instance speed jitter so a pack doesn't move as one blob. */
   private jitter = rand(0.9, 1.1);
   private bodyMat!: THREE.MeshStandardMaterial;
+  /**
+   * Every material the telegraph writes to. One entry while the body is the
+   * primitive rig; however many the authored mesh brought once it has swapped
+   * in. Without this an authored boss would wind up and strike with no tell —
+   * the emissive ramp is the whole readability language of the fight.
+   */
+  private flashMats: THREE.MeshStandardMaterial[] = [];
   private bob = rand(0, 6);
 
   constructor(public id: number, public kind: EnemyKind) {
@@ -245,6 +267,7 @@ export class Enemy implements Actor {
       roughness: 0.78,
       metalness: 0.06,
     });
+    this.flashMats = [this.bodyMat];
     const boneMat = new THREE.MeshStandardMaterial({ map: makeBoneSkin(), roughness: 0.55 });
     const trimMat = new THREE.MeshStandardMaterial({
       color: a.trim,
@@ -297,6 +320,59 @@ export class Enemy implements Actor {
     addOutline(this.mesh, 0.032);
     this.mesh.scale.setScalar(a.scale);
     this.mesh.position.y = -1.2; // rises out of the floor on spawn
+
+    this.shadow = shadow;
+    void this.loadAuthoredMesh();
+  }
+
+  /**
+   * Swap the primitive rig for a mesh authored in Blender.
+   *
+   * Everything the rig built goes, apart from the ground shadow and the boss's
+   * halo — the sculpt carries the silhouette now, and a leftover cone of horns
+   * would be floating inside its skull.
+   *
+   * The material is ours, not the file's. Exports arrive with whatever the tool
+   * felt like — this one is fully metallic, untextured and carries no UVs at
+   * all, so it would render as a black cut-out under the arena's point lights
+   * and could not wear the painted body skin even if it wanted to. A flat coat
+   * in the archetype's own colour is honest about that, and being a material
+   * this class owns means the tell and the hit flash keep working.
+   */
+  private async loadAuthoredMesh() {
+    const want = AUTHORED[this.kind];
+    if (!want) return;
+    const src = await loadModel(want.url).catch(() => null);
+    // No asset, no swap: the primitive rig is a complete enemy on its own.
+    if (!src || this.dead) return;
+
+    const mat = new THREE.MeshStandardMaterial({
+      color: this.a.color,
+      roughness: 0.72,
+      metalness: 0.05,
+    });
+    // Elites had their hot rim written onto the rig's material; carry it across
+    // or an elite would quietly become a common foe the moment its mesh landed.
+    mat.emissive.copy(this.bodyMat.emissive);
+    const body = instance(src, mat);
+    fitToHeight(body, want.height);
+    this.flashMats = [mat];
+
+    for (const child of [...this.mesh.children]) {
+      if (child === this.shadow || (child as THREE.PointLight).isPointLight) continue;
+      this.mesh.remove(child);
+      child.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh && !m.userData.sharedGeometry) m.geometry.dispose();
+      });
+    }
+    // Their pivots have just been thrown away; without this the idle animation
+    // keeps beating wings that are no longer in the scene.
+    this.wings = [];
+    this.heads = [];
+
+    addOutline(body, 0.032);
+    this.mesh.add(body);
   }
 
   /**
@@ -495,8 +571,13 @@ export class Enemy implements Actor {
     this.mesh.scale.setScalar(this.a.scale);
     if (mult > 1.2) {
       // Elites carry a hot rim so they are never mistaken for the rank and file.
-      this.bodyMat.emissive.setRGB(0.25, 0.05, 0.02);
+      this.glow(0.25, 0.05, 0.02);
     }
+  }
+
+  /** The telegraph, written to whatever the body is currently wearing. */
+  private glow(r: number, g: number, b: number) {
+    for (const m of this.flashMats) m.emissive.setRGB(r, g, b);
   }
 
   hurt(amount: number) {
@@ -569,18 +650,18 @@ export class Enemy implements Actor {
     // than ramp or blink, so at a glance you can tell "afflicted" from "about to
     // hit you" without reading a number. Anything louder wins the frame.
     if (this.flash > heat) {
-      this.bodyMat.emissive.setRGB(this.flash, this.flash * 0.95, this.flash * 0.9);
+      this.glow(this.flash, this.flash * 0.95, this.flash * 0.9);
     } else if (heat > 0.02) {
-      this.bodyMat.emissive.setRGB(heat * 1.6, heat * 0.12, heat * 0.05);
+      this.glow(heat * 1.6, heat * 0.12, heat * 0.05);
     } else {
       const worn = this.worstStatus;
       if (worn) {
         // Doom counts down visibly — the pulse tightens as the payload nears.
         const rate = worn === 'doom' ? 5 + 10 / Math.max(0.2, this.status.doom) : 6;
         const pulse = 0.16 + 0.14 * (0.5 + 0.5 * Math.sin(this.stateT * rate));
-        this.bodyMat.emissive.setHex(STATUS_COLOR[worn]).multiplyScalar(pulse);
+        for (const m of this.flashMats) m.emissive.setHex(STATUS_COLOR[worn]).multiplyScalar(pulse);
       } else {
-        this.bodyMat.emissive.setRGB(0, 0, 0);
+        this.glow(0, 0, 0);
       }
     }
     // Wingbeat: slow while stalking, hard and fast through an attack.
