@@ -18,12 +18,14 @@ interface Torch {
   flame: THREE.Sprite;
   phase: number;
   base: number;
+  /** Resting sprite size, so the flicker scales the flame instead of setting it. */
+  scale: number;
 }
 
 export class Arena {
   readonly group = new THREE.Group();
   private torches: Torch[] = [];
-  /** Things that stand between the camera and the fight, with the point to test. */
+  /** Wall segments, with the point on each that decides whether it is in the way. */
   private occluders: { obj: THREE.Object3D; probe: THREE.Vector3 }[] = [];
   private t = 0;
   private biome: Biome = BIOMES[0];
@@ -90,31 +92,6 @@ export class Arena {
     floor.receiveShadow = true;
     this.group.add(floor);
     this.repaintWhenMarbleArrives(mat, () => makeFloorTexture(b));
-
-    // Inlaid ring of cracked marble tiles — gives the eye something to scale against.
-    const ringGeo = new THREE.RingGeometry(radius - 2.6, radius - 2.2, 96);
-    ringGeo.rotateX(-Math.PI / 2);
-    const ring = new THREE.Mesh(
-      ringGeo,
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(b.gild),
-        roughness: 0.6,
-        emissive: 0x1a0d05,
-      })
-    );
-    ring.position.y = 0.012;
-    this.group.add(ring);
-
-    const inner = new THREE.Mesh(
-      new THREE.RingGeometry(3.0, 3.25, 64).rotateX(-Math.PI / 2),
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(b.bands[1]),
-        roughness: 0.5,
-        emissive: 0x180a22,
-      })
-    );
-    inner.position.y = 0.012;
-    this.group.add(inner);
 
     // Ground beyond the arena. With the near wall culled away the camera looks
     // straight past the edge, and pure black void there reads as a hole in the
@@ -195,7 +172,6 @@ export class Arena {
       p.castShadow = true;
       p.receiveShadow = true;
       placeholders.push(p);
-      this.occluders.push({ obj: p, probe: new THREE.Vector3(x, 1.5, z) });
       this.group.add(p);
     }
 
@@ -205,14 +181,12 @@ export class Arena {
         // A rebuild may have happened while the asset was in flight.
         if (token !== this.built) return;
         for (const p of placeholders) this.group.remove(p);
-        this.occluders = this.occluders.filter((o) => !placeholders.includes(o.obj as THREE.Mesh));
         for (const [x, z] of spots) {
           const col = instance(src, pillarMat);
           fitToHeight(col, 6.6);
           col.position.x = x;
           col.position.z = z;
           col.rotation.y = rand(0, TAU);
-          this.occluders.push({ obj: col, probe: new THREE.Vector3(x, 1.5, z) });
           this.group.add(col);
         }
       })
@@ -223,6 +197,15 @@ export class Arena {
 
   private buildTorches() {
     const b = this.biome;
+    // brazier.glb is a fire bowl on a tripod — a floor-standing prop, so it is
+    // sized to one and left on the ground. It used to be stretched to 2.6 units,
+    // which at its proportions is 2.48 across: a boulder floating half a metre
+    // up, overlapping a column that stood 0.6 away. The flame follows the rim
+    // rather than a hardcoded height, so the two can never drift apart again.
+    const BRAZIER_H = 1.7;
+    const RIM = BRAZIER_H;
+    // Sized to the bowl it sits in, not to the old floating one.
+    const FLAME_SCALE = 1.15;
     // Alternating fire: a majority flame and a cold accent. A room lit by a
     // single hue is the fastest way to look flat, however bright it gets.
     const warmTex = makeGlowTexture('#' + b.flameWarm.toString(16).padStart(6, '0'));
@@ -237,13 +220,15 @@ export class Arena {
     const bowlSpots: [number, number][] = [];
 
     for (let i = 0; i < count; i++) {
-      const a = (i / count) * TAU + 0.39;
-      const x = Math.cos(a) * (radius - 1.1);
-      const z = Math.sin(a) * (radius - 1.1);
+      // Half a step round from the columns, which share this count and this
+      // phase. Sitting on the same angle is what put a brazier inside a column.
+      const a = (i / count) * TAU + 0.39 + TAU / count / 2;
+      const x = Math.cos(a) * (radius - 1.5);
+      const z = Math.sin(a) * (radius - 1.5);
       const cold = i % 3 === 1;
 
       const light = new THREE.PointLight(cold ? b.flameCool : b.flameWarm, cold ? 7 : 11, 15, 2);
-      light.position.set(x, 4.2, z);
+      light.position.set(x, RIM + 0.5, z);
       this.group.add(light);
 
       const flame = new THREE.Sprite(
@@ -254,50 +239,48 @@ export class Arena {
           transparent: true,
         })
       );
-      flame.position.set(x, 4.2, z);
-      flame.scale.setScalar(2.2);
+      flame.position.set(x, RIM + 0.3, z);
+      flame.scale.setScalar(FLAME_SCALE);
       this.group.add(flame);
 
       // A placeholder bowl until the Blender brazier loads, so the flame is
-      // always sitting on something.
+      // always sitting on something. Parked at the same rim height the real one
+      // will occupy, so nothing jumps when the asset lands.
       const bowl = new THREE.Mesh(
         new THREE.CylinderGeometry(0.34, 0.16, 0.36, 10),
         ironMat
       );
-      bowl.position.set(x, 3.85, z);
+      bowl.position.set(x, RIM - 0.18, z);
       bowl.castShadow = true;
       this.group.add(bowl);
       bowls.push(bowl);
       bowlSpots.push([x, z]);
 
-      // Torches sit on the rim like the columns do, so they need the same
-      // culling — a near-side flame sprite fills half the frame with a blob.
-      const probe = new THREE.Vector3(x, 1.5, z);
-      this.occluders.push({ obj: flame, probe }, { obj: bowl, probe }, { obj: light, probe });
-
-      this.torches.push({ light, flame, phase: rand(0, TAU), base: cold ? 7 : 11 });
+      this.torches.push({
+        light,
+        flame,
+        phase: rand(0, TAU),
+        base: cold ? 7 : 11,
+        scale: FLAME_SCALE,
+      });
     }
 
-    // Swap the placeholder bowls for the Blender brazier once it arrives. The
-    // flame sits at the bowl's rim rather than floating above a stub.
+    // Swap the placeholder bowls for the Blender brazier once it arrives.
     const token = this.built;
     loadModel('/models/brazier.glb')
       .then((src) => {
         if (token !== this.built) return;
         for (const bowl of bowls) this.group.remove(bowl);
-        this.occluders = this.occluders.filter((o) => !bowls.includes(o.obj as THREE.Mesh));
-        bowlSpots.forEach(([x, z], i) => {
+        for (const [x, z] of bowlSpots) {
           const br = instance(src, ironMat);
-          fitToHeight(br, 2.6);
-          br.position.set(x, 1.9, z);
+          fitToHeight(br, BRAZIER_H);
+          // x and z only, exactly as the columns do it: fitToHeight has already
+          // written the y that stands the model on the floor, and `position.set`
+          // would throw that away — which is how this one ended up hovering.
+          br.position.x = x;
+          br.position.z = z;
           this.group.add(br);
-          this.occluders.push({ obj: br, probe: new THREE.Vector3(x, 1.5, z) });
-          const t = this.torches[i];
-          if (t) {
-            t.flame.position.y = 4.35;
-            t.light.position.y = 4.35;
-          }
-        });
+        }
       })
       .catch(() => {
         /* placeholders stay if the asset is missing */
@@ -328,10 +311,22 @@ export class Arena {
   }
 
   /**
-   * Hide whatever stands between the camera and the fight.
+   * Hide the near arc of the wall, and nothing else.
+   *
+   * The columns, braziers and flames used to be culled the same way, and the
+   * result was that walking towards the rim made the near columns pop into
+   * existence one at a time — the threshold moves with the camera, so a column
+   * crossed it while the player was still several metres short of it. The room
+   * is meant to read as one space, so the architecture now stays on screen and
+   * a column standing briefly in front of a player at the rim is accepted.
+   *
+   * The wall is the one thing that cannot stay: it is a closed ring, so the near
+   * segment is always between the camera and the fight, and at this camera pitch
+   * it fills the bottom of the frame with a black mass. Segments swap out behind
+   * the columns, where the eye is not looking.
    *
    * Measured against the camera, not the focus point: a threshold based on the
-   * focus drifts with the players and lets near columns creep back in.
+   * focus drifts with the players and lets the near wall creep back in.
    */
   cullOccluders(camera: THREE.Object3D, focus: THREE.Vector3) {
     const focusDist = camera.position.distanceTo(focus);
@@ -345,7 +340,7 @@ export class Arena {
     for (const t of this.torches) {
       const f = 0.78 + Math.sin(this.t * 9 + t.phase) * 0.12 + Math.sin(this.t * 23 + t.phase) * 0.07;
       t.light.intensity = t.base * f;
-      t.flame.scale.setScalar(2.0 + f * 0.5);
+      t.flame.scale.setScalar(t.scale * (0.9 + f * 0.24));
     }
   }
 }
@@ -379,12 +374,19 @@ function buildFloorTexture(b: Biome, size: number): THREE.Texture {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d')!;
-  const R = size / 2;
 
   ctx.fillStyle = b.floorBase;
   ctx.fillRect(0, 0, size, size);
 
-  // Broad mottling: overlapping soft blobs in two families, warm and cool.
+  /*
+   * Broad mottling: overlapping soft blobs in two families, warm and cool.
+   *
+   * Lifted eight points since the mosaic rings came out. Those rings were the
+   * only large, bright thing on the floor, and with them gone the stone
+   * underneath had to carry the whole surface on its own — at a mean luminance
+   * of 37/255 it read as flat black from the gameplay camera however good it
+   * looked up close.
+   */
   for (let i = 0; i < 900; i++) {
     const x = rand(0, size);
     const y = rand(0, size);
@@ -393,7 +395,7 @@ function buildFloorTexture(b: Biome, size: number): THREE.Texture {
     const g = ctx.createRadialGradient(x, y, 0, x, y, r);
     const range = warm ? b.warmHue : b.coolHue;
     const h = rand(range[0], range[1]);
-    const l = warm ? rand(24, 42) : rand(16, 30);
+    const l = warm ? rand(32, 50) : rand(24, 38);
     g.addColorStop(0, `hsla(${h}, ${warm ? 34 : 26}%, ${l}%, 0.5)`);
     g.addColorStop(1, `hsla(${h}, 30%, ${l}%, 0)`);
     ctx.fillStyle = g;
@@ -403,46 +405,18 @@ function buildFloorTexture(b: Biome, size: number): THREE.Texture {
   }
 
   /*
-   * The black slab, laid over the painted ground and under the stonework, two
-   * tiles across the floor. Two passes: `overlay` sinks the stone's own depth
-   * into the biome colour without repainting the floor black, then a light
-   * `screen` pass brings the gold veining back — overlay alone flattens the
-   * brightest part of a vein into the base and the gold disappears.
+   * The black slab, laid over the painted ground. Two passes: `overlay` sinks
+   * the stone's own depth into the biome colour without repainting the floor
+   * black, then a `screen` pass brings the gold veining back — overlay alone
+   * flattens the brightest part of a vein into the base and the gold vanishes.
+   *
+   * The slab is now the floor's only large-scale feature, so it is tiled 1.3
+   * times across rather than 2 — bigger veins, which is what survives the
+   * distance to the gameplay camera — and the two weights are rebalanced
+   * towards the screen pass so the gold actually shows.
    */
-  layMarble(ctx, 'black', size, size, { tile: 2, alpha: 0.56, mode: 'overlay' });
-  layMarble(ctx, 'black', size, size, { tile: 2, alpha: 0.18, mode: 'screen' });
-
-  // Concentric mosaic bands, radiating from the arena centre.
-  ctx.save();
-  ctx.translate(R, R);
-  const widths = [6, 3, 8, 3, 10];
-  const radii = [0.22, 0.26, 0.62, 0.67, 0.86];
-  for (let i = 0; i < radii.length; i++) {
-    ctx.strokeStyle = b.bands[i] + 'aa';
-    ctx.lineWidth = widths[i];
-    ctx.beginPath();
-    ctx.arc(0, 0, R * radii[i], 0, TAU);
-    ctx.stroke();
-  }
-
-  // Radial seams between the bands — turns the rings into laid stonework.
-  ctx.strokeStyle = 'rgba(12,6,16,0.55)';
-  ctx.lineWidth = 3;
-  for (let i = 0; i < 48; i++) {
-    const a = (i / 48) * TAU;
-    ctx.beginPath();
-    ctx.moveTo(Math.cos(a) * R * 0.62, Math.sin(a) * R * 0.62);
-    ctx.lineTo(Math.cos(a) * R * 0.86, Math.sin(a) * R * 0.86);
-    ctx.stroke();
-  }
-  for (let i = 0; i < 24; i++) {
-    const a = (i / 24) * TAU;
-    ctx.beginPath();
-    ctx.moveTo(Math.cos(a) * R * 0.26, Math.sin(a) * R * 0.26);
-    ctx.lineTo(Math.cos(a) * R * 0.62, Math.sin(a) * R * 0.62);
-    ctx.stroke();
-  }
-  ctx.restore();
+  layMarble(ctx, 'black', size, size, { tile: 1.3, alpha: 0.4, mode: 'overlay' });
+  layMarble(ctx, 'black', size, size, { tile: 1.3, alpha: 0.32, mode: 'screen' });
 
   // Cracks: short branching dark strokes, the thing that sells "ancient".
   ctx.strokeStyle = 'rgba(10,5,14,0.6)';
