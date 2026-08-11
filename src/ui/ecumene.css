@@ -70,6 +70,32 @@
   --e-vein: linear-gradient(101deg, transparent 30%, rgba(110, 103, 90, 0.2) 31.4%, transparent 33%),
     linear-gradient(72deg, transparent 58%, rgba(110, 103, 90, 0.14) 59.4%, transparent 61%);
 
+  /*
+   * The quarry. Two photographed slabs, tiled, shared with the arena floor so
+   * the HUD is cut from the stone the room is built of.
+   *
+   * They are always a *blend layer*, never a background on their own:
+   *   · white marble is multiplied over a lit ramp — the ramp keeps the colour
+   *     and the photograph contributes nothing but its veining
+   *   · black marble is screened over dark stone — the gold veins land on the
+   *     charcoal without lifting the ground under the type
+   *
+   * Because both are blends, a missing file leaves the slab exactly as the
+   * marble pass drew it. Tiles are deliberately small on furniture and large on
+   * full-screen grounds, so the same rock reads at both scales.
+   */
+  /*
+   * The veil. A photograph at full strength is craquelure, and the marble pass
+   * exists partly to get rid of craquelure: laid over the white slab it holds
+   * the veining to roughly half contrast, which is the difference between stone
+   * a letter can be cut into and a countertop.
+   */
+  --e-quarry-veil: linear-gradient(rgba(226, 218, 201, 0.55), rgba(226, 218, 201, 0.55));
+  --e-quarry-white: url('/textures/marble_white.jpg');
+  --e-quarry-black: url('/textures/marble_black.jpg');
+  --e-quarry-tile: 300px;
+  --e-quarry-field: 720px;
+
   /* A slab's edges: lit top, shadowed underside, and its weight on the floor. */
   --e-relief: 0 1px 0 rgba(255, 253, 246, 0.55) inset,
     0 -3px 0 rgba(90, 84, 74, 0.35) inset, 0 30px 60px rgba(0, 0, 0, 0.75);
@@ -169,8 +195,17 @@
 
 /* ============================================================ 01 · THE TITLE */
 
+/*
+ * The title stands on black marble rather than on flat charcoal. Screened, so
+ * only the gold veining survives, and held down by a scrim above it — a full
+ * strength slab behind a menu is a texture the eye reads before the words.
+ */
 #lobby.show {
-  background: var(--e-ground-deep);
+  background:
+    linear-gradient(rgba(10, 9, 8, 0.82), rgba(10, 9, 8, 0.9)),
+    var(--e-quarry-black),
+    var(--e-ground-deep);
+  background-size: auto, var(--e-quarry-field), auto;
 }
 
 /*
@@ -259,7 +294,9 @@
 .e-tablet {
   position: relative;
   padding: 54px 56px 48px;
-  background: var(--e-vein), var(--e-slab);
+  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-vein), var(--e-slab);
+  background-size: auto, 420px, auto, auto, auto;
+  background-blend-mode: normal, multiply, normal, normal, normal;
   box-shadow: var(--e-relief);
 }
 
@@ -471,7 +508,9 @@
 #e-top .e-top-line {
   display: block;
   padding: 20px 46px 18px;
-  background: var(--e-slab-dim);
+  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-slab-dim);
+  background-size: auto, var(--e-quarry-tile), auto;
+  background-blend-mode: normal, multiply, normal;
   box-shadow: var(--e-relief-soft);
   clip-path: polygon(0 0, 100% 0, 100% 74%, 50% 100%, 0 74%);
 }
@@ -584,7 +623,9 @@
   width: 196px;
   height: 248px;
   padding: 7px;
-  background: var(--e-slab);
+  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-slab);
+  background-size: auto, var(--e-quarry-tile), auto;
+  background-blend-mode: normal, multiply, normal;
   box-shadow:
     0 1px 0 rgba(255, 253, 246, 0.5) inset,
     0 22px 48px rgba(0, 0, 0, 0.8);
@@ -678,6 +719,7 @@
 /* A downed shade's frame goes to dead stone. */
 .e-plate.downed {
   background: linear-gradient(168deg, #6e6558, #4e4740 60%, #5d554a);
+  background-blend-mode: normal;
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.8);
 }
 
@@ -838,7 +880,9 @@
   width: 124px;
   height: 158px;
   padding: 5px;
-  background: var(--e-slab-dim);
+  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-slab-dim);
+  background-size: auto, 190px, auto;
+  background-blend-mode: normal, multiply, normal;
   box-shadow:
     0 1px 0 rgba(255, 253, 246, 0.4) inset,
     0 14px 32px rgba(0, 0, 0, 0.8);
@@ -974,7 +1018,11 @@
   position: absolute;
   inset: 0;
   display: flex;
-  background: var(--e-ground);
+  background:
+    linear-gradient(rgba(10, 9, 8, 0.84), rgba(10, 9, 8, 0.92)),
+    var(--e-quarry-black),
+    var(--e-ground);
+  background-size: auto, var(--e-quarry-field), auto;
   color: var(--e-ink);
   font-family: var(--e-body);
   animation: e-rise 0.35s ease-out both;
@@ -1068,7 +1116,11 @@
   flex-direction: column;
   justify-content: center;
   gap: 22px;
-  background: var(--e-ground-panel);
+  background:
+    linear-gradient(rgba(13, 12, 10, 0.88), rgba(13, 12, 10, 0.94)),
+    var(--e-quarry-black),
+    var(--e-ground-panel);
+  background-size: auto, 520px, auto;
 }
 
 .e-terms-kicker {
@@ -1098,7 +1150,9 @@
   border: 0;
   color: inherit;
   font: inherit;
-  background: var(--e-slab-dim);
+  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-slab-dim);
+  background-size: auto, var(--e-quarry-tile), auto;
+  background-blend-mode: normal, multiply, normal;
   box-shadow:
     0 1px 0 rgba(255, 253, 246, 0.45) inset,
     0 -3px 0 rgba(90, 84, 74, 0.3) inset,
@@ -1183,7 +1237,9 @@
 /* Lifted, lit and veined — the tablet you are about to take. */
 .e-card:hover,
 .e-card:focus-visible {
-  background: var(--e-vein), var(--e-slab-lit);
+  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-vein), var(--e-slab-lit);
+  background-size: auto, var(--e-quarry-tile), auto, auto, auto;
+  background-blend-mode: normal, multiply, normal, normal, normal;
   box-shadow:
     0 1px 0 rgba(255, 255, 250, 0.8) inset,
     0 -3px 0 rgba(90, 84, 74, 0.28) inset,
@@ -1225,7 +1281,13 @@
  */
 .e-card.rival {
   --rival: var(--e-sanguine);
-  background: var(--e-slab-dark);
+  /* The rival's tablet is the black slab the light ones were quarried against. */
+  background:
+    linear-gradient(rgba(26, 21, 19, 0.6), rgba(26, 21, 19, 0.6)),
+    var(--e-quarry-black),
+    var(--e-slab-dark);
+  background-size: auto, var(--e-quarry-tile), auto;
+  background-blend-mode: normal, screen, normal;
   box-shadow:
     0 0 0 1px rgba(176, 74, 48, 0.45),
     0 12px 28px rgba(0, 0, 0, 0.7);
@@ -1263,7 +1325,12 @@
 
 .e-card.rival:hover,
 .e-card.rival:focus-visible {
-  background: linear-gradient(168deg, #362b26, #221a18 55%, #2e2420);
+  background:
+    linear-gradient(rgba(38, 30, 27, 0.55), rgba(38, 30, 27, 0.55)),
+    var(--e-quarry-black),
+    linear-gradient(168deg, #362b26, #221a18 55%, #2e2420);
+  background-size: auto, var(--e-quarry-tile), auto;
+  background-blend-mode: normal, screen, normal;
   box-shadow:
     0 0 0 1px rgba(192, 116, 86, 0.75),
     0 20px 46px rgba(0, 0, 0, 0.75);
@@ -1334,7 +1401,11 @@
  */
 
 .lpanel {
-  background: linear-gradient(180deg, rgba(16, 15, 13, 0.96), rgba(10, 9, 8, 0.98));
+  background:
+    linear-gradient(180deg, rgba(16, 15, 13, 0.94), rgba(10, 9, 8, 0.97)),
+    var(--e-quarry-black),
+    #0a0908;
+  background-size: auto, 560px, auto;
   border: 1px solid rgba(230, 223, 208, 0.16);
   border-radius: 0;
   box-shadow:
@@ -1360,13 +1431,22 @@
   text-transform: none;
 }
 
-/* Buttons are small slabs: lit top edge, shadowed underside, engraved label. */
+/*
+ * Buttons are small slabs: lit top edge, shadowed underside, engraved label.
+ *
+ * The label is cut at 600 rather than 400. A 13px serif at 0.24em tracking is
+ * already thin, and over veined stone a hairline stroke stops being a letter —
+ * the weight is what keeps the button readable now that the slab has grain.
+ */
 .lbtn {
   font-family: var(--e-display);
+  font-weight: 600;
   letter-spacing: 0.24em;
   border-radius: 0;
   border: 0;
-  background: var(--e-slab-dim);
+  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-slab-dim);
+  background-size: auto, 220px, auto;
+  background-blend-mode: normal, multiply, normal;
   color: var(--e-cut);
   text-shadow: 0 1px 0 rgba(255, 253, 246, 0.7);
   box-shadow:
@@ -1376,17 +1456,44 @@
 }
 
 .lbtn:hover {
-  background: var(--e-vein), var(--e-slab-lit);
+  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-vein), var(--e-slab-lit);
+  background-size: auto, 220px, auto, auto, auto;
+  background-blend-mode: normal, multiply, normal, normal, normal;
   color: var(--e-cut-deep);
 }
 
+/*
+ * The base sheet paints a primary button's label gold, which was right over its
+ * near-black panel and is illegible on white marble — `.lbtn.primary` outweighs
+ * `.lbtn`, so the stone colour has to be restated here or the gold wins.
+ */
 .lbtn.primary {
-  background: var(--e-vein), var(--e-slab);
+  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-vein), var(--e-slab);
+  background-size: auto, 220px, auto, auto, auto;
+  background-blend-mode: normal, multiply, normal, normal, normal;
+  color: var(--e-cut-deep);
+  border-color: transparent;
+  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.9), 0 -1px 1px rgba(0, 0, 0, 0.18);
+}
+
+/*
+ * Secondary, not faded. The base sheet dims the whole button to 0.75, which on
+ * a dark panel reads as "quieter" and on stone reads as "out of focus" — the
+ * cut letters go grey and lose their highlight. Full strength, dimmer ink.
+ */
+.lbtn.ghost {
+  opacity: 1;
+  color: var(--e-stone-deep);
 }
 
 /* The one destructive control, and the only place sanguine appears in a menu. */
 .lbtn.danger {
-  background: var(--e-slab-dark);
+  background:
+    linear-gradient(rgba(26, 21, 19, 0.6), rgba(26, 21, 19, 0.6)),
+    var(--e-quarry-black),
+    var(--e-slab-dark);
+  background-size: auto, 220px, auto;
+  background-blend-mode: normal, screen, normal;
   color: #e2d6cf;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
   box-shadow:
@@ -1394,8 +1501,15 @@
     0 8px 20px rgba(0, 0, 0, 0.6);
 }
 
+/* Lit, not stripped: the hover state has to restate the slab, or the stone
+   vanishes from under the label the moment the cursor lands on it. */
 .lbtn.danger:hover {
-  background: linear-gradient(168deg, #362b26, #221a18 55%, #2e2420);
+  background:
+    linear-gradient(rgba(38, 30, 27, 0.55), rgba(38, 30, 27, 0.55)),
+    var(--e-quarry-black),
+    linear-gradient(168deg, #362b26, #221a18 55%, #2e2420);
+  background-size: auto, 220px, auto;
+  background-blend-mode: normal, screen, normal;
   box-shadow:
     0 0 0 1px rgba(192, 116, 86, 0.8),
     0 10px 24px rgba(0, 0, 0, 0.7);
@@ -1502,7 +1616,9 @@
 
 .ltoggle.on,
 .lsegbtn.on {
-  background: var(--e-slab-dim);
+  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-slab-dim);
+  background-size: auto, 180px, auto;
+  background-blend-mode: normal, multiply, normal;
   color: var(--e-cut);
   text-shadow: 0 1px 0 rgba(255, 253, 246, 0.6);
 }

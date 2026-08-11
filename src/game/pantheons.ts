@@ -111,7 +111,10 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
     css: '#665f52',
     color: 0x665f52,
     rivals: ['legion', 'netjer'],
-    gods: ['michael', 'raphael'],
+    // One voice, not two. The choir speaks as Michael alone — he is the face
+    // that was painted for it, and a throne with a portrait for one god and a
+    // sigil for the other reads as a missing file rather than as a choice.
+    gods: ['michael'],
   },
   legion: {
     id: 'legion',

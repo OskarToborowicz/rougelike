@@ -737,14 +737,21 @@ let tick = 0;
 let pauseHeld = false;
 
 /**
- * Escape opens the pause menu.
+ * Escape opens the pause menu, and escape again closes it.
+ *
+ * Closing is the menu's own job — it owns the sub-screens escape has to back out
+ * of first — so all this handler has to do is keep out of the way once the menu
+ * has consumed the key. Without the `defaultPrevented` check both listeners fire
+ * on the same press: the menu resumes, `isPaused` goes false, and this reopens
+ * the pause screen on the very keystroke meant to dismiss it.
  *
  * Only when hosting alone or playing solo: a host who pauses would freeze the
  * simulation for everyone else, and a guest cannot pause a world it does not
  * own. In a real party the menu still opens for settings, but the fight runs on.
  */
 addEventListener("keydown", (e) => {
-  if (e.code !== "Escape" || !running || menu.isPaused) return;
+  if (e.code !== "Escape" || e.defaultPrevented || !running || menu.isPaused)
+    return;
   const canFreeze =
     mode === "solo" || (mode === "host" && net.peers.length === 0);
   e.preventDefault();
