@@ -22,6 +22,7 @@ import sys
 
 import bmesh
 import bpy
+import mathutils
 
 # --------------------------------------------------------------------- budgets
 #
@@ -147,6 +148,88 @@ def _decimate(obj, target):
     return len(obj.data.polygons)
 
 
+def _unwrap_cylindrical(obj):
+    """
+    Wrap the body in a cylinder around Z: u is the angle, v is the height.
+
+    Computed from vertex positions rather than run through Blender's unwrapper,
+    because the texture this feeds is not arbitrary. makeBodySkin paints a
+    vertical light-to-dark ramp with horizontal armour bands and expects v=1 at
+    the top of the body — Smart UV Project would scatter the mesh into islands
+    and slice that ramp into confetti.
+
+    Only v carries meaning: every band in that texture spans the full width, so
+    u exists to keep the grime speckle from repeating, nothing more.
+
+    v is written **inverted** on purpose. Blender puts v=0 at the bottom of an
+    image and glTF puts it at the top, so the exporter flips the coordinate on
+    the way out; writing the obvious `height / span` here lands v=0 on the head
+    in game, which paints black horns and brightly lit hooves. Verified against
+    the loaded model, not assumed.
+    """
+    me = obj.data
+    uv = me.uv_layers[0] if me.uv_layers else me.uv_layers.new(name="UVMap")
+
+    zs = [v.co.z for v in me.vertices]
+    lo, hi = min(zs), max(zs)
+    span = (hi - lo) or 1.0
+
+    for poly in me.polygons:
+        us = []
+        for li in poly.loop_indices:
+            co = me.vertices[me.loops[li].vertex_index].co
+            us.append(math.atan2(co.y, co.x) / (2 * math.pi) + 0.5)
+        # A face straddling the back seam would otherwise smear the whole
+        # texture across itself; push its low corners round to the far side.
+        if max(us) - min(us) > 0.5:
+            us = [u + 1.0 if u < 0.5 else u for u in us]
+        for li, u in zip(poly.loop_indices, us):
+            co = me.vertices[me.loops[li].vertex_index].co
+            uv.data[li].uv = (u, 1.0 - (co.z - lo) / span)
+
+
+def _place(objs, face=0.0):
+    """
+    Put the model on its own pivot: centred on X/Y, feet on Z=0, facing -Y.
+
+    Generators do not care where the origin lands — the minotaur arrived with the
+    body sitting 0.25 units off it in depth. `fitToHeight` only ever corrects
+    height, so that offset survives into the game multiplied by the archetype's
+    scale, and the actor then rotates around a point beside itself while its
+    hitbox stays centred on the pivot. Half a collision radius of disagreement
+    between what you see and what you can hit.
+
+    -Y is Blender's front view, which the exporter maps to glTF +Z — the
+    direction `Enemy.facing` of 0 points down. A model that faces the wrong way
+    needs `face` in degrees, not a rotated node: the game writes `rotation.y`
+    every frame and would overwrite it.
+    """
+    for o in objs:
+        o.select_set(True)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+    if face:
+        rot = mathutils.Matrix.Rotation(math.radians(face), 4, "Z")
+        for o in objs:
+            o.data.transform(rot)
+
+    lo = mathutils.Vector((math.inf,) * 3)
+    hi = mathutils.Vector((-math.inf,) * 3)
+    for o in objs:
+        for corner in o.bound_box:
+            v = mathutils.Vector(corner)
+            lo = mathutils.Vector(map(min, lo, v))
+            hi = mathutils.Vector(map(max, hi, v))
+
+    shift = mathutils.Matrix.Translation(
+        (-(lo.x + hi.x) / 2, -(lo.y + hi.y) / 2, -lo.z)
+    )
+    for o in objs:
+        o.data.transform(shift)
+        o.data.update()
+    return tuple(round(v, 4) for v in shift.to_translation())
+
+
 def _shade(obj):
     bpy.context.view_layer.objects.active = obj
     try:
@@ -159,7 +242,18 @@ def _shade(obj):
             obj.data.auto_smooth_angle = SHARP_ANGLE
 
 
-def prep(src, dst, budget="boss", tris=None, keep_materials=False, keep_uvs=False, name=None):
+def prep(
+    src,
+    dst,
+    budget="boss",
+    tris=None,
+    keep_materials=False,
+    keep_uvs=False,
+    name=None,
+    face=0.0,
+    place=True,
+    unwrap=None,
+):
     """
     src, dst      — .glb in, .glb out
     budget        — key into BUDGETS; ignored when `tris` is given
@@ -171,7 +265,15 @@ def prep(src, dst, budget="boss", tris=None, keep_materials=False, keep_uvs=Fals
     keep_uvs      — nothing in the project samples a texture yet (every shipped
                     .glb has zero images), so UVs are pure wire weight until one
                     does.
+    face          — degrees to spin the model about Z so it faces -Y (Blender
+                    front). Generated meshes land at whatever angle they land.
+    place         — centre on the pivot and drop the feet to Z=0. See _place.
+    unwrap        — "cylindrical" to give a character body UVs so it can wear the
+                    game's painted skin. The texture is drawn in the browser at
+                    runtime, so this costs UV data and not one byte of image.
+                    Implies keep_uvs.
     """
+    keep_uvs = keep_uvs or unwrap is not None
     target = tris or BUDGETS[budget]
 
     bpy.ops.object.select_all(action="SELECT")
@@ -205,6 +307,8 @@ def prep(src, dst, budget="boss", tris=None, keep_materials=False, keep_uvs=Fals
 
         final_tris = _decimate(obj, share if len(meshes) > 1 else target)
         _shade(obj)
+        if unwrap == "cylindrical":
+            _unwrap_cylindrical(obj)
         if name and len(meshes) == 1:
             obj.name = name
 
@@ -218,6 +322,11 @@ def prep(src, dst, budget="boss", tris=None, keep_materials=False, keep_uvs=Fals
                 "tris": final_tris,
             }
         )
+
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.context.view_layer.objects.active = meshes[0]
+    if place:
+        report["placed"] = _place(meshes, face)
 
     bpy.ops.object.select_all(action="SELECT")
     kwargs = dict(
@@ -265,4 +374,8 @@ if __name__ == "__main__":
                 opts["keep_uvs"] = True
             elif a == "--name":
                 opts["name"] = rest[i + 1]
+            elif a == "--face":
+                opts["face"] = float(rest[i + 1])
+            elif a == "--no-place":
+                opts["place"] = False
         prep(argv[0], argv[1], **opts)

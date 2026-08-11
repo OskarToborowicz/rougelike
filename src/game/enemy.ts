@@ -332,12 +332,17 @@ export class Enemy implements Actor {
    * halo — the sculpt carries the silhouette now, and a leftover cone of horns
    * would be floating inside its skull.
    *
-   * The material is ours, not the file's. Exports arrive with whatever the tool
-   * felt like — this one is fully metallic, untextured and carries no UVs at
-   * all, so it would render as a black cut-out under the arena's point lights
-   * and could not wear the painted body skin even if it wanted to. A flat coat
-   * in the archetype's own colour is honest about that, and being a material
-   * this class owns means the tell and the hit flash keep working.
+   * The material is ours, not the file's — exports arrive with whatever the tool
+   * felt like, routinely fully metallic and untextured, which renders as a black
+   * cut-out under the arena's point lights.
+   *
+   * Which of ours depends on one thing: whether the sculpt was unwrapped. With
+   * UVs it wears the very same painted skin the primitive rig built, so the
+   * light-to-dark ramp and the armour banding carry across and the sculpt sits
+   * in the same visual language as every other foe. Without them there is
+   * nothing to sample, and a flat coat in the archetype's colour is the honest
+   * fallback. Either way the material belongs to this class, so the tell glow,
+   * the hit flash and the status tints keep driving it.
    */
   private async loadAuthoredMesh() {
     const want = AUTHORED[this.kind];
@@ -346,14 +351,27 @@ export class Enemy implements Actor {
     // No asset, no swap: the primitive rig is a complete enemy on its own.
     if (!src || this.dead) return;
 
-    const mat = new THREE.MeshStandardMaterial({
-      color: this.a.color,
-      roughness: 0.72,
-      metalness: 0.05,
+    let unwrapped = false;
+    src.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh && m.geometry.attributes.uv) unwrapped = true;
     });
-    // Elites had their hot rim written onto the rig's material; carry it across
-    // or an elite would quietly become a common foe the moment its mesh landed.
-    mat.emissive.copy(this.bodyMat.emissive);
+
+    let mat: THREE.MeshStandardMaterial;
+    if (unwrapped) {
+      // Reuse rather than rebuild: bodyMat already carries this enemy's own skin
+      // canvas, and flashMats already points at it.
+      mat = this.bodyMat;
+    } else {
+      mat = new THREE.MeshStandardMaterial({
+        color: this.a.color,
+        roughness: 0.72,
+        metalness: 0.05,
+      });
+      // Elites had their hot rim written onto the rig's material; carry it
+      // across or an elite quietly becomes a common foe when its mesh lands.
+      mat.emissive.copy(this.bodyMat.emissive);
+    }
     const body = instance(src, mat);
     fitToHeight(body, want.height);
     this.flashMats = [mat];

@@ -3,6 +3,42 @@
 Every `.glb` in `public/models` goes through `prep_model.py` before it ships.
 This file is why, and what the numbers mean.
 
+## From ComfyUI to the arena
+
+1. **Generate.** Export `.glb` from the ComfyUI 3D node. Do not bother reducing
+   polygons there — this pipeline does it better, and a generator's own decimate
+   usually leaves the topology worse than the one it started with.
+2. **Keep the raw file** somewhere outside the repo. The pipeline is destructive
+   and one-way; the raw is the only way to re-run at a different budget.
+3. **Prep it:**
+   ```python
+   exec(open(r"tools/prep_model.py", encoding="utf-8").read())
+   prep(r"raw/wretch.glb", r"public/models/wretch.glb", budget="common", name="Wretch")
+   ```
+4. **Check the facing.** Look at it in Blender's front view (Numpad 1). The model
+   must face *you*. If it does not, re-run with `face=90` / `180` / `-90` — the
+   game writes `mesh.rotation.y` every frame, so a rotation left on the node
+   would be overwritten and the model would moonwalk.
+5. **Register it** in the `ROLE` table in `glb-info.mjs`, then `npm run models`.
+6. **Wire it up** in `AUTHORED` in `enemy.ts` with the height you want.
+
+What a generator gets wrong, every time, and what handles it:
+
+| Symptom | Handled by |
+| --- | --- |
+| 500 k triangles | decimate to the role's budget |
+| 30 k non-manifold edges, dozens of loose shells | voxel remesh, gated on measurement |
+| every vertex split three ways, 45 MB | weld |
+| body sitting off its own pivot | `_place` — see below |
+| vertex colours or a baked texture | stripped; the game re-materials everything |
+| arbitrary facing | `face=` degrees |
+| arbitrary scale | nothing — `fitToHeight` owns scale at runtime |
+
+**Colour does not survive.** Whatever the generator painted is thrown away:
+`loadModel` re-materials every mesh so lighting matches the room, and the
+archetype's `color` / `trim` in `enemy.ts` is what you will actually see. Judge a
+generation on its silhouette, not its texture.
+
 ## Budgets
 
 | Role | Triangles | Bytes | Notes |
@@ -77,6 +113,20 @@ armour and blade edges crisp. It costs roughly 15% more vertices than blanket
 smoothing (split normals at the hard edges) — 419 kB against 365 kB on the
 minotaur — and it is worth every byte; blanket smoothing turns the axe into
 soap.
+
+**Place it on its own pivot.** Centred on X/Z, feet on the floor plane, facing
+-Y. `fitToHeight` corrects height and *nothing else*, so an off-centre pivot
+rides into the game multiplied by the archetype's scale: the actor rotates
+around a point beside itself while its hitbox stays where the pivot is. The
+generated minotaur arrived 0.25 units off in depth — 0.56 game units after
+scaling, against a collision radius of 1.15. `npm run models` prints the offset
+as a share of the model's own footprint and fails above 5%.
+
+Two files are exempt by hand in the `ROLE` table, because their pivots are
+authored deliberately: `warrior_sword.glb` pivots on its grip, and `warrior.glb`
+is an older hand-built rig whose 11% offset is 0.12 units against a 0.55 radius
+— measurable, not visible, and not worth re-exporting a seven-node rig that the
+animation and tint code looks up by string.
 
 **Strip what nothing reads.** No UVs and no materials by default:
 
