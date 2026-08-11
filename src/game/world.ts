@@ -233,14 +233,15 @@ export class World {
         p.comboIndex = p.usingSpecial ? 0 : (p.comboIndex + 1) % p.comboLength;
         p.usingSpecial = false;
       }
-      p.vel.multiplyScalar(Math.exp(-14 * dt));
     } else if (p.state === 'cast') {
       if (p.stateT > 0.18) {
         p.state = 'idle';
         p.stateT = 0;
       }
-      p.vel.multiplyScalar(Math.exp(-12 * dt));
     }
+    // No friction here: attacking and casting slow the shade inside
+    // stepMovement, which is the one integrator the guest's predictor also runs.
+    // Damping the velocity first meant the host bled off speed the guest kept.
 
     if (p.comboWindow <= 0 && p.state !== 'attack') p.comboIndex = 0;
 

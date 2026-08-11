@@ -3,6 +3,9 @@ import { arenaRadius } from "../render/arena";
 import { damp } from "../core/math";
 import { DASH } from "./player";
 
+/** Fraction of walking speed kept while an attack, special or cast is running. */
+export const BUSY_MOVE_MUL = 0.2;
+
 /** The minimum a mover needs for locomotion — a Player satisfies it. */
 export interface Movable {
   pos: { x: number; y: number; z: number };
@@ -13,7 +16,6 @@ export interface Movable {
   state: string;
   stateT: number;
   stagger: number;
-  isBusy: boolean;
 }
 
 /**
@@ -32,8 +34,13 @@ export function stepMovement(p: Movable, f: Frame | null, dt: number, moveMul: n
     p.vel.x = Math.sin(p.facing) * speed;
     p.vel.z = Math.cos(p.facing) * speed;
   } else if (f && p.stagger <= 0) {
-    const accel = p.isBusy ? 18 : 60;
-    const max = p.speed * moveMul * (p.state === "attack" ? 0.25 : 1);
+    // Swinging or casting slows the shade to a crawl — it never roots it. A root
+    // is nearly invisible on a mouse, where one click is one swing, but the aim
+    // stick on a phone autofires, so a rooted attack meant standing still for the
+    // whole fight. At a fifth of the speed the commitment still reads.
+    const busy = p.state === "attack" || p.state === "cast";
+    const accel = busy ? 26 : 60;
+    const max = p.speed * moveMul * (busy ? BUSY_MOVE_MUL : 1);
     p.vel.x = damp(p.vel.x, f.moveX * max, accel * 0.35, dt);
     p.vel.z = damp(p.vel.z, f.moveY * max, accel * 0.35, dt);
   } else if (!f) {

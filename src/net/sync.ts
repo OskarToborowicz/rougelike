@@ -315,7 +315,6 @@ export class RemoteView {
       state: p.state as string,
       stateT: p.stateT,
       stagger: p.stagger,
-      isBusy: p.isBusy,
     };
     for (const step of this.pending) {
       stepMovement(replayed, step.frame, step.dt, p.boons.moveMul);
