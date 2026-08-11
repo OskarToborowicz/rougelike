@@ -24,6 +24,11 @@ export function loadModel(url: string): Promise<THREE.Object3D> {
             if (!m.isMesh) return;
             m.castShadow = true;
             m.receiveShadow = true;
+            // Sculpting and generator exports routinely arrive as bare position
+            // data. Without normals a lit material has nothing to shade against
+            // and the model renders as a flat cut-out, so they are derived here
+            // once, on the cached source, rather than per clone.
+            if (!m.geometry.attributes.normal) m.geometry.computeVertexNormals();
           });
           resolve(root);
         },
