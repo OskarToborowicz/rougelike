@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && npm run models:check && vite build",
+    "models": "node tools/glb-info.mjs",
+    "models:check": "node tools/glb-info.mjs --check",
     "preview": "vite preview",
     "relay": "node server/relay.mjs"
   },
