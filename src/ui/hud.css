@@ -249,6 +249,13 @@ body {
 #lobby.show {
   display: grid;
 }
+/* The full-bleed layer and the panel are two children of the same grid, so the
+   emptied bleed still claimed a row of its own and pushed every panelled screen
+   — the pause menu, options, controls — about 90px below centre. Both live in
+   the one cell instead, which is what makes `place-items: center` mean centred. */
+#lobby > * {
+  grid-area: 1 / 1;
+}
 .lpanel {
   width: min(400px, 88vw);
   padding: 30px 28px 26px;

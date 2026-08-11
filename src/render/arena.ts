@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { rand, TAU } from '../core/math';
 import { fitToHeight, instance, loadModel } from './models';
 import { arenaRadiusFor, BIOMES, type Biome } from './biome';
+import { layMarble, marble, whenMarbleReady } from './marble';
 
 /**
  * Current arena radius. Mutable because the room is rebuilt when the party size
@@ -88,6 +89,7 @@ export class Arena {
     const floor = new THREE.Mesh(geo, mat);
     floor.receiveShadow = true;
     this.group.add(floor);
+    this.repaintWhenMarbleArrives(mat, () => makeFloorTexture(b));
 
     // Inlaid ring of cracked marble tiles — gives the eye something to scale against.
     const ringGeo = new THREE.RingGeometry(radius - 2.6, radius - 2.2, 96);
@@ -145,6 +147,7 @@ export class Arena {
       roughness: 0.95,
       side: THREE.DoubleSide,
     });
+    this.repaintWhenMarbleArrives(wallMat, () => makeWallTexture(b));
 
     // The wall is built in segments rather than one cylinder so the near side can
     // be culled away like the columns. A solid ring wall reads as a black mass
@@ -169,7 +172,15 @@ export class Arena {
 
     // More columns in a bigger room, so the spacing between them stays constant.
     const count = Math.max(8, Math.round(radius / 1.45));
-    const pillarMat = new THREE.MeshStandardMaterial({ color: b.pillar, roughness: 0.78 });
+    // The columns are the one thing in the room cut from white marble — the
+    // biome colour stays as the tint the map is multiplied by, so a column still
+    // belongs to its region instead of being a white post in a red hall.
+    const pillarMat = new THREE.MeshStandardMaterial({
+      color: b.pillar,
+      roughness: 0.78,
+      map: makeColumnTexture(),
+    });
+    this.repaintWhenMarbleArrives(pillarMat, () => makeColumnTexture());
     const placeholders: THREE.Mesh[] = [];
     const spots: [number, number][] = [];
     const pillarGeo = new THREE.CylinderGeometry(0.5, 0.62, 6.5, 14);
@@ -294,6 +305,29 @@ export class Arena {
   }
 
   /**
+   * Re-paint a surface once the marble photographs land.
+   *
+   * The room is built on frame zero and rebuilt between chambers, so nothing
+   * here may wait on a network round-trip: every surface is painted procedurally
+   * first and swapped for the veined version the moment the slab is decoded. The
+   * build token guards against a rebuild having happened in the meantime, and
+   * the texture caches are keyed on whether marble was available, so this asks
+   * for a genuinely different texture rather than the cached flat one.
+   */
+  private repaintWhenMarbleArrives(
+    mat: THREE.MeshStandardMaterial,
+    paint: () => THREE.Texture
+  ) {
+    if (marble('black')) return;
+    const token = this.built;
+    whenMarbleReady().then(() => {
+      if (token !== this.built || !marble('black')) return;
+      mat.map = paint();
+      mat.needsUpdate = true;
+    });
+  }
+
+  /**
    * Hide whatever stands between the camera and the fight.
    *
    * Measured against the camera, not the focus point: a threshold based on the
@@ -330,10 +364,14 @@ const wallCache = new Map<string, THREE.Texture>();
  * regions, so every later visit is free.
  */
 export function makeFloorTexture(b: Biome, size = 1024): THREE.Texture {
-  const hit = floorCache.get(b.id);
+  // Keyed on the slab too: the pre-marble painting and the veined one are two
+  // different textures for the same region, and the first must not shadow the
+  // second in the cache.
+  const key = `${b.id}|${marble('black') ? 'm' : 'flat'}`;
+  const hit = floorCache.get(key);
   if (hit) return hit;
   const tex = buildFloorTexture(b, size);
-  floorCache.set(b.id, tex);
+  floorCache.set(key, tex);
   return tex;
 }
 
@@ -363,6 +401,16 @@ function buildFloorTexture(b: Biome, size: number): THREE.Texture {
     ctx.arc(x, y, r, 0, TAU);
     ctx.fill();
   }
+
+  /*
+   * The black slab, laid over the painted ground and under the stonework, two
+   * tiles across the floor. Two passes: `overlay` sinks the stone's own depth
+   * into the biome colour without repainting the floor black, then a light
+   * `screen` pass brings the gold veining back — overlay alone flattens the
+   * brightest part of a vein into the base and the gold disappears.
+   */
+  layMarble(ctx, 'black', size, size, { tile: 2, alpha: 0.56, mode: 'overlay' });
+  layMarble(ctx, 'black', size, size, { tile: 2, alpha: 0.18, mode: 'screen' });
 
   // Concentric mosaic bands, radiating from the arena centre.
   ctx.save();
@@ -425,10 +473,11 @@ function buildFloorTexture(b: Biome, size: number): THREE.Texture {
  * void, warmer and busier at floor level where the light actually reaches.
  */
 export function makeWallTexture(b: Biome, w = 1024, h = 256): THREE.Texture {
-  const hit = wallCache.get(b.id);
+  const key = `${b.id}|${marble('black') ? 'm' : 'flat'}`;
+  const hit = wallCache.get(key);
   if (hit) return hit;
   const tex = buildWallTexture(b, w, h);
-  wallCache.set(b.id, tex);
+  wallCache.set(key, tex);
   return tex;
 }
 
@@ -445,6 +494,15 @@ function buildWallTexture(b: Biome, w: number, h: number): THREE.Texture {
   g.addColorStop(1, b.wallBase);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h);
+
+  /*
+   * The same black slab as the floor, but weaker and stretched wider: the wall
+   * is 1024×256 repeated three times around the room, so a square tile would
+   * read as an obvious grid. Kept faint because the top of the wall is supposed
+   * to fade into the void, and veining up there fights the fog.
+   */
+  layMarble(ctx, 'black', w, h, { tile: 3, alpha: 0.32, mode: 'overlay' });
+  layMarble(ctx, 'black', w, h, { tile: 3, alpha: 0.2, mode: 'screen' });
 
   ctx.strokeStyle = 'rgba(8,4,12,0.55)';
   ctx.lineWidth = 2;
@@ -483,6 +541,57 @@ function buildWallTexture(b: Biome, w: number, h: number): THREE.Texture {
   tex.wrapS = THREE.RepeatWrapping;
   tex.repeat.set(3, 1);
   return tex;
+}
+
+/**
+ * White marble for the columns, shared by every region — the biome tints it
+ * through the material's own colour, so one texture serves all three.
+ *
+ * Flutes are drawn in rather than modelled: the column is a 14-sided cylinder
+ * (or the Blender mesh, which is not fluted either), and a few vertical shadows
+ * in the map cost nothing and read from across the room.
+ */
+let columnTex: THREE.Texture | null = null;
+let columnHadMarble = false;
+
+export function makeColumnTexture(size = 512): THREE.Texture {
+  const has = !!marble('white');
+  if (columnTex && columnHadMarble === has) return columnTex;
+
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+
+  ctx.fillStyle = '#ded6c6';
+  ctx.fillRect(0, 0, size, size);
+  layMarble(ctx, 'white', size, size, { tile: 1, alpha: 0.95 });
+
+  // Flutes. The map wraps once around the shaft, so the spacing here is the
+  // spacing on the stone.
+  ctx.strokeStyle = 'rgba(58,50,42,0.24)';
+  ctx.lineWidth = 3;
+  for (let i = 0; i < 12; i++) {
+    const x = ((i + 0.5) / 12) * size;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, size);
+    ctx.stroke();
+  }
+
+  // Soot climbing the base — nothing in the underworld stays clean.
+  const grime = ctx.createLinearGradient(0, size, 0, size * 0.55);
+  grime.addColorStop(0, 'rgba(18,13,10,0.5)');
+  grime.addColorStop(1, 'rgba(18,13,10,0)');
+  ctx.fillStyle = grime;
+  ctx.fillRect(0, 0, size, size);
+
+  columnTex?.dispose();
+  columnTex = new THREE.CanvasTexture(c);
+  columnTex.colorSpace = THREE.SRGBColorSpace;
+  columnTex.wrapS = THREE.RepeatWrapping;
+  columnTex.anisotropy = 8;
+  columnHadMarble = has;
+  return columnTex;
 }
 
 /**

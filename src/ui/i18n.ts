@@ -225,10 +225,6 @@ const EN = {
   'god.michael.epithet': 'who holds the scales and does not look at them',
   'god.michael.quote':
     '“I have weighed better than you and let them fall. Take the sword or take the mercy — you will not be offered both again.”',
-  'god.raphael.name': 'RAPHAEL',
-  'god.raphael.epithet': 'who mends what should have been let die',
-  'god.raphael.quote':
-    '“Hold still. This will not hurt, and that is the part you should be frightened of.”',
   'god.belial.name': 'BELIAL',
   'god.belial.epithet': 'who is owed, and always collects',
   'god.belial.quote':
@@ -586,10 +582,6 @@ const PL: Partial<Record<Key, string>> = {
   'god.michael.epithet': 'ten, który trzyma wagę i na nią nie patrzy',
   'god.michael.quote':
     '„Ważyłem lepszych od ciebie i pozwoliłem im upaść. Weź miecz albo weź litość — drugi raz nie dostaniesz obu.”',
-  'god.raphael.name': 'RAFAŁ',
-  'god.raphael.epithet': 'ten, który zszywa to, co należało zostawić',
-  'god.raphael.quote':
-    '„Nie ruszaj się. To nie zaboli — i właśnie tego powinieneś się bać.”',
   'god.belial.name': 'BELIAL',
   'god.belial.epithet': 'ten, któremu się należy i który zawsze ściąga dług',
   'god.belial.quote':

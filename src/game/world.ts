@@ -421,7 +421,8 @@ export class World {
   /** Melee: an arc test in front of the attacker. Generous, because whiffing feels bad. */
   private resolveSwing(p: Player, a: AttackShape, heavy: boolean) {
     const mul = heavy ? p.boons.specialMul : p.boons.attackMul;
-    let connected = 0;
+    /** Where the blade actually met something, and which way that thing was hit. */
+    const contacts: { x: number; z: number; nx: number; nz: number }[] = [];
     for (const e of this.enemies) {
       if (e.dead) continue;
       const dx = e.pos.x - p.pos.x;
@@ -430,20 +431,13 @@ export class World {
       if (dist > a.reach + e.radius) continue;
       const to = Math.atan2(dx, dz);
       if (Math.abs(angleDelta(p.facing, to)) > a.arc / 2) continue;
-      this.damage(
-        e,
-        a.dmg * mul,
-        p,
-        dx / (dist || 1),
-        dz / (dist || 1),
-        a.push,
-        heavy ? 'special' : 'attack'
-      );
-      connected++;
+      const nx = dx / (dist || 1);
+      const nz = dz / (dist || 1);
+      this.damage(e, a.dmg * mul, p, nx, nz, a.push, heavy ? 'special' : 'attack');
+      // The near edge of the foe, not its centre: the sparks belong on the
+      // surface the blade landed on, and a big enemy's centre is well inside it.
+      contacts.push({ x: e.pos.x - nx * e.radius, z: e.pos.z - nz * e.radius, nx, nz });
     }
-
-    const fx = p.pos.x + Math.sin(p.facing) * 1.6;
-    const fz = p.pos.z + Math.cos(p.facing) * 1.6;
 
     // The arc fires on every swing, hit or miss — the attack has to exist in the
     // world before it has consequences.
@@ -458,13 +452,30 @@ export class World {
       heavy ? 0.32 : 0.24
     );
 
-    if (connected > 0) {
+    if (contacts.length) {
       this.freeze(heavy ? 0.085 : 0.045);
       this.fx.shake(heavy ? 0.55 : 0.22);
-      this.fx.hitSpark(fx, fz, Math.sin(p.facing), Math.cos(p.facing), '#ffe6a8', heavy ? 1.6 : 1);
+      /*
+       * One burst per foe struck, thrown off the point of contact and away from
+       * the attacker. This used to be a single spark pinned 1.6m along `facing`
+       * — the tip of the weapon — which meant the sparks flew off empty floor
+       * whenever the target was to the side of the arc or closer than the swing
+       * was long, and a cleave through three foes still only lit up one spot.
+       */
+      for (const c of contacts) {
+        this.fx.hitSpark(c.x, c.z, c.nx, c.nz, '#ffe6a8', heavy ? 1.6 : 1);
+      }
     } else {
-      // A whoosh even on a whiff — the swing must exist in the world.
-      this.fx.hitSpark(fx, fz, Math.sin(p.facing), Math.cos(p.facing), '#8fa8ff', 0.35);
+      // A whoosh even on a whiff. Nothing was struck, so there is no impact to
+      // sit on — this one belongs on the blade, at the far end of the arc.
+      this.fx.hitSpark(
+        p.pos.x + Math.sin(p.facing) * a.reach * 0.7,
+        p.pos.z + Math.cos(p.facing) * a.reach * 0.7,
+        Math.sin(p.facing),
+        Math.cos(p.facing),
+        '#8fa8ff',
+        0.35
+      );
     }
     if (heavy) this.fx.ring(p.pos.x, p.pos.z, 0xffc07a, a.reach, 0.3);
   }
