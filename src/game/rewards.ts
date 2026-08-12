@@ -62,9 +62,15 @@ export interface Reward {
   /** The face that throne is wearing this time. */
   god?: string;
   label: string;
-  /** Colour of the door's light and its symbol. */
+  /** The throne's tone, for anything carved or printed. */
   color: number;
   css: string;
+  /**
+   * The colour the door actually burns. For a throne this is its fire rather
+   * than its stone — see `light` in pantheons.ts. The other rewards are already
+   * saturated enough to read as light, so they burn their own colour.
+   */
+  light: number;
 }
 
 export interface Door {
@@ -95,6 +101,7 @@ export function rollReward(kind: RewardKind, courted = PANTHEON_ORDER): Reward {
       },
       color: PANTHEONS[pantheon].color,
       css: PANTHEONS[pantheon].css,
+      light: PANTHEONS[pantheon].light,
     };
   }
   if (kind === 'pom') {
@@ -105,6 +112,7 @@ export function rollReward(kind: RewardKind, courted = PANTHEON_ORDER): Reward {
       },
       color: 0xd6a6ff,
       css: '#d6a6ff',
+      light: 0xd6a6ff,
     };
   }
   if (kind === 'vitality') {
@@ -115,6 +123,7 @@ export function rollReward(kind: RewardKind, courted = PANTHEON_ORDER): Reward {
       },
       color: 0xff4d6a,
       css: '#ff4d6a',
+      light: 0xff4d6a,
     };
   }
   return {
@@ -124,6 +133,7 @@ export function rollReward(kind: RewardKind, courted = PANTHEON_ORDER): Reward {
     },
     color: 0xffb04a,
     css: '#ffb04a',
+    light: 0xffb04a,
   };
 }
 

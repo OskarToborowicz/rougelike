@@ -220,11 +220,23 @@ export class Arena {
     const bowlSpots: [number, number][] = [];
 
     for (let i = 0; i < count; i++) {
-      // Half a step round from the columns, which share this count and this
-      // phase. Sitting on the same angle is what put a brazier inside a column.
-      const a = (i / count) * TAU + 0.39 + TAU / count / 2;
-      const x = Math.cos(a) * (radius - 1.5);
-      const z = Math.sin(a) * (radius - 1.5);
+      /*
+       * One brazier per column, standing in front of it rather than beside it.
+       *
+       * The obvious fix for a brazier overlapping a column is to put it in the
+       * gap between two — but the gaps are where the doors are. `Gate.show`
+       * measures its angle as `x = sin(a), z = cos(a)`, a quarter turn from the
+       * convention here, and half a step round from the columns lands exactly on
+       * it: every one of the five door positions had a brazier 0.3 units from
+       * its centre, standing in the opening.
+       *
+       * So the angle goes back to the column's and the clearance is taken
+       * radially instead. 3.2 in from the rim puts 2.7 between the two axes,
+       * against 2.26 of combined width.
+       */
+      const a = (i / count) * TAU + 0.39;
+      const x = Math.cos(a) * (radius - 3.2);
+      const z = Math.sin(a) * (radius - 3.2);
       const cold = i % 3 === 1;
 
       const light = new THREE.PointLight(cold ? b.flameCool : b.flameWarm, cold ? 7 : 11, 15, 2);

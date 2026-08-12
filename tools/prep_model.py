@@ -40,7 +40,11 @@ BUDGETS = {
     "elite": 4_000,
     "boss": 20_000,
     "prop": 8_000,
-    "player": 2_000,
+    # A built chamber already draws 118k triangles, 85k of it scenery. Four
+    # heroes at this budget, outline shells included, cost 64k — less than the
+    # room. warrior.glb is 1.4k and stays there because it was modelled that
+    # way, not because a sculpted hero has to be.
+    "player": 8_000,
 }
 
 # Above this share of non-manifold edges the mesh cannot be decimated — collapse
@@ -148,6 +152,136 @@ def _decimate(obj, target):
     return len(obj.data.polygons)
 
 
+"""
+Where a standing humanoid gets cut, as fractions of its own height.
+
+Defaults are ordinary human proportions, not this model's. Every sculpt is a
+little different, so `prep(..., split_at={...})` overrides any of them and the
+report prints the triangle count that landed in each part — a limb that comes
+back at 30 triangles means the plane missed.
+"""
+SPLIT_AT = {
+    "waist": 0.52,  # pelvis ends, torso begins
+    "neck": 0.84,
+    "shoulder": 0.72,  # arms are only separated above this
+    "arm_x": 0.52,  # |x| beyond this share of half-width, above the waist
+}
+
+# Origin of each part, as (share of height, share of half-width). The part turns
+# around this point, so it has to sit on the joint and not in the middle of the
+# mesh — an origin in the centre of a limb makes it spin like a propeller.
+JOINT_AT = {
+    "Pelvis": (0.52, 0.0),
+    "Torso": (0.60, 0.0),
+    "Head": (0.84, 0.0),
+    "ArmL": (0.78, -0.62),
+    "ArmR": (0.78, 0.62),
+    "LegL": (0.50, -0.28),
+    "LegR": (0.50, 0.28),
+}
+
+# Parent of each part. Rotating the torso has to carry the arms and the head
+# with it — that nesting is what makes a turn read as one movement.
+JOINT_PARENT = {
+    "Pelvis": None,
+    "Torso": "Pelvis",
+    "Head": "Torso",
+    "ArmL": "Torso",
+    "ArmR": "Torso",
+    "LegL": "Pelvis",
+    "LegR": "Pelvis",
+}
+
+
+def _classify(co, lo, hi, at, legs):
+    """Which part a face belongs to, from where its centre sits in the bounds."""
+    h = hi.z - lo.z or 1.0
+    half = max(hi.x - lo.x, 1e-6) / 2
+    fz = (co.z - lo.z) / h
+    fx = co.x / half  # already centred on the pivot by _place
+
+    if fz >= at["neck"]:
+        return "Head"
+    if fz >= at["shoulder"] and abs(fx) >= at["arm_x"]:
+        return "ArmL" if fx < 0 else "ArmR"
+    if fz >= at["waist"]:
+        # Arms hanging at the sides reach well below the shoulder line.
+        if abs(fx) >= at["arm_x"]:
+            return "ArmL" if fx < 0 else "ArmR"
+        return "Torso"
+    if legs:
+        return "LegL" if fx < 0 else "LegR"
+    return "Pelvis"
+
+
+def _split_humanoid(obj, legs=True, at=None):
+    """
+    Cut one sculpted body into the named, nested nodes the game animates.
+
+    The game does no skinning: `animateBody` in player.ts rotates named nodes,
+    each around its own origin, and a mesh that arrives as a single object has
+    nothing to rotate. This carves that hierarchy out of the sculpt by where the
+    geometry sits, which is crude but repeatable — and every part is reported so
+    a bad cut is visible before it ships.
+    """
+    at = {**SPLIT_AT, **(at or {})}
+    me = obj.data
+    lo = mathutils.Vector((min(v.co.x for v in me.vertices), 0, min(v.co.z for v in me.vertices)))
+    hi = mathutils.Vector((max(v.co.x for v in me.vertices), 0, max(v.co.z for v in me.vertices)))
+    h = hi.z - lo.z
+    half = (hi.x - lo.x) / 2
+
+    groups = {}
+    for poly in me.polygons:
+        groups.setdefault(_classify(poly.center, lo, hi, at, legs), []).append(poly.index)
+
+    # Separate by selection, one part at a time; whatever is left over stays on
+    # the original object and becomes the root.
+    parts = {}
+    order = [n for n in ("Head", "ArmL", "ArmR", "Torso", "LegL", "LegR") if n in groups]
+    for name in order:
+        bpy.ops.object.select_all(action="DESELECT")
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="DESELECT")
+        bpy.ops.object.mode_set(mode="OBJECT")
+        # Face indices shift as parts leave, so the set is recomputed each pass.
+        for poly in obj.data.polygons:
+            poly.select = _classify(poly.center, lo, hi, at, legs) == name
+        if not any(p.select for p in obj.data.polygons):
+            continue
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.separate(type="SELECTED")
+        bpy.ops.object.mode_set(mode="OBJECT")
+        new = [o for o in bpy.context.selected_objects if o is not obj][-1]
+        new.name = name
+        parts[name] = new
+
+    obj.name = "Pelvis"
+    parts["Pelvis"] = obj
+
+    # Origins onto the joints, then the hierarchy. Parenting keeps the world
+    # transform, so this is purely a change of pivot and of who follows whom.
+    for name, part in parts.items():
+        fz, fx = JOINT_AT[name]
+        cursor = bpy.context.scene.cursor.location.copy()
+        bpy.context.scene.cursor.location = (fx * half, 0.0, lo.z + fz * h)
+        bpy.ops.object.select_all(action="DESELECT")
+        part.select_set(True)
+        bpy.context.view_layer.objects.active = part
+        bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
+        bpy.context.scene.cursor.location = cursor
+
+    for name, part in parts.items():
+        parent = JOINT_PARENT[name]
+        if parent and parent in parts:
+            part.parent = parts[parent]
+            part.matrix_parent_inverse = parts[parent].matrix_world.inverted()
+
+    return {n: len(p.data.polygons) for n, p in parts.items()}
+
+
 def _unwrap_cylindrical(obj):
     """
     Wrap the body in a cylinder around Z: u is the angle, v is the height.
@@ -253,6 +387,8 @@ def prep(
     face=0.0,
     place=True,
     unwrap=None,
+    split=None,
+    split_at=None,
 ):
     """
     src, dst      — .glb in, .glb out
@@ -272,6 +408,11 @@ def prep(
                     game's painted skin. The texture is drawn in the browser at
                     runtime, so this costs UV data and not one byte of image.
                     Implies keep_uvs.
+    split         — "humanoid" cuts the body into the seven named nodes the game
+                    animates; "robed" leaves the skirt whole and cuts five, for
+                    a figure whose legs are not visible and whose hem should not
+                    split in two. See _split_humanoid.
+    split_at      — override any of SPLIT_AT for a model with odd proportions.
     """
     keep_uvs = keep_uvs or unwrap is not None
     target = tris or BUDGETS[budget]
@@ -328,6 +469,12 @@ def prep(
     if place:
         report["placed"] = _place(meshes, face)
 
+    # Cutting happens after placing, so the planes are measured against a body
+    # that is already centred and standing on the floor.
+    if split and len(meshes) == 1:
+        report["parts_cut"] = _split_humanoid(meshes[0], legs=split != "robed", at=split_at)
+        meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+
     bpy.ops.object.select_all(action="SELECT")
     kwargs = dict(
         filepath=dst,
@@ -378,4 +525,6 @@ if __name__ == "__main__":
                 opts["face"] = float(rest[i + 1])
             elif a == "--no-place":
                 opts["place"] = False
+            elif a == "--split":
+                opts["split"] = rest[i + 1]
         prep(argv[0], argv[1], **opts)

@@ -15,6 +15,10 @@ import { makeGlowTexture } from '../render/arena';
  * makes a Hades run feel like a series of decisions rather than a queue of
  * waves: you see where you are going, and you choose when to leave.
  */
+/** Centre of the doorway, and how wide the light in it reaches across. */
+const PORTAL_Y = 2.15;
+const PORTAL_SPAN = 3.4;
+
 export class Gate {
   readonly group = new THREE.Group();
   open = false;
@@ -51,11 +55,21 @@ export class Gate {
       opacity: 0,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      side: THREE.DoubleSide,
+      /*
+       * Front faces only, which matters far more here than it did for the flat
+       * quad this replaces. Additive blending adds every fragment it draws, and
+       * the portal disc is a closed solid — drawn double-sided with no depth
+       * write, each of its eight thousand triangles laid its colour on again
+       * until the whole doorway saturated to white and the reward hue, the one
+       * thing a door has to communicate, was gone. Culling the back half leaves
+       * a single layer, the same as a plane.
+       */
+      side: THREE.FrontSide,
     });
     this.portal = new THREE.Mesh(geo, mat);
-    this.portal.position.set(0, 2.15, 0);
+    this.portal.position.set(0, PORTAL_Y, 0);
     this.group.add(this.portal);
+    void this.loadPortalSurface();
 
     // Floor marker. The arch itself sits on the rim and can be half out of
     // frame; the ring on the ground is what actually says "walk here".
@@ -89,6 +103,48 @@ export class Gate {
   }
 
   private marker!: THREE.Mesh;
+
+  /**
+   * Swap the flat sheet of light for the sculpted portal disc.
+   *
+   * portal.glb is a solid round slab — no opening — so it cannot be the arch the
+   * party walks through; gate.glb still does that. It is the *surface* inside the
+   * arch instead, which is what it is shaped like. The material is untouched, so
+   * the reward colour, the additive blend and the breathing opacity all keep
+   * driving it exactly as they drove the plane.
+   *
+   * The geometry is never modified — every gate shares the one cached copy, and
+   * the disc is centred on the doorway by moving the mesh rather than the mesh
+   * data. Mutating it here would scale it again for each gate that loaded.
+   */
+  private async loadPortalSurface() {
+    const src = await loadModel('/models/portal.glb').catch(() => null);
+    // No asset, no swap: the plane of light is a complete portal on its own.
+    if (!src) return;
+
+    let found: THREE.BufferGeometry | null = null;
+    src.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh && !found) found = m.geometry;
+    });
+    const geo = found as THREE.BufferGeometry | null;
+    if (!geo) return;
+
+    geo.computeBoundingBox();
+    const box = geo.boundingBox!;
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const span = Math.max(size.x, size.y) || 1;
+
+    const old = this.portal.geometry;
+    this.portal.geometry = geo;
+    old.dispose();
+
+    const s = PORTAL_SPAN / span;
+    this.portal.scale.setScalar(s);
+    // The pipeline stands every model on y=0; the doorway wants it centred.
+    this.portal.position.y = PORTAL_Y - ((box.min.y + box.max.y) / 2) * s;
+  }
 
   private async loadFrame() {
     try {
@@ -129,7 +185,9 @@ export class Gate {
     this.open = true;
     this.entered.clear();
 
-    const c = new THREE.Color(reward.color);
+    // The fire, not the stone: a throne's marble tone turns to off-white the
+    // moment it becomes light, and then every door looks the same.
+    const c = new THREE.Color(reward.light);
     (this.portal.material as THREE.MeshBasicMaterial).color.copy(c);
     (this.marker.material as THREE.MeshBasicMaterial).color.copy(c);
     (this.symbol.material as THREE.SpriteMaterial).color.copy(c);
@@ -153,10 +211,11 @@ export class Gate {
 
     this.glow = damp(this.glow, this.open ? 1 : 0, 4, dt);
     // Additive light blows out to white as it brightens, which erases the very
-    // hue that tells the player what the door is worth. Kept dim enough that the
-    // colour survives; the floor ring carries the rest of the read.
+    // hue that tells the player what the door is worth. Backface culling is what
+    // buys the headroom to sit a little brighter than the flat plane did and
+    // still keep the colour; the floor ring carries the rest of the read.
     (this.portal.material as THREE.MeshBasicMaterial).opacity =
-      this.glow * (0.34 + Math.sin(this.t * 2.4) * 0.06);
+      this.glow * (0.46 + Math.sin(this.t * 2.4) * 0.07);
     (this.marker.material as THREE.MeshBasicMaterial).opacity =
       this.glow * (0.7 + Math.sin(this.t * 3.1) * 0.22);
     // Pulse the marker so it reads as an invitation, not a hazard ring.

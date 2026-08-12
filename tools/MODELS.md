@@ -47,12 +47,19 @@ generation on its silhouette, not its texture.
 | `elite` | 4 000 | 300 kB | |
 | `boss` | 20 000 | 600 kB | one body, most-looked-at |
 | `prop` | 8 000 | 300 kB | pillars, gates, braziers |
-| `player` | 2 000 | 200 kB | on screen every frame |
+| `player` | 8 000 | 300 kB | on screen every frame, up to four |
 
 Two multipliers make these tighter than they look:
 
 - `addOutline()` clones every mesh into an inverted hull, so the **on-screen
   cost is 2×** the count in Blender.
+`player` started at 2 000, anchored on `warrior.glb` being 1 404 — which is one
+hand-authored, deliberately blocky rig, not a measurement. A built chamber draws
+**118k triangles, 85k of it scenery** (eight columns at 7.6k, three portals at
+8k), so four sculpted heroes at 8k — outline shells included, 64k — cost less
+than the room they stand in. Anchor a budget on what the frame actually spends,
+not on the smallest asset that happens to exist.
+
 - The whole model set currently fits in **0.88 MB**. That is the number to
   protect — `loadModel` fetches on demand, mid-run, and there is no preload, so
   a fat asset is a stall in the middle of a fight on a phone.

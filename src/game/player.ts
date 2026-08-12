@@ -25,6 +25,50 @@ export type PlayerState =
 
 export const DASH = { dist: 4.6, time: 0.16, cooldown: 0.26, iframes: 0.22 };
 
+/**
+ * The joints `animateBody` drives, and the node names it looks for.
+ *
+ * A model supplies whichever of these it has. Demanding the full set meant one
+ * missing node switched the entire body animation off, which rules out any
+ * figure that has no separate legs to swing — a mage in a robe wants its skirt
+ * to stay one piece, and cutting fake legs into it only buys a visible seam.
+ * What the walk is actually carried by is the torso, the head counter-rotating
+ * against it and the arms; the legs are the stride, and a robe hides that.
+ */
+const RIG_JOINTS = {
+  pelvis: 'Pelvis',
+  torso: 'Torso',
+  head: 'Head',
+  armL: 'ArmL',
+  armR: 'ArmR',
+  legL: 'LegL',
+  legR: 'LegR',
+} as const;
+
+type RigJoint = keyof typeof RIG_JOINTS;
+
+/**
+ * Bodies authored in Blender, per class. Anything not listed keeps the
+ * primitive rig, which is a finished character and not a placeholder.
+ *
+ * `tint` is how the seat colour gets onto the model, and it depends on what the
+ * file brings with it. The warrior was built with named materials, so only its
+ * plume takes the colour and the armour keeps its own. A generated sculpt has
+ * one nameless material and no UVs — nothing to pick out — so the whole body
+ * wears it, which at this camera distance is what tells four players apart.
+ */
+const AUTHORED_RIGS: Partial<
+  Record<ClassId, { body: string; weapon?: string; height: number; tint: "crest" | "whole" }>
+> = {
+  warrior: {
+    body: "/models/warrior.glb",
+    weapon: "/models/warrior_sword.glb",
+    height: 2.1,
+    tint: "crest",
+  },
+  mage: { body: "/models/mage.glb", height: 2.1, tint: "whole" },
+};
+
 /** The sword's resting guard angle, and the pose every swing returns to. */
 const REST_SWORD_Y = -0.5;
 
@@ -97,15 +141,7 @@ export class Player implements Actor {
    * Joint nodes of the authored mesh, each with its origin on the joint it turns
    * around. Null until the model lands, and for classes that don't have one.
    */
-  private rig: {
-    pelvis: THREE.Object3D;
-    torso: THREE.Object3D;
-    head: THREE.Object3D;
-    armL: THREE.Object3D;
-    armR: THREE.Object3D;
-    legL: THREE.Object3D;
-    legR: THREE.Object3D;
-  } | null = null;
+  private rig: Record<RigJoint, THREE.Object3D> | null = null;
   /** Eased 0..1 walk weight, so the gait grows and dies instead of popping on. */
   private gaitAmp = 0;
   private idleT = 0;
@@ -280,22 +316,25 @@ export class Player implements Actor {
   /**
    * Swap the primitive rig for the mesh authored in Blender.
    *
-   * Only the warrior has one, and only the body comes from the file — the blade
-   * loads separately and goes under `weaponPivot`, so the swing animation keeps
-   * driving it. A baked-in sword would be a static prop hanging off the hip.
+   * Only the body comes from the file. A weapon, where the class has one on
+   * disk, loads separately and goes under `weaponPivot` so the swing animation
+   * keeps driving it — a baked-in blade would be a static prop hanging off the
+   * hip. Classes with no entry keep the primitive rig, which is a complete
+   * character on its own.
    */
   private async loadAuthoredRig(tint: number) {
-    if (this.cls !== "warrior") return;
+    const want = AUTHORED_RIGS[this.cls];
+    if (!want) return;
 
-    const [bodySrc, swordSrc] = await Promise.all([
-      loadModel("/models/warrior.glb"),
-      loadModel("/models/warrior_sword.glb"),
+    const [bodySrc, weaponSrc] = await Promise.all([
+      loadModel(want.body),
+      want.weapon ? loadModel(want.weapon) : Promise.resolve(null),
     ]).catch(() => [null, null] as const);
-    // No asset, no swap: the primitive rig is a complete character on its own.
-    if (!bodySrc || !swordSrc) return;
+    // No asset, no swap.
+    if (!bodySrc || (want.weapon && !weaponSrc)) return;
 
     const body = instance(bodySrc);
-    fitToHeight(body, 2.1);
+    fitToHeight(body, want.height);
 
     // Materials come off a shared cached model, so every player would flash and
     // tint together unless each rig gets its own copies.
@@ -305,9 +344,18 @@ export class Player implements Actor {
       if (!m.isMesh) return;
       const src = m.material as THREE.MeshStandardMaterial;
       const mine = src.clone();
-      // The plume is the seat colour — the one part of the armour that says
-      // which of the four players this is, from the top-down camera.
-      if (/crest/i.test(src.name)) mine.color.setHex(tint);
+      if (want.tint === "whole") {
+        // A bare sculpt arrives with one nameless material and no UVs, so there
+        // is no plume to pick out — the whole body wears the seat colour, which
+        // is the only thing that has to survive at this camera distance.
+        mine.color.setHex(tint);
+        mine.roughness = 0.72;
+        mine.metalness = 0.04;
+      } else if (/crest/i.test(src.name)) {
+        // The plume is the seat colour — the one part of the armour that says
+        // which of the four players this is, from the top-down camera.
+        mine.color.setHex(tint);
+      }
       m.material = mine;
       mats.push(mine);
     });
@@ -325,35 +373,39 @@ export class Player implements Actor {
 
     // The joints are just named nodes — no skinning. Hard-edged plate armour has
     // nothing to deform anyway, and segmented limbs read cleanly from this far up.
-    const node = (n: string) => body.getObjectByName(n);
-    const [pelvis, torso, head, armL, armR, legL, legR] = [
-      "Pelvis",
-      "Torso",
-      "Head",
-      "ArmL",
-      "ArmR",
-      "LegL",
-      "LegR",
-    ].map(node);
-    if (pelvis && torso && head && armL && armR && legL && legR) {
-      this.rig = { pelvis, torso, head, armL, armR, legL, legR };
+    //
+    // A joint the model does not carry gets a detached stand-in: animateBody can
+    // then write to every slot without a guard on each line, and the writes land
+    // on an object that is in no scene and renders nothing.
+    const found = {} as Record<RigJoint, THREE.Object3D>;
+    let any = false;
+    for (const [joint, nodeName] of Object.entries(RIG_JOINTS) as [RigJoint, string][]) {
+      const node = body.getObjectByName(nodeName);
+      if (node) any = true;
+      found[joint] = node ?? new THREE.Object3D();
     }
+    if (any) this.rig = found;
+
+    // A class with no weapon file keeps the procedural one buildWeapon made —
+    // it is already parented to weaponPivot and already animates, so the mage's
+    // staff swings exactly as it did before its body arrived.
+    if (!weaponSrc) return;
 
     // The blade rides the same offset the primitive one did, so every pose in
     // animateWeapon lands where it always did.
-    const sword = instance(swordSrc);
-    sword.position.set(0.55, 0, 0);
-    sword.traverse((o) => {
+    const held = instance(weaponSrc);
+    held.position.set(0.55, 0, 0);
+    held.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.isMesh) this.weapon = m;
     });
-    addOutline(sword, 0.03);
+    addOutline(held, 0.03);
     for (const child of [...this.weaponPivot.children]) {
       this.weaponPivot.remove(child);
       const m = child as THREE.Mesh;
       if (m.isMesh && !m.userData.sharedGeometry) m.geometry.dispose();
     }
-    this.weaponPivot.add(sword);
+    this.weaponPivot.add(held);
   }
 
   /**
@@ -440,7 +492,10 @@ export class Player implements Actor {
       group.add(bolt);
 
       // Trigger guard hanging under the stock, so the underside isn't a slab.
-      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, 0.1), trim);
+      const guard = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.14, 0.1),
+        trim,
+      );
       guard.position.set(0.5, -0.11, 0.28);
       group.add(guard);
 
@@ -571,7 +626,10 @@ export class Player implements Actor {
 
     // A footfall is the bottom of the bob, not a timer — so steps stay locked to
     // the legs at every speed, and stop dead the moment the player does.
-    if (speed > 1.2 && Math.floor(bobWas / Math.PI) !== Math.floor(this.bob / Math.PI)) {
+    if (
+      speed > 1.2 &&
+      Math.floor(bobWas / Math.PI) !== Math.floor(this.bob / Math.PI)
+    ) {
       this.onStep?.(this.pos.x, this.pos.z, speed);
     }
 
@@ -658,7 +716,8 @@ export class Player implements Actor {
     // Sword arm is slaved to the blade, plus a little arm swing when it's idle
     // enough to have one.
     r.armR.rotation.x =
-      this.weaponPivot.rotation.x * 0.8 + stride * 0.3 * g * (attacking ? 0 : 1);
+      this.weaponPivot.rotation.x * 0.8 +
+      stride * 0.3 * g * (attacking ? 0 : 1);
     r.armR.rotation.y = swung * 0.6;
   }
 

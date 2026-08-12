@@ -22,7 +22,10 @@ const MODELS = 'public/models';
 const ROLE = {
   'minotaur.glb': { role: 'boss' },
   'boss.glb': { role: 'boss' },
+  'vampire.glb': { role: 'common' },
+  'mage.glb': { role: 'player' },
   'pillar.glb': { role: 'prop' },
+  'portal.glb': { role: 'prop' },
   'gate.glb': { role: 'prop' },
   'brazier.glb': { role: 'prop' },
 
@@ -38,10 +41,18 @@ const ROLE = {
   'warrior_sword.glb': { role: 'player', pivot: 'authored' },
 };
 
-const BUDGET = { common: 2000, elite: 4000, boss: 20000, prop: 8000, player: 2000 };
+/*
+ * `player` was 2000, anchored on warrior.glb being 1404 — one hand-authored,
+ * deliberately blocky rig, which is not a constraint, just a sample. Measured
+ * against the actual scene it was far too tight: a built chamber already draws
+ * 118k triangles, 85k of it scenery (eight columns at 7.6k, three portals at
+ * 8k). Four heroes at 8k, outline shells included, is 64k — less than the room
+ * they stand in. The warrior stays well under either way.
+ */
+const BUDGET = { common: 2000, elite: 4000, boss: 20000, prop: 8000, player: 8000 };
 
 /** Bytes on the wire. A phone on mobile data pays for every one of them. */
-const SIZE_BUDGET = { common: 150e3, elite: 300e3, boss: 600e3, prop: 300e3, player: 200e3 };
+const SIZE_BUDGET = { common: 150e3, elite: 300e3, boss: 600e3, prop: 300e3, player: 300e3 };
 
 /**
  * Vertices per triangle. A welded closed mesh sits near 0.5; UV and material

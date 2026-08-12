@@ -129,6 +129,10 @@ export const ARCHETYPES: Record<EnemyKind, Archetype> = {
 const AUTHORED: Partial<Record<EnemyKind, { url: string; height: number }>> = {
   // Erinys is the first boss, so she is the one worth looking at closest.
   erinys: { url: '/models/minotaur.glb', height: 2.2 },
+  // The wretch is the foe the run is mostly made of — every chamber opens with
+  // a pack of them. 1.9 against the player's 2.1 keeps it readably smaller
+  // without turning it into vermin.
+  wretch: { url: '/models/vampire.glb', height: 1.9 },
 };
 
 /**

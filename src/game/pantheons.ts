@@ -56,6 +56,19 @@ export interface Pantheon {
   /** Text and ring colour, as CSS and as a three.js hex. */
   css: string;
   color: number;
+  /**
+   * The colour this throne burns in the world — its door, its portal, the light
+   * it throws on the floor.
+   *
+   * Deliberately not `stone`. The stones are a desaturated marble ramp, four of
+   * the seven within 18 degrees of hue of each other, and the note above is
+   * honest about why that works: every mark also wears its numeral, so the
+   * stone only has to carry mood. A door has no numeral. Turned into light those
+   * four arrive as the same off-white and the party cannot tell what it is
+   * walking towards, so the fire gets its own spread-out hue and the marble is
+   * left exactly as designed.
+   */
+  light: number;
   /** Thrones that will answer over this one's offers. Symmetric by convention. */
   rivals: PantheonId[];
   /** The gods who speak for it, by id. */
@@ -70,6 +83,7 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
     ink: '#3a352e',
     css: '#e2dac6',
     color: 0xe2dac6,
+    light: 0xf7ef3a, // hellenic — gold, pushed to H57 to clear the hammer's amber
     rivals: ['aesir', 'legion'],
     gods: ['zeus', 'athena'],
   },
@@ -80,6 +94,7 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
     ink: '#2b2f31',
     css: '#a9b2b8',
     color: 0xa9b2b8,
+    light: 0x3dc4ff, // aesir — ice, H198, the cool its stone leans to
     rivals: ['hellenic', 'rodnova'],
     gods: ['odin', 'skadi'],
   },
@@ -90,6 +105,7 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
     ink: '#17140f',
     css: '#8d8474',
     color: 0x8d8474,
+    light: 0x2fe0b4, // netjer — jade, H165
     rivals: ['anunna', 'choir'],
     gods: ['anubis', 'sekhmet'],
   },
@@ -100,6 +116,7 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
     ink: '#f6e7e0',
     css: '#b04a30',
     color: 0xb04a30,
+    light: 0xff5630, // anunna — rust, H12, the one stone with real hue
     rivals: ['netjer', 'legion'],
     gods: ['inanna', 'nergal'],
   },
@@ -110,6 +127,7 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
     ink: '#f4efe4',
     css: '#665f52',
     color: 0x665f52,
+    light: 0x5a72ff, // choir — indigo, H240
     rivals: ['legion', 'netjer'],
     // One voice, not two. The choir speaks as Michael alone — he is the face
     // that was painted for it, and a throne with a portrait for one god and a
@@ -123,6 +141,7 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
     ink: '#e6dfd0',
     css: '#584a40',
     color: 0x584a40,
+    light: 0xff5ad0, // legion — magenta, H322
     rivals: ['choir', 'hellenic', 'anunna'],
     gods: ['belial', 'lilith'],
   },
@@ -133,6 +152,7 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
     ink: '#e6dfd0',
     css: '#39463a',
     color: 0x39463a,
+    light: 0x5ce063, // rodnova — green, H122, keeping its stone's cast
     rivals: ['aesir'],
     gods: ['perun', 'morana'],
   },
