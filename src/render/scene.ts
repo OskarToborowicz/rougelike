@@ -175,7 +175,21 @@ export class Stage {
   follow(focus: THREE.Vector3, dt: number, spread = 0) {
     this.camTarget.copy(focus);
 
-    const aspectPad = this.camera.aspect < 1.5 ? 1 + (1.5 - this.camera.aspect) * 0.55 : 1;
+    /*
+     * Back off far enough that the room fits front to back.
+     *
+     * This used to pad only below 1.5, on the theory that a narrow viewport is
+     * the one that overflows. It is the wrong axis. The camera looks down at
+     * about 52 degrees, so a wide frame projects onto the floor as a wide,
+     * shallow trapezoid: at 16:9 it covered 34.6 units across but only 19.1
+     * deep, against an arena 23 across. A third of the screen was empty floor
+     * beside the arena while the arena's own near and far edges sat off frame —
+     * which is exactly what makes a room feel cramped, however big it is.
+     *
+     * Depth is what has to fit, so the pad is driven by depth for every shape of
+     * screen, and the old narrow-viewport case falls out of the same number.
+     */
+    const aspectPad = 1.2 + Math.max(0, 1.5 - this.camera.aspect) * 0.4;
     const spreadPad = 1 + Math.max(0, spread - 3.0) * 0.1;
     const wantZoom = Math.min(1.85, aspectPad * spreadPad) * this.zoomScale;
     this.zoom = damp(this.zoom, wantZoom, 3.5, dt);
