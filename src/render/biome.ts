@@ -102,5 +102,17 @@ export function biomeForDepth(depth: number): Biome {
  * into the same telegraph.
  */
 export function arenaRadiusFor(playerCount: number) {
-  return 11.5 + Math.max(0, playerCount - 1) * 2.2;
+  /*
+   * 11.5 was too tight from about the sixth chamber on, and the arithmetic says
+   * why rather than the feel. Usable radius is this minus the player's own body
+   * and the confine margin, and spread n foes evenly over it and the average gap
+   * between them is 2·usable/√n. At depth 9 in a horde room that is 28 bodies in
+   * a 20.7 circle: a 3.9 gap, against a brute reaching 2.9 and a dash carrying
+   * 4.6. There was nowhere to dash that was not already inside someone's range.
+   *
+   * 13 buys 31% more floor and takes that gap back above a dash. It does not fix
+   * the deep end on its own — the wave counts climb with depth and nothing caps
+   * them — but it is the half that is about space.
+   */
+  return 13 + Math.max(0, playerCount - 1) * 2.2;
 }

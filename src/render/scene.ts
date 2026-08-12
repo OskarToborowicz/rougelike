@@ -189,7 +189,7 @@ export class Stage {
      * Depth is what has to fit, so the pad is driven by depth for every shape of
      * screen, and the old narrow-viewport case falls out of the same number.
      */
-    const aspectPad = 1.2 + Math.max(0, 1.5 - this.camera.aspect) * 0.4;
+    const aspectPad = 1.4 + Math.max(0, 1.5 - this.camera.aspect) * 0.4;
     const spreadPad = 1 + Math.max(0, spread - 3.0) * 0.1;
     const wantZoom = Math.min(1.85, aspectPad * spreadPad) * this.zoomScale;
     this.zoom = damp(this.zoom, wantZoom, 3.5, dt);

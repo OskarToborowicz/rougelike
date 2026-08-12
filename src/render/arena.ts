@@ -219,24 +219,41 @@ export class Arena {
     const bowls: THREE.Mesh[] = [];
     const bowlSpots: [number, number][] = [];
 
+    /*
+     * Where the doors can open, in this file's own convention.
+     *
+     * `Gate.show` places itself with `x = sin(a), z = cos(a)` — a quarter turn
+     * from the `cos/sin` used here — and spreads its slots over a half-right
+     * angle centred on the far wall. Worked back through both, that is always
+     * these three bearings, whether two doors open or three.
+     */
+    const gateR = radius - 1.2;
+    const gateSpots = [Math.PI * 1.25, Math.PI * 1.5, Math.PI * 1.75].map((g) => ({
+      x: Math.cos(g) * gateR,
+      z: Math.sin(g) * gateR,
+    }));
+    /** Half the door's width plus half a brazier, with a little to spare. */
+    const DOORWAY = 3.4;
+
     for (let i = 0; i < count; i++) {
       /*
-       * One brazier per column, standing in front of it rather than beside it.
+       * Braziers go between the columns, near the wall and out of the fighting
+       * floor — except where a door can open, and those are simply left unlit.
        *
-       * The obvious fix for a brazier overlapping a column is to put it in the
-       * gap between two — but the gaps are where the doors are. `Gate.show`
-       * measures its angle as `x = sin(a), z = cos(a)`, a quarter turn from the
-       * convention here, and half a step round from the columns lands exactly on
-       * it: every one of the five door positions had a brazier 0.3 units from
-       * its centre, standing in the opening.
+       * Both earlier attempts fixed one collision by causing another. Sitting on
+       * the column's own angle put the brazier inside the column; half a step
+       * round put it inside the doorway; moving it inward cleared both but only
+       * while there were eight columns, and the count is `radius / 1.45`, so
+       * widening the arena to 13 made it nine, moved every angle, and put a
+       * brazier back under a door.
        *
-       * So the angle goes back to the column's and the clearance is taken
-       * radially instead. 3.2 in from the rim puts 2.7 between the two axes,
-       * against 2.26 of combined width.
+       * Hence a measured skip rather than another angle: whatever the count and
+       * whatever the radius, a spot too close to where a door opens is dropped.
        */
-      const a = (i / count) * TAU + 0.39;
-      const x = Math.cos(a) * (radius - 3.2);
-      const z = Math.sin(a) * (radius - 3.2);
+      const a = (i / count) * TAU + 0.39 + TAU / count / 2;
+      const x = Math.cos(a) * (radius - 1.5);
+      const z = Math.sin(a) * (radius - 1.5);
+      if (gateSpots.some((g) => Math.hypot(g.x - x, g.z - z) < DOORWAY)) continue;
       const cold = i % 3 === 1;
 
       const light = new THREE.PointLight(cold ? b.flameCool : b.flameWarm, cold ? 7 : 11, 15, 2);
