@@ -33,18 +33,19 @@ exactly when the player is looking at it.
 
 Fill the left 47.5% of the offer screen, full height. The god's name, epithet and
 quote sit over the bottom third under a scrim — **keep the face in the upper
-half**. Thirteen gods, two per throne except the choir; any you skip fall back to
-the empty state with the god's initial.
+half**. Thirteen gods, two per throne except the aesir (three) and the choir and
+rodnova (one each); any you skip fall back to the empty state with the god's
+initial.
 
 | Throne | Files |
 | --- | --- |
 | I · hellenic | `god-zeus.jpg`, `god-athena.jpg` |
-| II · aesir | `god-odin.jpg`, `god-skadi.jpg` |
+| II · aesir | `god-odin.jpg`, `god-skadi.jpg`, `god-loki.jpg` |
 | III · netjer | `god-anubis.jpg`, `god-sekhmet.jpg` |
 | IV · anunna | `god-inanna.jpg`, `god-nergal.jpg` |
 | V · the choir | `god-michael.jpg` (the choir speaks with one voice) |
 | VI · the legion | `god-belial.jpg`, `god-lilith.jpg` |
-| VII · rodnova | `god-perun.jpg`, `god-morana.jpg` |
+| VII · rodnova | `god-morana.jpg` |
 
 Size: **760 × 900** or larger at the same 0.84:1 ratio.
 

@@ -113,9 +113,16 @@ export class Menu {
     });
   }
 
-  private show(children: HTMLElement[]) {
+  /**
+   * `variant` puts a marker class on the panel. The setup screen is drawn from
+   * its own design and needs a whole different panel — black marble, gold rules,
+   * Cormorant — without dragging options, controls, the shrine and the waiting
+   * room along with it, and those four share every class name it would restyle.
+   */
+  private show(children: HTMLElement[], variant = '') {
     this.bleed.innerHTML = '';
     this.panel.style.display = '';
+    this.panel.className = 'lpanel' + (variant ? ' ' + variant : '');
     this.panel.innerHTML = '';
     this.panel.append(...children);
     this.root.classList.add('show');
@@ -124,6 +131,7 @@ export class Menu {
   /** Hand the whole screen to one element. Used only by the title. */
   private showBleed(node: HTMLElement) {
     this.panel.innerHTML = '';
+    this.panel.className = 'lpanel';
     this.panel.style.display = 'none';
     this.bleed.replaceChildren(node);
     this.root.classList.add('show');
@@ -275,20 +283,39 @@ export class Menu {
         };
         back.onclick = titleScreen;
 
-        this.show([
-          ...this.title(t('menu.sub.setup')),
-          row(t('menu.field.name'), name),
-          picker,
-          blurb,
-          solo,
-          el('div', 'ldiv', t('menu.online')),
-          row(t('menu.field.relay'), url),
-          hostBtn,
-          row(t('menu.field.code'), code),
-          joinBtn,
-          back,
-          this.status,
-        ]);
+        /*
+         * The gate's own header. The shared `title()` is a wordmark and a
+         * subtitle; this screen wants them between two scored rules, which is
+         * the ornament the whole design hangs off.
+         */
+        const head = el('div', 'e-gate-head');
+        head.append(
+          ornament(),
+          el('h1', 'e-gate-name', t('brand')),
+          el('p', 'e-gate-sub', t('menu.sub.setup')),
+          ornament('small')
+        );
+
+        this.show(
+          [
+            el('div', 'e-gate-tick tl'),
+            el('div', 'e-gate-tick tr'),
+            head,
+            row(t('menu.field.name'), name),
+            picker,
+            blurb,
+            solo,
+            el('div', 'ldiv', t('menu.online')),
+            row(t('menu.field.relay'), url),
+            hostBtn,
+            row(t('menu.field.code'), code),
+            joinBtn,
+            back,
+            this.status,
+            ornament('foot'),
+          ],
+          'e-gate'
+        );
       };
 
       titleScreen();
@@ -578,6 +605,19 @@ function row(label: string, input: HTMLElement) {
   const r = el('label', 'lrow');
   r.append(el('span', '', label), input);
   return r;
+}
+
+/**
+ * Rule, lozenge, rule. The gate screen's one piece of decoration, at three
+ * weights: full above the wordmark, small below it, and wider still at the foot
+ * of the panel. Built here rather than drawn in CSS because the two rules have
+ * to fade *towards* the lozenge from opposite sides, which one pseudo-element
+ * cannot do.
+ */
+function ornament(size = '') {
+  const o = el('div', 'e-orn' + (size ? ' ' + size : ''));
+  o.append(el('i'), el('b'), el('i'));
+  return o;
 }
 
 function toggleRow(label: string, value: boolean, onChange: (v: boolean) => void) {

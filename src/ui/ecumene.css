@@ -196,16 +196,21 @@
 /* ============================================================ 01 · THE TITLE */
 
 /*
- * The title stands on black marble rather than on flat charcoal. Screened, so
- * only the gold veining survives, and held down by a scrim above it — a full
- * strength slab behind a menu is a texture the eye reads before the words.
+ * The title is the one screen cut the other way round: the room is white marble
+ * and the menu is black. Everywhere else in the game a lit slab is furniture
+ * standing on a dark ground; here the ground *is* the quarry face, and the only
+ * dark things on it are the seven rows you can press.
+ *
+ * The veil is what keeps it a wall rather than a countertop — the photograph at
+ * full strength is craquelure, and type cannot be cut into craquelure.
  */
 #lobby.show {
   background:
-    linear-gradient(rgba(10, 9, 8, 0.82), rgba(10, 9, 8, 0.9)),
-    var(--e-quarry-black),
-    var(--e-ground-deep);
+    var(--e-quarry-veil),
+    var(--e-quarry-white),
+    var(--e-slab-lit);
   background-size: auto, var(--e-quarry-field), auto;
+  background-blend-mode: normal, multiply, normal;
 }
 
 /*
@@ -219,12 +224,14 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
-  color: var(--e-ink);
+  /* Ink cut into a lit face, not laid on a dark one — the whole screen flipped. */
+  color: var(--e-cut);
   font-family: var(--e-body);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 4vh 6vw 40px;
+  /* The foot has to clear the tagline, which now sits in this column too. */
+  padding: 4vh 6vw 56px;
 }
 
 .e-title-art {
@@ -233,6 +240,14 @@
   top: 0;
   bottom: 0;
   width: 54%;
+  /*
+   * The container's own left edge, dissolved. The scrim fades the *painting*
+   * into the type, but it cannot hide where the element stops — and a straight
+   * vertical seam down a marble wall is the one thing that gives away that this
+   * is a div and not a fresco. The mask ends the image on nothing instead.
+   */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 24%);
+  mask-image: linear-gradient(90deg, transparent, #000 24%);
 }
 
 .e-title-art > .e-art {
@@ -241,30 +256,73 @@
 }
 
 /* Two scrims: one pulls the painting left into the type, one seats it in the
-   frame top and bottom. Separate layers so each can be tuned alone. */
+   frame top and bottom. Separate layers so each can be tuned alone.
+
+   Both are marble now, not charcoal. The painting has to dissolve into the wall
+   it hangs on, and the wall is white — fading a fresco out to black on a white
+   ground draws a rectangle around it, which is exactly what a scrim is for
+   avoiding. */
 .e-title-scrim {
   position: absolute;
   inset: 0;
   background:
     linear-gradient(
       90deg,
-      #100d0b 0%,
-      #100d0b 30%,
-      rgba(16, 13, 11, 0.92) 44%,
-      rgba(16, 13, 11, 0.55) 58%,
-      rgba(16, 13, 11, 0.12) 74%,
+      #e4ddcc 0%,
+      #e4ddcc 30%,
+      rgba(228, 221, 204, 0.94) 44%,
+      rgba(228, 221, 204, 0.6) 58%,
+      rgba(228, 221, 204, 0.16) 74%,
       transparent 100%
     ),
     linear-gradient(
       180deg,
-      rgba(16, 13, 11, 0.72),
+      rgba(228, 221, 204, 0.78),
       transparent 30%,
       transparent 58%,
-      rgba(16, 13, 11, 0.88)
+      rgba(228, 221, 204, 0.9)
     );
 }
 
-/* Torchlight pooling out of the bottom-left corner, under the menu. */
+/*
+ * The painting, lifted. `.e-art` is built for a dark room: near-monochrome and
+ * pulled down to 0.82 brightness so it sits back into charcoal. On a white wall
+ * that same treatment is a hole punched in the stone, so on this screen only it
+ * comes back up and loses its dark plate.
+ */
+.e-title-art > .e-art {
+  background: none;
+}
+
+/*
+ * Full strength, and no longer desaturated the way the dark-room plates are.
+ * `multiply` is what keeps it a fresco *in* the wall rather than a photograph
+ * pasted onto it — the marble's own veining still shows through the light parts
+ * of the painting — but the blend is doing that job on its own now, so the
+ * opacity and the grey wash that used to help it recede are both gone.
+ */
+.e-title-art > .e-art > img {
+  filter: grayscale(0.7) contrast(1.24) brightness(1.02);
+  mix-blend-mode: multiply;
+  opacity: 1;
+}
+
+/* The missing-art vignette is a light bloom for a dark room; on stone it has to
+   darken instead, or the empty slot is a bright patch on a bright wall. */
+.e-title-art > .e-art.missing::after {
+  background: radial-gradient(
+    ellipse at 50% 38%,
+    rgba(76, 68, 59, 0.1),
+    transparent 68%
+  );
+}
+
+.e-title-art .e-sigil {
+  color: rgba(76, 68, 59, 0.16);
+}
+
+/* Torchlight pooling out of the bottom-left corner, under the menu. On stone
+   this reads as warmth in the marble rather than a lamp: a stain, not a glow. */
 .e-title-glow {
   position: absolute;
   left: -60px;
@@ -273,7 +331,7 @@
   height: 560px;
   background: radial-gradient(
     ellipse at center,
-    rgba(210, 162, 92, 0.2),
+    rgba(160, 132, 88, 0.16),
     transparent 68%
   );
 }
@@ -301,6 +359,19 @@
 }
 
 /* The rule under the subtitle: a scored line, lit along its lower edge. */
+/*
+ * On the white screen the tablet is the same stone as the wall behind it, so
+ * the only thing telling them apart is the light: a slab one step down from the
+ * lit ground, and a shadow it actually casts. The base rule's 0.75-black drop
+ * was tuned against charcoal and reads as soot on marble.
+ */
+.e-title .e-tablet {
+  box-shadow:
+    0 1px 0 rgba(255, 253, 246, 0.85) inset,
+    0 -3px 0 rgba(90, 84, 74, 0.3) inset,
+    0 22px 44px rgba(74, 66, 56, 0.3);
+}
+
 .e-rule {
   margin-top: 22px;
   height: 1px;
@@ -334,32 +405,53 @@
 }
 
 .e-menu {
-  margin-top: 52px;
+  margin-top: 44px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 9px;
 }
 
+/*
+ * The rows are slabs of the same white stone as the wall, set proud of it. Bare
+ * text was enough to read as a control on the old charcoal ground; on marble it
+ * is just more carving, so each row gets edges and a shadow — one step down from
+ * the lit ground so the ramp reads, lit along the top, shadowed underneath.
+ *
+ * Same construction as `.e-card` and `.lbtn`, which is the point: a button is
+ * one thing in this game, wherever it appears.
+ */
 .e-menu-row {
   display: grid;
   grid-template-columns: 34px 1fr auto;
   align-items: center;
   gap: 14px;
-  padding: 13px 0;
-  background: none;
+  padding: 15px 22px;
   border: 0;
   text-align: left;
   cursor: pointer;
   color: inherit;
   font: inherit;
   pointer-events: auto;
+  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-slab-dim);
+  background-size: auto, 240px, auto;
+  background-blend-mode: normal, multiply, normal;
+  box-shadow:
+    0 1px 0 rgba(255, 253, 246, 0.7) inset,
+    0 -3px 0 rgba(90, 84, 74, 0.3) inset,
+    0 10px 24px rgba(74, 66, 56, 0.3);
+  transition:
+    box-shadow 0.16s ease,
+    transform 0.16s ease,
+    background 0.16s ease;
 }
 
 .e-menu-row .e-menu-label {
   font-family: var(--e-display);
   font-size: clamp(17px, 1.5vw, 22px);
   letter-spacing: 0.28em;
-  color: rgba(230, 223, 208, 0.5);
+  /* Cut into the face: highlight below the glyph, soft dark above it. */
+  color: var(--e-cut);
+  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.8);
   transition: color 0.16s ease;
 }
 
@@ -382,19 +474,55 @@
   transform: scaleX(1);
 }
 
+/*
+ * The one row you are meant to press: a taller slab, brighter stone, veined,
+ * and edged in sanguine — the only accent in the menu.
+ */
+.e-menu-row.primary {
+  padding: 19px 22px;
+  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-vein), var(--e-slab);
+  background-size: auto, 240px, auto, auto, auto;
+  background-blend-mode: normal, multiply, normal, normal, normal;
+  box-shadow:
+    0 0 0 1px rgba(176, 74, 48, 0.4),
+    0 1px 0 rgba(255, 253, 246, 0.8) inset,
+    0 -3px 0 rgba(90, 84, 74, 0.3) inset,
+    0 14px 30px rgba(74, 66, 56, 0.34);
+}
+
 .e-menu-row.primary .e-menu-label {
   font-weight: 600;
   font-size: clamp(20px, 1.9vw, 27px);
-  color: var(--e-ink-bright);
+  color: var(--e-cut-deep);
+  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.92), 0 -1px 1px rgba(0, 0, 0, 0.18);
+}
+
+/* Lifted and lit, not recoloured — the stone stays the stone. */
+.e-menu-row:hover,
+.e-menu-row:focus-visible {
+  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-vein), var(--e-slab-lit);
+  background-size: auto, 240px, auto, auto, auto;
+  background-blend-mode: normal, multiply, normal, normal, normal;
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 250, 0.9) inset,
+    0 -3px 0 rgba(90, 84, 74, 0.28) inset,
+    0 16px 34px rgba(74, 66, 56, 0.4);
+  outline: none;
+}
+
+.e-menu-row.primary:hover,
+.e-menu-row.primary:focus-visible {
+  box-shadow:
+    0 0 0 1px rgba(192, 116, 86, 0.7),
+    0 1px 0 rgba(255, 255, 250, 0.9) inset,
+    0 -3px 0 rgba(90, 84, 74, 0.28) inset,
+    0 18px 38px rgba(74, 66, 56, 0.44);
 }
 
 .e-menu-row:hover .e-menu-label,
 .e-menu-row:focus-visible .e-menu-label {
-  color: var(--e-ink-bright);
-}
-
-.e-menu-row:focus-visible {
-  outline: none;
+  color: var(--e-cut-deep);
 }
 
 /* An obol, struck. Used on the reliquary row and in the HUD's corner. */
@@ -414,7 +542,17 @@
   font-family: var(--e-display);
   font-size: 15px;
   letter-spacing: 0.16em;
-  color: #9d9484;
+  /* Cut into the row's own slab, like the label beside it. */
+  color: var(--e-stone-mid);
+  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.7);
+}
+
+/* An obol on white stone needs an edge, or it is a pale square on a pale slab. */
+.e-menu-aside .e-obol {
+  background: var(--e-marble-deep);
+  box-shadow:
+    0 1px 0 rgba(255, 253, 246, 0.7) inset,
+    0 0 0 1px rgba(90, 84, 74, 0.35);
 }
 
 /* ----------------------------------------------------------- the seven thrones */
@@ -427,6 +565,28 @@
   display: flex;
   align-items: flex-start;
   gap: 20px;
+}
+
+/*
+ * On the title the marks stay inside the left column. The painting owns the
+ * right half of the frame now that it is at full strength, and small caps at
+ * 0.34em tracking laid across a figure in armour stop being text. Scoped to
+ * `.e-title` because `thronesRow()` is shared with screens that have no art.
+ */
+.e-title .e-thrones {
+  flex-wrap: wrap;
+  max-width: 46%;
+}
+
+.e-title .e-thrones-note {
+  align-self: flex-start;
+}
+
+/* Same reason: out from under the fresco, into the clear column. */
+.e-title .e-tagline {
+  left: 6vw;
+  right: auto;
+  bottom: 16px;
 }
 
 .e-throne {
@@ -487,6 +647,29 @@
   text-transform: uppercase;
   color: rgba(230, 223, 208, 0.34);
   align-self: center;
+}
+
+/*
+ * The small print, flipped. All three of these are pale ink for a dark room,
+ * and `thronesRow()` is shared with the mid-run screens that still are one — so
+ * the inversion is scoped to the title rather than done at the source.
+ */
+.e-title .e-throne-name,
+.e-title .e-thrones-note,
+.e-title .e-tagline {
+  color: rgba(76, 68, 59, 0.62);
+  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.6);
+}
+
+.e-title .e-throne.spurned .e-throne-name {
+  color: rgba(76, 68, 59, 0.34);
+}
+
+/* The mason's marks stand on stone now, so they cast onto it. */
+.e-title .e-roundel {
+  box-shadow:
+    0 1px 0 rgba(255, 253, 246, 0.5) inset,
+    0 2px 5px rgba(74, 66, 56, 0.45);
 }
 
 /* ============================================================== 02 · THE HUD */
@@ -1623,6 +1806,502 @@
   text-shadow: 0 1px 0 rgba(255, 253, 246, 0.6);
 }
 
+/* ============================================================= 04 · THE GATE */
+
+/*
+ * The setup screen, drawn from its own design (`Ecumene Menu.dc.html`).
+ *
+ * It is deliberately not the marble pass. Where the rest of the game is one
+ * stone under one light with a single sanguine accent, the gate is a black
+ * marble tablet standing on the white wall, ruled in gold, set in Cormorant.
+ * That is the whole point of the screen: it is the last thing above ground.
+ *
+ * Everything here hangs off `.lpanel.e-gate`, because options, controls, the
+ * shrine and the waiting room are built from the same class names and must keep
+ * the marble pass. Nothing in this section may be written unscoped.
+ */
+
+.lpanel.e-gate {
+  position: relative;
+  width: min(720px, 92vw);
+  padding: 64px 56px 54px;
+  border: 0;
+  border-radius: 0;
+  font-family: 'Cormorant Garamond', Garamond, var(--e-body);
+  background: url('/textures/marble_black.jpg') center / 760px repeat, #100e0d;
+  background-size: 760px, auto;
+  box-shadow:
+    0 0 0 1px rgba(214, 199, 170, 0.16),
+    0 44px 100px -24px rgba(0, 0, 0, 0.9);
+}
+
+/* The light in the room: bright at the top edge, falling off to near black at
+   the foot, so the tablet has a top and a bottom. */
+.lpanel.e-gate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    115% 85% at 50% 0%,
+    rgba(0, 0, 0, 0.28),
+    rgba(0, 0, 0, 0.72) 62%,
+    rgba(0, 0, 0, 0.9)
+  );
+}
+
+/* A hairline standing off the tablet — the frame the stone is mounted in. */
+.lpanel.e-gate::after {
+  content: '';
+  position: absolute;
+  inset: -16px;
+  pointer-events: none;
+  border: 1px solid rgba(120, 86, 70, 0.3);
+}
+
+/* Mason's corners, inside the top two. Only two: the design marks where the
+   stone was set, not where it ends. */
+.e-gate .e-gate-tick {
+  position: absolute;
+  top: 18px;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+  border-top: 1px solid rgba(226, 205, 150, 0.4);
+}
+
+.e-gate .e-gate-tick.tl {
+  left: 16px;
+  border-left: 1px solid rgba(226, 205, 150, 0.4);
+}
+
+.e-gate .e-gate-tick.tr {
+  right: 16px;
+  border-right: 1px solid rgba(226, 205, 150, 0.4);
+}
+
+/* Everything below the vignette. */
+.e-gate > *:not(.e-gate-tick) {
+  position: relative;
+}
+
+/* ------------------------------------------------------------- the ornament */
+
+.e-gate .e-orn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  opacity: 0.6;
+}
+
+.e-gate .e-orn i {
+  width: 72px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(230, 207, 152, 0.95));
+}
+
+/* The second rule fades the other way, towards the lozenge. */
+.e-gate .e-orn i + b + i {
+  background: linear-gradient(90deg, rgba(230, 207, 152, 0.95), transparent);
+}
+
+.e-gate .e-orn b {
+  width: 5px;
+  height: 5px;
+  background: #e2cd96;
+  transform: rotate(45deg);
+}
+
+.e-gate .e-orn.small {
+  margin-top: 18px;
+  gap: 12px;
+  opacity: 0.4;
+}
+
+.e-gate .e-orn.small i {
+  width: 42px;
+}
+
+.e-gate .e-orn.small b {
+  width: 4px;
+  height: 4px;
+}
+
+.e-gate .e-orn.foot {
+  margin-top: 34px;
+  gap: 14px;
+  opacity: 0.3;
+}
+
+.e-gate .e-orn.foot i {
+  width: 92px;
+}
+
+.e-gate .e-orn.foot b {
+  width: 4px;
+  height: 4px;
+}
+
+/* ---------------------------------------------------------------- the header */
+
+.e-gate .e-gate-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.e-gate .e-gate-name {
+  margin: 12px 0 0;
+  font-family: 'Cormorant SC', 'Cormorant Garamond', serif;
+  font-weight: 400;
+  font-size: clamp(42px, 9vw, 74px);
+  line-height: 1;
+  letter-spacing: 0.14em;
+  /* Tracking hangs off the last glyph; the indent puts the word back on centre. */
+  text-indent: 0.14em;
+  color: #f6f0e2;
+  text-shadow: 0 0 46px rgba(230, 207, 152, 0.32), 0 2px 0 rgba(0, 0, 0, 0.7);
+}
+
+.e-gate .e-gate-sub {
+  margin: 14px 0 0;
+  font-style: italic;
+  font-size: clamp(17px, 2.6vw, 21px);
+  letter-spacing: 0.06em;
+  color: #8e8574;
+}
+
+/* ------------------------------------------------------- fields and the roster */
+
+.e-gate .lrow {
+  margin: 40px 0 0;
+  gap: 24px;
+  font-size: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+  opacity: 1;
+}
+
+.e-gate .lrow > span {
+  flex: 0 0 84px;
+  width: auto;
+  font-family: 'Cormorant SC', serif;
+  font-size: 17px;
+  letter-spacing: 0.2em;
+  color: #8e8574;
+}
+
+.e-gate .lfield {
+  padding: 14px 18px;
+  font-family: inherit;
+  font-size: 22px;
+  letter-spacing: 0.05em;
+  color: #efe9dd;
+  background: rgba(4, 4, 3, 0.72);
+  border: 1px solid rgba(226, 205, 150, 0.22);
+  border-radius: 0;
+}
+
+.e-gate .lfield:focus {
+  outline: none;
+  border-color: rgba(230, 207, 152, 0.6);
+  box-shadow: 0 0 26px -8px rgba(230, 207, 152, 0.45);
+}
+
+/* The two co-op fields are quieter than the name — they are configuration, not
+   the thing the player came here to type. */
+.e-gate .lrow + .lbtn,
+.e-gate .ldiv + .lrow {
+  margin-top: 16px;
+}
+
+.e-gate .ldiv + .lrow > span,
+.e-gate .lrow:has(.lfield.code) > span {
+  font-size: 15px;
+  letter-spacing: 0.18em;
+}
+
+.e-gate .ldiv + .lrow .lfield {
+  padding: 13px 18px;
+  font-family: 'Cormorant SC', serif;
+  font-size: 19px;
+  letter-spacing: 0.06em;
+  color: #e3ddd1;
+  border-color: rgba(226, 205, 150, 0.18);
+}
+
+.e-gate .lfield.code {
+  padding: 13px 18px;
+  font-family: 'Cormorant SC', serif;
+  font-size: 24px;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  text-align: center;
+  border-color: rgba(226, 205, 150, 0.18);
+}
+
+.e-gate .lfield::placeholder {
+  color: #6b6459;
+  opacity: 1;
+  letter-spacing: 0.28em;
+}
+
+.e-gate .lclasses {
+  margin: 22px 0 0;
+  gap: 14px;
+}
+
+.e-gate .lclass {
+  display: block;
+  padding: 16px 10px;
+  text-align: center;
+  border-radius: 0;
+  opacity: 1;
+  color: #8b8271;
+  background: rgba(4, 4, 3, 0.62);
+  border: 1px solid rgba(226, 205, 150, 0.16);
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.e-gate .lclass:hover {
+  transform: none;
+  border-color: rgba(230, 207, 152, 0.55);
+}
+
+/* Sworn: lit from inside, the only thing on the tablet that glows. */
+.e-gate .lclass.on {
+  color: #f4eee0;
+  background: rgba(230, 207, 152, 0.1);
+  border-color: rgba(230, 207, 152, 0.6);
+  box-shadow:
+    0 0 30px -10px rgba(230, 207, 152, 0.5),
+    inset 0 0 40px rgba(230, 207, 152, 0.06);
+}
+
+.e-gate .lclass .cn {
+  font-family: 'Cormorant SC', serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: inherit;
+}
+
+.e-gate .lclass .ct {
+  display: block;
+  margin-top: 6px;
+  font-style: italic;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  opacity: 0.72;
+}
+
+/* Fixed height, because the three oaths are different lengths and the buttons
+   below them must not move when the player changes their mind. */
+.e-gate .lblurb {
+  margin: 22px 4px 0;
+  min-height: 56px;
+  font-family: inherit;
+  font-size: 19px;
+  line-height: 1.45;
+  color: #9d9484;
+  text-wrap: pretty;
+}
+
+/* ------------------------------------------------------------- the four doors */
+
+/*
+ * White marble buttons on the black tablet — the inverse of the title screen,
+ * and the reason this reads as a way out rather than another panel. Each takes
+ * the slab at a different scale and offset so four buttons in a column are not
+ * four copies of one photograph.
+ */
+.e-gate .lbtn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 15px 20px;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  font-family: 'Cormorant SC', serif;
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: 0.2em;
+  text-indent: 0.2em;
+  color: #241e18;
+  text-shadow: none;
+  background: url('/textures/marble_white.jpg') 30% 60% / 580px repeat, #e5dfd2;
+  background-blend-mode: normal;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.5) inset,
+    0 -3px 10px rgba(0, 0, 0, 0.25) inset;
+  transition: filter 0.16s ease, box-shadow 0.16s ease;
+}
+
+.e-gate .lbtn:hover {
+  filter: brightness(1.07);
+  background: url('/textures/marble_white.jpg') 30% 60% / 580px repeat, #e5dfd2;
+  color: #241e18;
+}
+
+.e-gate .lbtn:active {
+  transform: translateY(1px);
+}
+
+/* The door that costs nothing to open. */
+.e-gate .lbtn.primary {
+  margin-top: 26px;
+  padding: 18px 20px;
+  font-size: 25px;
+  color: #201b16;
+  background: url('/textures/marble_white.jpg') center / 620px repeat, #e8e2d5;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.55) inset,
+    0 -3px 10px rgba(0, 0, 0, 0.28) inset,
+    0 12px 30px -14px rgba(230, 207, 152, 0.45);
+}
+
+.e-gate .lbtn.primary:hover {
+  background: url('/textures/marble_white.jpg') center / 620px repeat, #e8e2d5;
+  color: #201b16;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 -3px 10px rgba(0, 0, 0, 0.22) inset,
+    0 16px 38px -12px rgba(230, 207, 152, 0.6);
+}
+
+/* Join is cut from a different part of the slab than host. */
+.e-gate .lrow:has(.lfield.code) + .lbtn,
+.e-gate .lrow:has(.lfield.code) + .lbtn:hover {
+  background: url('/textures/marble_white.jpg') 70% 20% / 560px repeat, #e5dfd2;
+}
+
+/* Back is the same stone left unpolished. */
+.e-gate .lbtn.ghost,
+.e-gate .lbtn.ghost:hover {
+  opacity: 1;
+  color: #3a332b;
+  background: url('/textures/marble_white.jpg') 15% 85% / 540px repeat, #ded8ca;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.45) inset,
+    0 -3px 10px rgba(0, 0, 0, 0.22) inset;
+  filter: brightness(0.94) saturate(0.85);
+}
+
+.e-gate .lbtn.ghost:hover {
+  filter: brightness(1) saturate(0.9);
+}
+
+/* ------------------------------------------------------------- the co-op rule */
+
+/*
+ * Rules to the edges with the label held between them. Not uppercased: the base
+ * sheet transforms `.ldiv`, and "Co-op" is a word players already have, not a
+ * carved inscription like everything else on this tablet.
+ */
+.e-gate .ldiv {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 22px 0 0;
+  /*
+   * The one label on this tablet not set in Cormorant SC. Small caps would
+   * render "Co-op" as "CO-OP", and the point of the word is that it is the
+   * player's own, borrowed from outside the fiction — the rest of the screen is
+   * inscription, this is a signpost.
+   */
+  font-family: 'Cormorant Garamond', Garamond, serif;
+  font-size: 22px;
+  letter-spacing: 0.24em;
+  text-indent: 0.24em;
+  text-transform: none;
+  color: #80776a;
+  opacity: 1;
+}
+
+.e-gate .ldiv::before,
+.e-gate .ldiv::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(226, 205, 150, 0.35));
+}
+
+.e-gate .ldiv::after {
+  background: linear-gradient(90deg, rgba(226, 205, 150, 0.35), transparent);
+}
+
+.e-gate .lstatus {
+  margin-top: 14px;
+  font-family: inherit;
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  color: #c07456;
+}
+
+/* ------------------------------------------------------------- narrow gates */
+
+@media (max-width: 620px) {
+  .lpanel.e-gate {
+    padding: 40px 22px 34px;
+  }
+
+  .e-gate .lrow {
+    gap: 14px;
+  }
+
+  .e-gate .lrow > span {
+    flex-basis: 62px;
+    font-size: 14px;
+    letter-spacing: 0.14em;
+  }
+
+  .e-gate .lfield {
+    font-size: 18px;
+    padding: 11px 13px;
+  }
+
+  .e-gate .lclasses {
+    gap: 8px;
+  }
+
+  .e-gate .lclass {
+    padding: 12px 4px;
+  }
+
+  .e-gate .lclass .cn {
+    font-size: 15px;
+    letter-spacing: 0.08em;
+  }
+
+  .e-gate .lclass .ct {
+    font-size: 12px;
+  }
+
+  .e-gate .lblurb {
+    font-size: 16px;
+  }
+
+  .e-gate .lbtn {
+    font-size: 18px;
+  }
+
+  .e-gate .lbtn.primary {
+    font-size: 20px;
+  }
+
+  .e-gate .e-orn i {
+    width: 44px;
+  }
+
+  .e-gate .e-orn.foot i {
+    width: 56px;
+  }
+}
+
 /* ------------------------------------------------- carried over from hud.css */
 
 #banner {
@@ -1718,17 +2397,90 @@
 /* --------------------------------------------- the offer, stacked as a sheet */
 
 @media (max-width: 900px) and (orientation: portrait) {
+  /*
+   * The painting keeps the right-hand side even here. It used to go full-bleed
+   * at half strength, which on the dark screen was a backdrop; against white
+   * marble the same wash just greys the whole wall and the fresco stops being a
+   * thing hanging on it. So it stays a band on the right, wider than the desktop
+   * 54% because there is less room, and the body narrows to clear it.
+   */
   .e-title-art {
-    width: 100%;
-    opacity: 0.5;
+    width: 50%;
+    opacity: 1;
   }
 
   .e-title-body {
-    width: min(560px, 88vw);
+    width: min(560px, 52vw);
   }
 
+  /* Two real columns, so the scrim has to fade left over half the frame rather
+     than the 74% the desktop layout can afford. */
+  .e-title-scrim {
+    background:
+      linear-gradient(
+        90deg,
+        #e4ddcc 0%,
+        #e4ddcc 40%,
+        rgba(228, 221, 204, 0.82) 48%,
+        rgba(228, 221, 204, 0.24) 56%,
+        transparent 66%
+      ),
+      linear-gradient(
+        180deg,
+        rgba(228, 221, 204, 0.6),
+        transparent 20%,
+        transparent 62%,
+        rgba(228, 221, 204, 0.94)
+      );
+  }
+
+  /*
+   * The wordmark has to survive the narrower column. Half the frame at 0.14em
+   * tracking is not enough for eight capitals, and the name overhanging its own
+   * tablet is the one thing on this screen that cannot be allowed to happen.
+   */
+  .e-tablet {
+    padding: 30px 26px 26px;
+  }
+
+  .e-wordmark {
+    margin-top: 18px;
+    font-size: clamp(26px, 5.9vw, 52px);
+    letter-spacing: 0.08em;
+  }
+
+  /* And the kicker has to stay on one line, or it pushes the name down. */
+  .e-kicker {
+    font-size: clamp(8px, 1.5vw, 11px);
+    letter-spacing: 0.22em;
+  }
+
+  .e-subtitle {
+    margin-top: 14px;
+    font-size: clamp(14px, 2.4vw, 19px);
+  }
+
+  .e-menu-row {
+    padding: 13px 16px;
+  }
+
+  .e-menu-row.primary {
+    padding: 16px 16px;
+  }
+
+  /*
+   * The marks and their note stay in the left column with everything else. Left
+   * to run the full width they cross under the painting, and small caps at
+   * 0.34em tracking over a figure in armour is not text any more.
+   */
   .e-thrones {
     gap: 12px;
+    flex-wrap: wrap;
+    max-width: 46%;
+  }
+
+  .e-thrones-note {
+    align-self: flex-start;
   }
 
   .e-roundel {

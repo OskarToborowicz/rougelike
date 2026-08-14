@@ -42,7 +42,8 @@ const EN = {
   'menu.host': 'OPEN A WAY',
   'menu.join': 'JOIN WITH CODE',
   'menu.back': 'BACK',
-  'menu.online': 'together',
+  // Not translated in any language: the word players already use for this.
+  'menu.online': 'Co-op',
   'menu.needCode': 'Enter the four-letter code from your host.',
   'menu.defaultName': 'Shade',
   'menu.descend': 'DESCEND',
@@ -206,6 +207,10 @@ const EN = {
   'god.skadi.epithet': 'who hunts the winter down',
   'god.skadi.quote':
     '“Cold is not cruelty. Cold is patience that stopped pretending.”',
+  'god.loki.name': 'LOKI',
+  'god.loki.epithet': 'who is owed a favour by everyone at this table',
+  'god.loki.quote':
+    '“Take it. I want to see what you do with it far more than I want you to win.”',
   'god.anubis.name': 'ANUBIS',
   'god.anubis.epithet': 'who weighs the heart against a feather',
   'god.anubis.quote':
@@ -233,10 +238,6 @@ const EN = {
   'god.lilith.epithet': 'who left, and was called a monster for it',
   'god.lilith.quote':
     '“They will say you were given this. Let them. You and I know better.”',
-  'god.perun.name': 'PERUN',
-  'god.perun.epithet': 'whose axe is still in the oak',
-  'god.perun.quote':
-    '“Strike once. If it needs a second, you have already lost the argument.”',
   'god.morana.name': 'MORANA',
   'god.morana.epithet': 'who ends the year so it can begin',
   'god.morana.quote':
@@ -300,7 +301,7 @@ const EN = {
   'boon.leg-life.desc': 'Heal 4% of the damage you deal.',
   'boon.leg-attack.name': "Butcher's Rhythm",
   'boon.leg-attack.desc': 'Your Attack winds up and recovers 30% faster.',
-  'boon.rod-move.name': "Perun's Mark",
+  'boon.rod-move.name': 'Thunderstep',
   'boon.rod-move.desc': '+14% movement speed.',
   'boon.rod-ammo.name': 'Deadly Volley',
   'boon.rod-ammo.desc': '+2 Cast ammo.',
@@ -404,7 +405,7 @@ const PL: Partial<Record<Key, string>> = {
   'menu.host': 'OTWÓRZ PRZEJŚCIE',
   'menu.join': 'DOŁĄCZ KODEM',
   'menu.back': 'WSTECZ',
-  'menu.online': 'razem',
+  'menu.online': 'Co-op',
   'menu.needCode': 'Wpisz czteroliterowy kod od gospodarza.',
   'menu.defaultName': 'Cień',
   'menu.descend': 'ZEJDŹ',
@@ -564,6 +565,10 @@ const PL: Partial<Record<Key, string>> = {
   'god.skadi.epithet': 'ta, która tropi zimę aż do końca',
   'god.skadi.quote':
     '„Chłód to nie okrucieństwo. Chłód to cierpliwość, która przestała udawać.”',
+  'god.loki.name': 'LOKI',
+  'god.loki.epithet': 'ten, któremu każdy przy tym stole jest coś winien',
+  'god.loki.quote':
+    '„Bierz. Znacznie bardziej chcę zobaczyć, co z tym zrobisz, niż żebyś wygrał.”',
   'god.anubis.name': 'ANUBIS',
   'god.anubis.epithet': 'ten, który waży serce naprzeciw pióru',
   'god.anubis.quote': '„Twoje jest ciężkie. Nie mówię tego, by cię zawstydzić.”',
@@ -590,10 +595,6 @@ const PL: Partial<Record<Key, string>> = {
   'god.lilith.epithet': 'ta, która odeszła i nazwano ją za to potworem',
   'god.lilith.quote':
     '„Powiedzą, że ci to dano. Niech mówią. Ty i ja wiemy lepiej.”',
-  'god.perun.name': 'PERUN',
-  'god.perun.epithet': 'ten, którego topór wciąż tkwi w dębie',
-  'god.perun.quote':
-    '„Uderz raz. Jeśli potrzeba drugiego, spór już przegrałeś.”',
   'god.morana.name': 'MARZANNA',
   'god.morana.epithet': 'ta, która kończy rok, by mógł się zacząć',
   'god.morana.quote':
@@ -656,7 +657,7 @@ const PL: Partial<Record<Key, string>> = {
   'boon.leg-life.desc': 'Leczysz 4% zadanych obrażeń.',
   'boon.leg-attack.name': 'Rytm Rzeźnika',
   'boon.leg-attack.desc': 'Twój Atak zamachuje się i kończy o 30% szybciej.',
-  'boon.rod-move.name': 'Znak Peruna',
+  'boon.rod-move.name': 'Krok Gromu',
   'boon.rod-move.desc': '+14% szybkości ruchu.',
   'boon.rod-ammo.name': 'Zabójcza Salwa',
   'boon.rod-ammo.desc': '+2 ładunki Czaru.',

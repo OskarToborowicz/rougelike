@@ -96,7 +96,9 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
     color: 0xa9b2b8,
     light: 0x3dc4ff, // aesir — ice, H198, the cool its stone leans to
     rivals: ['hellenic', 'rodnova'],
-    gods: ['odin', 'skadi'],
+    // Three faces rather than two: the throne that keeps a liar at its table is
+    // the one most likely to arrive wearing a different one.
+    gods: ['odin', 'skadi', 'loki'],
   },
   netjer: {
     id: 'netjer',
@@ -154,7 +156,7 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
     color: 0x39463a,
     light: 0x5ce063, // rodnova — green, H122, keeping its stone's cast
     rivals: ['aesir'],
-    gods: ['perun', 'morana'],
+    gods: ['morana'],
   },
 };
 
