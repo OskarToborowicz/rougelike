@@ -1,10 +1,10 @@
 import * as THREE from "three";
-import type { World } from "../game/world";
+import { makeBolt, type World } from "../game/world";
 import { Player, PLAYER_TINTS, type PlayerState } from "../game/player";
 import { Enemy, STATUS_KINDS, type EnemyKind, type EnemyState } from "../game/enemy";
 import { BoonSet } from "../game/boons";
 import { CLASS_ORDER } from "../game/classes";
-import { ASCENDANCIES, ASCENDANCY_ORDER } from "../game/ascendancy";
+import { decodePicks, encodePicks } from "../game/save";
 import type { FxBus } from "../render/fxbus";
 import { clamp } from "../core/math";
 import { stepMovement } from "../game/locomotion";
@@ -50,6 +50,8 @@ export function buildSnapshot(
   label: string,
   paused: boolean,
   offers: WireOffer[] = [],
+  /** Only when a build actually changed; see `builds` in net/protocol.ts. */
+  sendBuilds = false,
 ): Snapshot {
   const players: WirePlayer[] = world.players.map((p) => [
     p.id,
@@ -68,7 +70,6 @@ export function buildSnapshot(
     Math.max(0, CLASS_ORDER.indexOf(p.cls)),
     p.usingSpecial ? 1 : 0,
     r(p.speed * p.boons.moveMul),
-    p.asc ? ASCENDANCY_ORDER.indexOf(p.asc.id) : -1,
   ]);
 
   const enemies: WireEnemy[] = world.enemies.map((e) => [
@@ -92,6 +93,7 @@ export function buildSnapshot(
     r(pr.pos.z),
     pr.color,
     pr.team === "player" ? 1 : 0,
+    r((pr.mesh.userData.drawRadius as number) ?? pr.radius),
   ]);
 
   return {
@@ -107,6 +109,9 @@ export function buildSnapshot(
     label,
     paused,
     offers,
+    builds: sendBuilds
+      ? world.players.map((p): [number, string] => [p.id, encodePicks(p.picks)])
+      : undefined,
   };
 }
 
@@ -143,6 +148,8 @@ const INTERP_MS = 110;
 export class RemoteView {
   players = new Map<number, Player>();
   enemies = new Map<number, Enemy>();
+  /** Last build string applied per player, so an unchanged one is not replayed. */
+  private builds = new Map<number, string>();
   private bolts = new Map<number, THREE.Mesh>();
   private history: Keyframe[] = [];
   /** Inputs this client has predicted but the host has not confirmed. */
@@ -202,7 +209,6 @@ export class RemoteView {
         clsIdx,
         spec,
         moveSpeed,
-        ascIdx,
       ] = w;
       seenP.add(id);
       let p = this.players.get(id);
@@ -221,13 +227,6 @@ export class RemoteView {
         this.players.set(id, p);
         this.scene.add(p.mesh);
       }
-      // The branch is host-authoritative like everything else, but it still has
-      // to land on the guest's own copy: `def` carries the accent this client
-      // draws that shade's bolts and trails in. `ascend` guards against a second
-      // call, so re-applying it every snapshot costs nothing.
-      const asc = ascIdx >= 0 ? ASCENDANCIES[ASCENDANCY_ORDER[ascIdx]] : null;
-      if (asc && !p.asc) p.ascend(asc);
-
       p.usingSpecial = !!spec;
       poses.set(id, { x, z });
       // The local shade's facing is predicted, not replicated — it follows the
@@ -235,7 +234,13 @@ export class RemoteView {
       if (id !== this.myPlayerId) p.facing = facing;
       p.hp = hp;
       p.maxHp = maxHp;
-      p.state = PLAYER_STATES[st] ?? "idle";
+      const next = PLAYER_STATES[st] ?? "idle";
+      // stateT drives every attack animation's wind, active and recover phases,
+      // so it has to restart when the state does — the same rule the enemies
+      // below have always had. Without it a remote shade's swing sat frozen past
+      // its own follow-through for the rest of the run.
+      if (next !== p.state) p.stateT = 0;
+      p.state = next;
       p.dead = !!dead;
       p.castAmmo = ammo;
       p.callGauge = call;
@@ -249,6 +254,26 @@ export class RemoteView {
       if (seenP.has(id)) continue;
       this.scene.remove(p.mesh);
       this.players.delete(id);
+      this.builds.delete(id);
+    }
+
+    /*
+     * What each shade is carrying. Rebuilt from scratch rather than appended:
+     * the host re-sends the whole list, and replaying it onto a set that already
+     * holds it would double every number.
+     *
+     * This is what stops a guest's own weapon animating at base speed while the
+     * host swings it faster — `currentAttack` scales off the BoonSet, and until
+     * now the guest's was empty. Its HUD and build sheet read the same set.
+     */
+    for (const [pid, encoded] of snap.builds ?? []) {
+      if (this.builds.get(pid) === encoded) continue;
+      const p = this.players.get(pid);
+      if (!p) continue;
+      this.builds.set(pid, encoded);
+      p.boons = new BoonSet();
+      p.renounce();
+      p.applyPicks(decodePicks(encoded));
     }
 
     const seenE = new Set<number>();
@@ -383,20 +408,29 @@ export class RemoteView {
 
   private syncBolts(list: WireProjectile[]) {
     const seen = new Set<number>();
-    for (const [id, x, z, color] of list) {
+    for (const [id, x, z, color, , radius] of list) {
       seen.add(id);
       let m = this.bolts.get(id);
       if (!m) {
+        /*
+         * The same mesh the host builds, not an approximation of it. This used
+         * to be a bare sphere at one fixed size: no additive glow shell, so a
+         * bolt read as a dull pellet instead of something burning, and every
+         * projectile in the game came out the same radius.
+         *
+         * The glow is derived from the core colour rather than sent. The host
+         * pairs each bolt with a hand-picked tint, but a lightened core lands
+         * within a shade of it and costs nothing on the wire.
+         */
+        const core = new THREE.Color(color);
+        const glow = core.clone().lerp(new THREE.Color(0xffffff), 0.45);
+        m = makeBolt(
+          color,
+          radius || 0.26,
+          `#${glow.getHexString()}`,
+          core.clone().lerp(new THREE.Color(0xffffff), 0.55).getHex(),
+        );
         // No per-bolt light: the renderer pools a fixed set of them instead.
-        const tint = new THREE.Color(color).lerp(
-          new THREE.Color(0xffffff),
-          0.55,
-        );
-        m = new THREE.Mesh(
-          new THREE.SphereGeometry(0.26, 12, 10),
-          new THREE.MeshBasicMaterial({ color: tint }),
-        );
-        m.userData.glowColor = color;
         this.bolts.set(id, m);
         this.scene.add(m);
       }
@@ -407,6 +441,12 @@ export class RemoteView {
       this.scene.remove(m);
       m.geometry.dispose();
       (m.material as THREE.Material).dispose();
+      // The glow is a child sprite with its own material and texture; disposing
+      // only the mesh leaked one of each per bolt fired.
+      m.traverse((o) => {
+        const s = o as THREE.Sprite;
+        if (s.isSprite) s.material.dispose();
+      });
       this.bolts.delete(id);
     }
   }
@@ -428,7 +468,10 @@ export class RemoteView {
           p.pos.z = pose.z;
         }
       }
-      p.stateT += dt;
+      // `tick` advances stateT itself. Doing it here as well ran every animation
+      // clock on a guest at exactly twice real time: enemy tells finished in half
+      // the wind-up the host was actually giving them, which is the one cue the
+      // fight is read by.
       p.tick(dt, null);
     }
     for (const [id, e] of this.enemies) {
@@ -437,7 +480,6 @@ export class RemoteView {
         e.pos.x = pose.x;
         e.pos.z = pose.z;
       }
-      e.stateT += dt;
       e.tick(dt);
     }
   }

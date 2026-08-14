@@ -140,6 +140,24 @@ export function saveRun(run: RunSave) {
   }
 }
 
+/**
+ * Picks as one short string, for the wire.
+ *
+ * The same list the save file holds, in the same order, because it is the same
+ * thing being described — what a shade chose. A host sends this to its guests so
+ * their own copy can be rebuilt by replaying it. See net/protocol.ts.
+ */
+export const encodePicks = (picks: Pick[]) => picks.map((p) => p.join(':')).join(',');
+
+/** Rebuild picks from the wire. Anything this build cannot apply is dropped. */
+export function decodePicks(s: string): Pick[] {
+  if (!s) return [];
+  return s
+    .split(',')
+    .map((part) => part.split(':') as Pick)
+    .filter(knownPick);
+}
+
 export function clearRun() {
   try {
     localStorage.removeItem(KEY);

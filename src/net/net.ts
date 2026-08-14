@@ -145,12 +145,33 @@ export class Net {
     this.ws.send(JSON.stringify({ t: 'pick', boonId }));
   }
 
-  /** Host → guests. Rate-limited to 30Hz; the render loop runs faster than the wire needs to. */
-  sendSnapshot(snap: Snapshot, now: number) {
-    if (this.role !== 'host' || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    if (now - this.lastSent < 33) return;
+  /**
+   * Whether a snapshot sent now would actually go out.
+   *
+   * Asked *before* one is built, because building is not free of consequences:
+   * it drains the effect log. A snapshot built and then dropped by the rate
+   * limit below took that tick's sparks, damage numbers and hitstop with it, and
+   * at 60fps against a 30Hz wire that was most of them.
+   */
+  dueForSnapshot(now: number): boolean {
+    if (this.role !== 'host' || !this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+    return now - this.lastSent >= 33;
+  }
+
+  /**
+   * Host → guests. Rate-limited to 30Hz; the render loop runs faster than the
+   * wire needs to.
+   *
+   * Returns whether the packet actually went out. Anything the caller only sends
+   * once — a build that just changed — has to know the difference between "sent"
+   * and "dropped by the rate limit", or it clears its dirty flag on a tick that
+   * never reached anyone.
+   */
+  sendSnapshot(snap: Snapshot, now: number): boolean {
+    if (!this.dueForSnapshot(now)) return false;
     this.lastSent = now;
-    this.ws.send(JSON.stringify(snap));
+    this.ws!.send(JSON.stringify(snap));
+    return true;
   }
 
   disconnect() {

@@ -23,7 +23,12 @@ import { PANTHEONS } from './pantheons';
  * this camera angle reads as a UI dot sitting on the image rather than an object
  * flying through the room.
  */
-function makeBolt(core: number, radius: number, glow: string, coreTint = 0xffffff): THREE.Mesh {
+export function makeBolt(
+  core: number,
+  radius: number,
+  glow: string,
+  coreTint = 0xffffff,
+): THREE.Mesh {
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(radius, 12, 10),
     new THREE.MeshBasicMaterial({ color: coreTint })
@@ -41,6 +46,10 @@ function makeBolt(core: number, radius: number, glow: string, coreTint = 0xfffff
   // the renderer recompile every material each time one spawns or dies.
   mesh.add(shell);
   mesh.userData.glowColor = core;
+  // The radius it is *drawn* at, which is not the radius it is *hit* at — a bolt
+  // collides at 0.3 and draws at 0.14. A guest builds its own mesh and needs the
+  // one the eye sees. See WireProjectile.
+  mesh.userData.drawRadius = radius;
   return mesh;
 }
 
@@ -150,6 +159,20 @@ export class World {
 
   private freeze(seconds: number) {
     this.hitstop = Math.max(this.hitstop, seconds);
+    // Guests never run this clock — they have to be handed the moment. See FxBus.
+    this.fx.noteFreeze(seconds);
+  }
+
+  /**
+   * A number over a body.
+   *
+   * Two destinations because there are two kinds of client: `damageEvents` is
+   * what this machine's own HUD drains, and the bus is how a guest — which fills
+   * no such array, having simulated nothing — gets told the same number.
+   */
+  private note(ev: DamageEvent) {
+    this.damageEvents.push(ev);
+    this.fx.damage(ev.x, ev.z, ev.amount, ev.crit, ev.color);
   }
 
   update(dtRaw: number, frames: Map<number, Frame | null>) {
@@ -1004,7 +1027,7 @@ export class World {
     this.payScales(p, from);
     this.fx.sfx(p.dead ? 'down' : 'hurt', p.pos.x, p.pos.z);
     this.fx.bloodBurst(p.pos.x, p.pos.z, '#ff4d5e', 0.8);
-    this.damageEvents.push({
+    this.note({
       x: p.pos.x,
       z: p.pos.z,
       amount: dealt,
@@ -1139,7 +1162,7 @@ export class World {
         this.fx.shake(0.4);
         this.freeze(0.06);
         this.fx.bloodBurst(p.pos.x, p.pos.z, '#ff4d5e', 0.8);
-        this.damageEvents.push({
+        this.note({
           x: p.pos.x,
           z: p.pos.z,
           amount: contact,
@@ -1191,7 +1214,7 @@ export class World {
             this.fx.sfx((t as Player).dead ? 'down' : 'hurt', t.pos.x, t.pos.z);
             this.fx.shake(0.32);
             this.fx.bloodBurst(t.pos.x, t.pos.z, '#ff4d5e', 0.7);
-            this.damageEvents.push({
+            this.note({
               x: t.pos.x,
               z: t.pos.z,
               amount: pr.damage,
@@ -1249,7 +1272,7 @@ export class World {
     e.vel.z += nz * push;
     e.stagger = 0.15;
 
-    this.damageEvents.push({
+    this.note({
       x: e.pos.x,
       z: e.pos.z,
       amount: final,

@@ -48,14 +48,11 @@ import {
 } from "./game/meta";
 import {
   ascendanciesOf,
-  ascendancyById,
   ASCEND_DEPTH,
   CAPSTONE_DEPTH,
   type Ascendancy,
   type Capstone,
 } from "./game/ascendancy";
-import { boonById } from "./game/boons";
-import { hammerById } from "./game/hammers";
 import { clearRun, loadRun, saveRun, type RunSave } from "./game/save";
 
 const host = document.getElementById("app")!;
@@ -105,6 +102,16 @@ const seatOwner = new Map<number, number>();
 
 /** Guest-side: seats whose plate has already been re-titled for a branch. */
 const guestAscended = new Set<number>();
+
+/**
+ * Set whenever a shade's build changes, cleared once it has gone out.
+ *
+ * Builds are a list of ids, not a number, and they change a few times a descent
+ * — putting them in every snapshot would send the same few hundred bytes per
+ * player thirty times a second to say nothing new.
+ */
+let buildsDirty = true;
+const markBuilds = () => (buildsDirty = true);
 
 let mode: "solo" | "host" | "guest" = "solo";
 let paused = true;
@@ -189,6 +196,8 @@ function addSeat(
   p.pos.set(Math.cos(a) * 2, 0, 3 + Math.sin(a) * 2);
   world.addPlayer(p);
   hud.addSeat(seat, seatLabel(seat, cls), cls);
+  // A new arrival has to be told everyone's build, not just its own.
+  markBuilds();
   return p;
 }
 
@@ -436,6 +445,9 @@ async function runCardRound<T extends { id: string }>(round: CardRound<T>) {
 
   for (const { p, choice } of all) {
     round.apply(p, choice);
+    // Every kind of round ends here, so this is the one place a build can change
+    // — boon, hammer, pom, branch or capstone alike.
+    markBuilds();
     p.castAmmo = 3 + p.boons.extraCastAmmo;
     fx.ring(p.pos.x, p.pos.z, round.ring, 2.4, 0.6);
     fx.sfx("boon", p.pos.x, p.pos.z);
@@ -861,6 +873,7 @@ async function onWipe() {
     // The branch goes with the build. `renounce` puts `def` back to the bare
     // class, which is what the line below already assumes.
     p.renounce();
+    markBuilds();
     hud.setSeatName(p.seat, seatLabel(p.seat, p.cls));
     p.maxHp = CLASSES[p.cls].maxHp + p.boons.metaMaxHp;
     p.hp = p.maxHp;
@@ -951,11 +964,12 @@ addEventListener("keydown", (e) => {
     pauseHeld = false;
     return;
   }
-  // A guest's shade is simulated on the host, and its local copy carries an
-  // empty BoonSet — the wire sends the body, not the build. There is nothing
-  // truthful to show, so nothing is shown. See net/protocol.ts.
-  if (mode === "guest") return;
-  const me = world.players.find((p) => p.seat === 0);
+  // A guest's shade is simulated on the host, but the build now travels — its
+  // local copy replays the same picks, so the sheet is as true there as here.
+  const me =
+    mode === "guest"
+      ? remote.playerList.find((p) => p.id === remote.myPlayerId)
+      : world.players.find((p) => p.seat === 0);
   if (!me) return;
   hud.openSheet(me);
   if (mode === "solo" || (mode === "host" && net.peers.length === 0)) pauseHeld = true;
@@ -1047,8 +1061,13 @@ function loop(now: number) {
       : input.sample(0, 0, 0);
 
     const seq = net.sendInput(f, now);
-    remote.predictLocal(dt, f, seq);
-    remote.update(dt);
+    // The host's hitstop, applied to the one thing a guest moves on its own.
+    // Everything else already stalls, because the poses being interpolated stop
+    // changing while the host is frozen — but the local shade is predicted, and
+    // without this it glides on through everybody else's freeze frame.
+    const gdt = fx.stepTime(dt);
+    remote.predictLocal(gdt, f, seq);
+    remote.update(gdt);
 
     // A guest does not know which body is its own until the roster lands, and
     // the big portrait plate belongs to whoever is actually holding the pad.
@@ -1174,12 +1193,21 @@ function loop(now: number) {
     // Cheap no-op unless the region or the party size actually changed.
     reshapeArena();
 
-    if (mode === "host" && net.peers.length) {
+    /*
+     * Only build one that is going to be sent.
+     *
+     * `buildSnapshot` drains the effect log, so a snapshot built on a tick the
+     * 30Hz limiter then throws away takes that tick's sparks, damage numbers and
+     * hitstop with it — permanently. Against a 60fps loop that was most of them,
+     * which is why a guest's fight looked so much quieter than the host's.
+     */
+    if (mode === "host" && net.peers.length && net.dueForSnapshot(now)) {
       const owners: [number, number][] = [...seatOwner.entries()];
       // Tell each guest which of its inputs this snapshot already accounts for.
       const acks: [number, number][] = [...net.consumed.entries()];
 
-      net.sendSnapshot(
+      const withBuilds = buildsDirty;
+      const sent = net.sendSnapshot(
         buildSnapshot(
           world,
           fx,
@@ -1190,9 +1218,11 @@ function loop(now: number) {
           director.label,
           paused,
           openOffers,
+          withBuilds,
         ),
         now,
       );
+      if (withBuilds && sent) buildsDirty = false;
     }
   }
 
@@ -1244,10 +1274,13 @@ function loop(now: number) {
   stage.follow(focus, dt, spread);
   arena.cullOccluders(stage.camera, focus);
 
+  // A guest simulates nothing, so its World never fills `damageEvents` — the
+  // numbers arrive over the wire and land on the bus instead.
+  const numbers = mode === "guest" ? fx.damageEvents : world.damageEvents;
   if (settings.damageNumbers) {
-    hud.spawnDamage(world.damageEvents, stage.camera);
+    hud.spawnDamage(numbers, stage.camera);
   } else {
-    world.damageEvents.length = 0;
+    numbers.length = 0;
   }
 
   applySettings();
@@ -1275,26 +1308,7 @@ function resumeRun(save: RunSave) {
 
   for (const sh of save.shades) {
     const p = addSeat(sh.seat, sh.cls);
-    for (const pick of sh.picks) {
-      if (pick[0] === "b") {
-        const b = boonById(pick[1]);
-        // `add` counts the level, so a boon listed twice comes back at two.
-        if (b) p.boons.add(b);
-      } else if (pick[0] === "h") {
-        const h = hammerById(pick[1]);
-        if (h) {
-          h.apply(p.boons);
-          p.boons.hammers.push(h.id);
-        }
-      } else if (pick[0] === "a") {
-        const a = ascendancyById(pick[1]);
-        if (a) p.ascend(a);
-      } else {
-        p.takeCapstone();
-      }
-      // `ascend` and `takeCapstone` write their own entry; the rest need one.
-      if (pick[0] === "b" || pick[0] === "h") p.picks.push(pick);
-    }
+    p.applyPicks(sh.picks);
     for (const s of sh.spurned) p.boons.spurned.add(s);
 
     p.castAmmo = 3 + p.boons.extraCastAmmo;

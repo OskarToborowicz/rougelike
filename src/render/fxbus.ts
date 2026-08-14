@@ -2,6 +2,8 @@ import type { Vfx } from './vfx';
 import type { Stage } from './scene';
 import type { WireFx } from '../net/protocol';
 import type { Audio } from '../audio/audio';
+import type { DamageEvent } from '../game/world';
+import { damp } from '../core/math';
 
 /**
  * Every visual flourish goes through here instead of straight to Vfx.
@@ -69,6 +71,55 @@ export class FxBus {
     if (this.record) this.log.push(['shake', r(amp)]);
   }
 
+  /**
+   * A damage number, recorded only.
+   *
+   * Unlike everything else on this bus there is nothing to play here: the host
+   * already spawns its own from `World.damageEvents`, which is the array the HUD
+   * drains. This exists purely so a guest — which never simulates and therefore
+   * never fills that array — is told the numbers instead of watching a silent
+   * fight. They land in `damageEvents` below on replay.
+   */
+  damage(x: number, z: number, amount: number, crit: boolean, color: string) {
+    if (this.record) this.log.push(['dmg', r(x), r(z), amount, crit ? 1 : 0, color]);
+  }
+
+  /**
+   * Hitstop, recorded only — the host's own comes from World, which owns the
+   * clock it stops.
+   *
+   * A guest sees most of a freeze for free: the host's positions stop changing,
+   * so the poses it interpolates between stop too. What it does *not* get is its
+   * own shade, which is predicted locally and would keep gliding through
+   * everyone else's freeze frame. See `stepTime`.
+   */
+  noteFreeze(seconds: number) {
+    if (this.record) this.log.push(['freeze', r(seconds)]);
+  }
+
+  // --------------------------------------------------- guest-side playback
+
+  /** Damage numbers received this tick. The HUD drains it, exactly as on a host. */
+  damageEvents: DamageEvent[] = [];
+
+  private hitstop = 0;
+  private timeScale = 1;
+
+  /**
+   * Scale a guest's frame the way World scales the host's. Same easing, same
+   * constants — a freeze that ramps differently on the two screens reads as lag
+   * rather than as weight.
+   */
+  stepTime(dtRaw: number) {
+    if (this.hitstop > 0) {
+      this.hitstop -= dtRaw;
+      this.timeScale = damp(this.timeScale, 0.03, 30, dtRaw);
+    } else {
+      this.timeScale = damp(this.timeScale, 1, 14, dtRaw);
+    }
+    return dtRaw * this.timeScale;
+  }
+
   /** Hand the tick's events to the snapshot and start a fresh log. */
   drain(): WireFx[] {
     if (!this.log.length) return [];
@@ -101,6 +152,18 @@ export class FxBus {
           break;
         case 'sfx':
           this.audio?.play(e[1], { x: e[2], z: e[3] }, e[4]);
+          break;
+        case 'dmg':
+          this.damageEvents.push({
+            x: e[1],
+            z: e[2],
+            amount: e[3],
+            crit: !!e[4],
+            color: e[5],
+          });
+          break;
+        case 'freeze':
+          this.hitstop = Math.max(this.hitstop, e[1]);
           break;
       }
     }

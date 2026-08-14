@@ -11,7 +11,9 @@ import {
   type ClassDef,
   type ClassId,
 } from "./classes";
-import { defFor, type Ascendancy } from "./ascendancy";
+import { ascendancyById, defFor, type Ascendancy } from "./ascendancy";
+import { boonById } from "./boons";
+import { hammerById } from "./hammers";
 // Type-only: save.ts describes a Player's choices but never constructs one, and
 // keeping the import erased is what stops the two files from forming a cycle.
 import type { Pick } from "./save";
@@ -209,6 +211,42 @@ export class Player implements Actor {
     this.asc.capstone.apply(this.boons);
     this.picks.push(['c']);
     this.refreshDef();
+  }
+
+  /**
+   * Replay a list of choices onto this shade, in the order they were made.
+   *
+   * The one path back from a list of ids to a built shade, used by both the run
+   * save and a guest rebuilding its own copy from the host. Order is load
+   * bearing: a status is last-write-wins, so the same cards in a different order
+   * are a different shade.
+   *
+   * `ascend` and `takeCapstone` record their own entry; the other two are pushed
+   * here, so `picks` comes out matching what went in.
+   */
+  applyPicks(picks: Pick[]) {
+    for (const pick of picks) {
+      if (pick[0] === 'b') {
+        const b = boonById(pick[1]);
+        // `add` counts the level, so a boon listed twice comes back at two.
+        if (b) {
+          this.boons.add(b);
+          this.picks.push(pick);
+        }
+      } else if (pick[0] === 'h') {
+        const h = hammerById(pick[1]);
+        if (h) {
+          h.apply(this.boons);
+          this.boons.hammers.push(h.id);
+          this.picks.push(pick);
+        }
+      } else if (pick[0] === 'a') {
+        const a = ascendancyById(pick[1]);
+        if (a) this.ascend(a);
+      } else {
+        this.takeCapstone();
+      }
+    }
   }
 
   /** Back to the bare class. The descent restarted; the oath did not survive it. */

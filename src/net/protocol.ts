@@ -36,21 +36,19 @@ export function decodeFrame(w: WireFrame): Frame {
 
 /**
  * [id, seat, x, z, facing, hp, maxHp, stateIdx, dead, castAmmo, callGauge,
- *  revive, iframes, classIdx, usingSpecial, moveSpeed, ascIdx]
+ *  revive, iframes, classIdx, usingSpecial, moveSpeed]
  *
  * `moveSpeed` is the *effective* top speed after boons. The guest predicts its
  * own movement and has no idea what boons the host applied, so sending the
  * derived number keeps prediction and simulation on the same footing.
  *
- * `ascIdx` indexes ASCENDANCY_ORDER, or -1 before the fork. It travels because
- * a branch changes the colour a shade's bolts and trails are drawn in, and the
- * guest draws those from its own copy. The capstone deliberately does not: it
- * moves damage and timing, both of which are resolved host-side, and nothing on
- * a guest's screen would look any different for knowing about it.
+ * The build does not ride here. It is a list of ids, not a number, and it
+ * changes a few times a descent rather than thirty times a second — see
+ * `builds` on the Snapshot.
  */
 export type WirePlayer = [
   number, number, number, number, number, number, number, number,
-  number, number, number, number, number, number, number, number, number
+  number, number, number, number, number, number, number, number
 ];
 
 /** [id, kindIdx, x, z, facing, hp, maxHp, stateIdx, dead, enraged, flash, statusBits] */
@@ -59,8 +57,15 @@ export type WireEnemy = [
   number
 ];
 
-/** [id, x, z, colour, teamIsPlayer] */
-export type WireProjectile = [number, number, number, number, number];
+/**
+ * [id, x, z, colour, teamIsPlayer, radius]
+ *
+ * `radius` is the radius the bolt is *drawn* at, not the one it is hit at — the
+ * two differ by roughly half. It travels because a guest builds the mesh itself,
+ * and a bolt, an orb and a hydra's spit are three different sizes that were all
+ * coming out as the same wrong one.
+ */
+export type WireProjectile = [number, number, number, number, number, number];
 
 /** Visual events the host played this tick, replayed verbatim on every guest. */
 export type WireFx =
@@ -72,7 +77,10 @@ export type WireFx =
   | ['shake', number]
   /** ['sfx', cue name, x, z, power] — the audible half of a moment. */
   | ['sfx', string, number, number, number]
-  | ['dmg', number, number, number, number, string];
+  /** ['dmg', x, z, amount, crit, colour] — a number that popped over a body. */
+  | ['dmg', number, number, number, number, string]
+  /** ['freeze', seconds] — the hitstop the host just took. */
+  | ['freeze', number];
 
 export interface Snapshot {
   t: 'sn';
@@ -86,6 +94,19 @@ export interface Snapshot {
   owners: [number, number][];
   /** Boon choices the host is currently waiting on, if any. */
   offers?: WireOffer[];
+  /**
+   * [player id, encoded picks] — what each shade is carrying.
+   *
+   * The host resolves all combat, so a guest needs none of this to be simulated
+   * correctly. It needs it to be *told*: without it a guest's own HUD shows an
+   * empty build, the sheet has nothing to list, and its weapon animates at base
+   * speed while the host swings it 30% faster.
+   *
+   * Sent as the choices rather than the numbers, exactly as the run save is
+   * written, so one replay path serves both. Omitted from most snapshots — a
+   * build changes a few times a descent, not every tick.
+   */
+  builds?: [number, string][];
   /**
    * [network id, last input sequence the host consumed]. Guests replay only the
    * inputs newer than their ack, which is what keeps prediction from fighting
