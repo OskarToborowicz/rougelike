@@ -214,6 +214,17 @@
 }
 
 /*
+ * The gate is taller than a 1080p window — panel 1134px against 1080 — and the
+ * grid that centres it has no overflow of its own, so the last row, the status
+ * line and the foot ornament were simply cut off with no way to reach them.
+ * Centring is still what should happen whenever the panel fits; this only
+ * decides what to do when it does not.
+ */
+#lobby {
+  overflow-y: auto;
+}
+
+/*
  * A column, not absolute placement. The design doc is a fixed 1600×900 frame
  * where the menu and the thrones row happen not to touch; on a real viewport
  * they collide the moment the window is shorter than about 800px. Laying the
@@ -1306,6 +1317,21 @@
   background-size: auto, 520px, auto;
 }
 
+/*
+ * A tablet has a measure. The column is a share of the screen, so on anything
+ * wider than 16:9 it keeps growing while the words inside do not, and a card
+ * ends up a strip of stone with six words at the far left of it. Past this the
+ * column stops widening and centres instead.
+ *
+ * Deliberately above every 16:9 card: 880px at 1920, and the same 880 under the
+ * zoom tiers at the foot of this sheet. Only an ultrawide ever reaches it.
+ */
+.e-offer-terms > * {
+  width: 100%;
+  max-width: 1000px;
+  align-self: center;
+}
+
 .e-terms-kicker {
   font-family: var(--e-display);
   font-size: 11px;
@@ -1925,9 +1951,24 @@
   border-right: 1px solid rgba(226, 205, 150, 0.4);
 }
 
-/* Everything below the vignette. */
-.e-gate > *:not(.e-gate-tick) {
+/* Everything below the vignette. The groups generate no box of their own, so
+   the rule has to reach past them to what is actually drawn. */
+.e-gate > *:not(.e-gate-tick),
+.e-gate .e-gate-col > *,
+.e-gate .e-gate-foot > * {
   position: relative;
+}
+
+/*
+ * The gate is built as four groups — the title, the solo half, the co-op half
+ * and the foot — but it is drawn as one column until there is room to do
+ * otherwise. `display: contents` is what makes that free: the groups put no box
+ * between the panel and its rows, so every margin below resolves exactly as it
+ * did when this screen was a flat list of children.
+ */
+.e-gate .e-gate-col,
+.e-gate .e-gate-foot {
+  display: contents;
 }
 
 /* ------------------------------------------------------------- the ornament */
@@ -2285,6 +2326,138 @@
   font-size: 16px;
   letter-spacing: 0.08em;
   color: #c07456;
+}
+
+/* ------------------------------------------------------------- the two halves */
+
+/*
+ * Landscape: the gate opens out.
+ *
+ * As one column the panel is 720×1128, which does not fit a 1080p window — the
+ * back button, the status line and the foot ornament fell off the bottom. The
+ * screen was never short of room, only of the right shape: a desktop window has
+ * some 1200px to either side of that column doing nothing.
+ *
+ * Keyed on width alone, deliberately. Height would have to be read through the
+ * zoom tiers at the foot of this sheet — a 2560px window is 1067px tall as far
+ * as this layout is concerned, not 1440 — and a rule that has to know its own
+ * scale factor is a rule that will be wrong the next time one is added.
+ */
+@media (min-width: 860px) {
+  .lpanel.e-gate {
+    width: min(1040px, 92vw);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: clamp(28px, 4vw, 54px);
+  }
+
+  /* The title names the screen and the foot leaves it; neither belongs to a half. */
+  .e-gate .e-gate-head,
+  .e-gate .e-gate-foot {
+    grid-column: 1 / -1;
+  }
+
+  .e-gate .e-gate-col,
+  .e-gate .e-gate-foot {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /*
+   * The rhythm here is written as a top margin on every row, which is right in
+   * a single column and wrong at the head of one: it would push each half down
+   * by its first row's margin instead of the gap set below.
+   */
+  .e-gate .e-gate-col > :first-child,
+  .e-gate .e-gate-foot > :first-child {
+    margin-top: 0;
+  }
+
+  .e-gate .e-gate-col {
+    margin-top: 40px;
+  }
+
+  .e-gate .e-gate-foot {
+    margin-top: 36px;
+  }
+
+  /*
+   * Both halves end in the button that is the point of them. The two rows above
+   * are different lengths, so without this the two buttons sit at different
+   * heights and the screen reads as lopsided rather than as a pair.
+   */
+  .e-gate .e-gate-col > .lbtn:last-child {
+    margin-top: auto;
+  }
+}
+
+/* --------------------------------------------------------------- short gates */
+
+/*
+ * A 1366×768 laptop, or 720p. Two columns get the gate down to 794px, which is
+ * still taller than the window — so the whitespace gives before anything else
+ * does. Every value here is a margin, a padding or the wordmark; not one row is
+ * removed and no control gets smaller, because this screen is the last thing
+ * above ground and it should not read as a cramped form.
+ *
+ * Two thresholds because the two layouts run out of room in different places.
+ * Stacked, the gate is 1134px tall and needs this well before a window is what
+ * anyone would call short; opened out it is 794px and only wants it near 720p.
+ * One shared threshold would either crowd every desktop or leave the narrow
+ * band between the phone rules and the two-column breakpoint hanging.
+ *
+ * `859.98px` rather than `859px` because a viewport is not always a whole
+ * number of pixels: at 150% OS scaling — a laptop default — this window
+ * measures 859.33px, which is neither `max-width: 859px` nor `min-width: 860px`
+ * and fell through both rules into the uncompressed layout.
+ */
+@media (max-width: 859.98px) and (max-height: 1150px), (min-width: 860px) and (max-height: 820px) {
+  .lpanel.e-gate {
+    padding: 34px 44px 30px;
+  }
+
+  .e-gate .e-gate-name {
+    font-size: clamp(34px, 7vw, 54px);
+  }
+
+  .e-gate .e-gate-sub {
+    margin-top: 10px;
+  }
+
+  .e-gate .e-orn.small {
+    margin-top: 12px;
+  }
+
+  .e-gate .lrow {
+    margin-top: 22px;
+  }
+
+  .e-gate .lclasses,
+  .e-gate .lblurb {
+    margin-top: 14px;
+  }
+
+  .e-gate .lbtn,
+  .e-gate .lrow + .lbtn,
+  .e-gate .ldiv + .lrow {
+    margin-top: 12px;
+  }
+
+  .e-gate .e-gate-col {
+    margin-top: 24px;
+  }
+
+  .e-gate .e-gate-foot {
+    margin-top: 20px;
+  }
+
+  .e-gate .lstatus {
+    margin-top: 10px;
+  }
+
+  .e-gate .e-orn.foot {
+    margin-top: 16px;
+  }
 }
 
 /* ------------------------------------------------------------- narrow gates */
@@ -2996,4 +3169,314 @@ body:has(#choice.show) #e-concord {
 body.touching .e-card-index,
 body.touching .e-offer-foot .e-hint {
   display: none;
+}
+
+/* ============================================================ THE BUILD SHEET */
+
+/*
+ * What the shade is carrying, on demand.
+ *
+ * The HUD can only ever show a row of throne marks — enough to remember that
+ * something was taken, nowhere near enough to say what it does or whether it
+ * still does it. This is the long form: every card in the order it was taken,
+ * what each one promised, which promises have since been overruled, and the one
+ * table the game never had — what the whole pile adds up to.
+ *
+ * Drawn as a page rather than a panel. It is read, not operated.
+ */
+#e-sheet {
+  position: absolute;
+  inset: 0;
+  display: none;
+  overflow-y: auto;
+  z-index: 30;
+  background:
+    linear-gradient(rgba(10, 9, 8, 0.93), rgba(10, 9, 8, 0.97)),
+    var(--e-quarry-black),
+    var(--e-ground);
+  background-size: auto, var(--e-quarry-field), auto;
+  color: var(--e-ink);
+  font-family: var(--e-body);
+  pointer-events: auto;
+}
+
+#e-sheet.show {
+  display: block;
+  animation: e-rise 0.22s ease-out both;
+}
+
+.e-sheet-inner {
+  width: min(880px, 92vw);
+  margin: 0 auto;
+  padding: clamp(28px, 4vh, 56px) 0 clamp(32px, 5vh, 64px);
+}
+
+.e-sheet-kicker {
+  font-family: var(--e-display);
+  font-size: 11px;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: rgba(230, 223, 208, 0.4);
+}
+
+.e-sheet-name {
+  margin-top: 8px;
+  font-family: var(--e-display);
+  font-weight: 600;
+  font-size: clamp(30px, 3.4vw, 46px);
+  line-height: 1;
+  letter-spacing: 0.1em;
+  color: var(--e-ink-bright);
+}
+
+.e-sheet-sub {
+  margin-top: 8px;
+  font-style: italic;
+  font-size: 17px;
+  color: rgba(230, 223, 208, 0.55);
+}
+
+.e-sheet-head {
+  margin: clamp(22px, 3vh, 34px) 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(230, 223, 208, 0.14);
+  font-family: var(--e-display);
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(230, 223, 208, 0.45);
+}
+
+/* --- what your blows carry ------------------------------------------------ */
+
+/*
+ * Three rows, always all three, even when a slot carries nothing. "Your Cast
+ * carries nothing" is information; an absent row is just a gap the player has
+ * to notice.
+ */
+.e-carry {
+  --tint: rgba(230, 223, 208, 0.3);
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 9px 0 9px 14px;
+  border-left: 3px solid var(--tint);
+}
+
+.e-carry + .e-carry {
+  border-top: 1px solid rgba(230, 223, 208, 0.07);
+}
+
+.e-carry-slot {
+  flex: 0 0 96px;
+  font-family: var(--e-display);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(230, 223, 208, 0.5);
+}
+
+.e-carry-what {
+  font-family: var(--e-display);
+  font-size: 17px;
+  letter-spacing: 0.14em;
+  color: var(--tint);
+}
+
+.e-carry.none .e-carry-what {
+  font-family: var(--e-body);
+  font-style: italic;
+  letter-spacing: normal;
+  font-size: 15px;
+  color: rgba(230, 223, 208, 0.32);
+}
+
+/* --- the cards ------------------------------------------------------------ */
+
+.e-sheet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.e-sheet-card {
+  --tint: var(--e-ink);
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 13px 4px;
+}
+
+.e-sheet-card + .e-sheet-card {
+  border-top: 1px solid rgba(230, 223, 208, 0.07);
+}
+
+/* A throne's roundel keeps its numeral; a hammer or a branch gets a plain bar,
+   because neither sits on a throne and a made-up numeral would say they did. */
+.e-sheet-mark {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  margin-top: 2px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--e-display);
+  font-size: 11px;
+  font-style: normal;
+  letter-spacing: 0.04em;
+}
+
+.e-sheet-bar {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 30px;
+  margin-top: 2px;
+}
+
+.e-sheet-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.e-sheet-line {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.e-sheet-kick {
+  font-family: var(--e-display);
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(230, 223, 208, 0.38);
+}
+
+.e-sheet-title {
+  font-family: var(--e-display);
+  font-size: 17px;
+  letter-spacing: 0.08em;
+  color: var(--tint);
+}
+
+.e-sheet-pips {
+  display: flex;
+  gap: 4px;
+}
+
+.e-sheet-pips i {
+  width: 7px;
+  height: 7px;
+  background: var(--tint);
+}
+
+.e-sheet-desc {
+  margin-top: 5px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: rgba(230, 223, 208, 0.62);
+  text-wrap: pretty;
+}
+
+/*
+ * A card whose status was taken over by a later one. The numbers it granted are
+ * still live — only the status lapsed — so the card is dimmed rather than struck
+ * through, and the line below says exactly what lapsed.
+ */
+.e-sheet-card.overruled .e-sheet-title,
+.e-sheet-card.overruled .e-sheet-desc {
+  color: rgba(230, 223, 208, 0.32);
+}
+
+.e-sheet-card.overruled .e-sheet-mark,
+.e-sheet-card.overruled .e-sheet-bar {
+  opacity: 0.4;
+}
+
+.e-sheet-dead {
+  margin-top: 6px;
+  font-family: var(--e-display);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--e-sanguine-lit);
+}
+
+/* --- the sums ------------------------------------------------------------- */
+
+.e-sheet-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 2px 34px;
+}
+
+.e-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(230, 223, 208, 0.07);
+  font-size: 15px;
+  color: rgba(230, 223, 208, 0.6);
+}
+
+.e-total b {
+  font-family: var(--e-display);
+  font-weight: 400;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  color: var(--e-ink-bright);
+}
+
+.e-sheet-foot {
+  margin-top: clamp(20px, 3vh, 32px);
+  text-align: center;
+  font-family: var(--e-display);
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  color: rgba(230, 223, 208, 0.3);
+}
+
+/* ========================================================= THE LARGE DISPLAY */
+
+/*
+ * This sheet is drawn in pixels, and every breakpoint above is a `max-width` —
+ * the whole interface knows how to get smaller and nothing tells it how to get
+ * bigger. On a 4K panel that reads as a bug: the shade's plate stays 196px, a
+ * card's type stays at the 26px ceiling it hits around 1530px, and the offer
+ * stretches those same small words across a 1900px tablet. Nothing is broken;
+ * everything is simply half the size it was designed to be.
+ *
+ * `zoom` is the honest fix rather than a second set of type scales. It scales
+ * layout, type and hit-testing together, so a 3840×2160 screen renders the
+ * exact 1920×1080 composition at twice the size — the proportions here were
+ * tuned for that canvas, and this hands them back rather than inventing new
+ * ones. Percentages inside (the damage numbers ride on them) and the `vw`
+ * clamps above all resolve against the real viewport first and are then scaled,
+ * which is what lifts the frozen ceilings.
+ *
+ * The canvas in #app is deliberately not in this list. It is sized by the
+ * renderer against the real viewport, and zooming it would blur the game.
+ *
+ * Both dimensions gate each tier because zoom spends the space it magnifies: a
+ * 3840×1080 ultrawide has the width for a big interface and nowhere near the
+ * height, and would lose the third card off the bottom of the offer.
+ */
+@media (min-width: 2400px) and (min-height: 1300px) {
+  #ui,
+  #touch,
+  #lobby {
+    zoom: 1.35;
+  }
+}
+
+@media (min-width: 3400px) and (min-height: 1800px) {
+  #ui,
+  #touch,
+  #lobby {
+    zoom: 2;
+  }
 }

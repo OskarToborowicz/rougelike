@@ -48,11 +48,15 @@ import {
 } from "./game/meta";
 import {
   ascendanciesOf,
+  ascendancyById,
   ASCEND_DEPTH,
   CAPSTONE_DEPTH,
   type Ascendancy,
   type Capstone,
 } from "./game/ascendancy";
+import { boonById } from "./game/boons";
+import { hammerById } from "./game/hammers";
+import { clearRun, loadRun, saveRun, type RunSave } from "./game/save";
 
 const host = document.getElementById("app")!;
 const stage = new Stage(host);
@@ -235,6 +239,50 @@ let runKills = 0;
 /** Which upgrade state each seat was built from. Guests bring their own. */
 const seatMeta = new Map<number, MetaState>();
 
+// ------------------------------------------------------------- the run save
+
+/**
+ * Only a descent this machine owns outright is written down.
+ *
+ * A co-op run lives on the host and is made of people, not state: resuming one
+ * alone would mean inventing bodies for players who are not here, and a guest
+ * has no authority over the world it would be restoring. Both would be a lie
+ * about what was saved, so neither is offered.
+ */
+const canSaveRun = () => mode === "solo";
+
+/** The descent as it stands, in the only form that survives a rebalance. */
+function snapshotRun(): RunSave {
+  return {
+    v: 1,
+    depth: director.depth,
+    room: director.room,
+    obols: runObols,
+    kills: runKills,
+    shades: world.players.map((p) => ({
+      seat: p.seat,
+      cls: p.cls,
+      picks: p.picks.slice(),
+      spurned: [...p.boons.spurned],
+      hp: p.maxHp > 0 ? p.hp / p.maxHp : 1,
+    })),
+  };
+}
+
+/**
+ * Write the checkpoint.
+ *
+ * Called where a chamber begins and nowhere else. Saving mid-fight would mean
+ * serialising every enemy, every projectile and the wave the director is part
+ * way through — and would hand the player a way to reload out of a blow already
+ * in the air. The chamber threshold is the one moment a descent is fully
+ * described by what has been chosen rather than by what is currently moving.
+ */
+function checkpoint() {
+  if (!canSaveRun() || !running) return;
+  saveRun(snapshotRun());
+}
+
 /** Obols a corpse is worth. Bosses pay for the fight they actually were. */
 const bounty = (e: Enemy) =>
   e.a.boss ? 60 + director.depth * 8 : Math.round(4 + e.a.hp / 24 + director.depth * 0.6);
@@ -259,6 +307,9 @@ function startRun() {
   audio.unlock();
   audio.startMusic();
   hud.showBanner(director.biome.name);
+  // Chamber one is a checkpoint like any other: a player who walks away from the
+  // first room should find it waiting, not have to earn the right to be saved.
+  checkpoint();
 }
 
 /**
@@ -449,6 +500,7 @@ const runBoonRound = (pantheon: PantheonId, god: string) => {
     }),
     apply: (p, b) => {
       p.boons.add(b);
+      p.picks.push(["b", b.id]);
       // Taken over the offering throne's head. It is done with this shade.
       if (b.pantheon !== pantheon) p.boons.spurned.add(pantheon);
     },
@@ -475,6 +527,7 @@ const runHammerRound = () =>
     apply: (p, h) => {
       h.apply(p.boons);
       p.boons.hammers.push(h.id);
+      p.picks.push(["h", h.id]);
     },
     ring: 0xffb04a,
   });
@@ -497,7 +550,13 @@ const runPomRound = () =>
       pips: p.boons.levelOf(b.id),
       pipsOf: p.boons.levelOf(b.id) + 1,
     }),
-    apply: (p, b) => p.boons.upgrade(b),
+    // A pom is another level of a boon already held, so it writes another entry
+    // rather than a different kind of one. Replaying two adds it twice, which is
+    // exactly what `upgrade` does.
+    apply: (p, b) => {
+      p.boons.upgrade(b);
+      p.picks.push(["b", b.id]);
+    },
     ring: 0xd6a6ff,
   });
 
@@ -577,6 +636,10 @@ if (import.meta.env.DEV) {
     runPomRound,
     runAscendRound,
     runCapstoneRound,
+    // A checkpoint normally only lands on a chamber threshold, which is minutes
+    // of play away; these make a save and its restore one line apiece.
+    checkpoint,
+    snapshotRun,
     seatOwner,
     get openOffers() {
       return openOffers;
@@ -681,6 +744,9 @@ async function onChamberCleared() {
 
   const wasBiome = director.biome.id;
   director.nextChamber();
+  // The threshold. Everything chosen for this chamber is chosen; nothing in the
+  // next one has started moving yet.
+  checkpoint();
   reshapeArena();
 
   for (const p of world.players) {
@@ -757,6 +823,8 @@ function visitShore(summary: RunSummary) {
  */
 async function onWipe() {
   paused = true;
+  hud.closeSheet();
+  pauseHeld = false;
   hud.showBanner(t("banner.died"));
   fx.shake(0.9);
   await wait(2300);
@@ -767,6 +835,11 @@ async function onWipe() {
   world.projectiles.length = 0;
 
   recordRun(director.depth);
+  // The descent is over, so there is nothing left to come back to. Cleared
+  // before the shore screen, not after: the player is about to sit on a menu
+  // that can be closed, and a stale save would offer to resume a run they
+  // already lost.
+  clearRun();
   // Only the machine that owns the run gets the shore. A guest's death is the
   // host's run ending, and its own meta screen would be spending obols it did
   // not earn here.
@@ -804,6 +877,11 @@ async function onWipe() {
   director.depth = 1;
   director.room = "combat";
   director.buildChamber();
+  // A wipe does not end the session, it starts the next descent in place — so
+  // that descent gets its chamber-one checkpoint here, the same one `startRun`
+  // writes. Without it the run that follows a death is the only one a player
+  // cannot walk away from.
+  checkpoint();
   reshapeArena();
   hud.showBanner(director.biome.name);
   paused = false;
@@ -833,6 +911,14 @@ let pauseHeld = false;
 addEventListener("keydown", (e) => {
   if (e.code !== "Escape" || e.defaultPrevented || !running || menu.isPaused)
     return;
+  // Escape backs out of the sheet before it reaches for the pause menu, so the
+  // key means one thing at a time.
+  if (hud.sheetOpen) {
+    e.preventDefault();
+    hud.closeSheet();
+    pauseHeld = false;
+    return;
+  }
   const canFreeze =
     mode === "solo" || (mode === "host" && net.peers.length === 0);
   e.preventDefault();
@@ -843,6 +929,36 @@ addEventListener("keydown", (e) => {
     },
     () => abandonRun(),
   );
+});
+
+/**
+ * The build sheet.
+ *
+ * Everything the shade is carrying, and — the part the game never said out loud
+ * — which of those cards is still in force. Held open rather than glanced at, so
+ * in a run this machine owns it stops the world exactly as the pause menu does:
+ * reading your build should not be something you get hit for.
+ */
+addEventListener("keydown", (e) => {
+  if (e.code !== "Tab" || e.defaultPrevented || !running || menu.isPaused) return;
+  // An offer is already a screen about what you are taking; a second one over it
+  // would be two answers to the same question.
+  if (hud.offerOpen && !hud.sheetOpen) return;
+  // The browser would move focus to whatever it thinks is next.
+  e.preventDefault();
+  if (hud.sheetOpen) {
+    hud.closeSheet();
+    pauseHeld = false;
+    return;
+  }
+  // A guest's shade is simulated on the host, and its local copy carries an
+  // empty BoonSet — the wire sends the body, not the build. There is nothing
+  // truthful to show, so nothing is shown. See net/protocol.ts.
+  if (mode === "guest") return;
+  const me = world.players.find((p) => p.seat === 0);
+  if (!me) return;
+  hud.openSheet(me);
+  if (mode === "solo" || (mode === "host" && net.peers.length === 0)) pauseHeld = true;
 });
 
 /**
@@ -879,11 +995,14 @@ function applySettings() {
 /** Leave the run and go back to the title screen. */
 async function abandonRun() {
   pauseHeld = false;
+  hud.closeSheet();
   running = false;
   paused = true;
   // Walking away still counts as a descent — the obols are already banked, and
   // the deepest-chamber record should not depend on dying to earn it.
   if (mode !== "guest") recordRun(director.depth);
+  // Abandoning is a decision, not an interruption — the run is spent either way.
+  clearRun();
   runObols = 0;
   runKills = 0;
   seatMeta.clear();
@@ -996,8 +1115,15 @@ function loop(now: number) {
           clearedHandled = false;
         });
       }
-    } else {
+    } else if (!pauseHeld) {
       // Keep the world breathing behind the boon screen, just without agency.
+      //
+      // Not behind the pause menu, though. The two states arrive here together
+      // and want opposite things: an offer is a moment inside the fight and
+      // should not freeze-frame it, while a pause is the player stepping away —
+      // running the room at 35% still walked enemies into them and could kill a
+      // shade sitting in the menu. `pauseHeld` is only ever set for a session
+      // that owns its own simulation, so a party's fight still runs on.
       frames.clear();
       world.update(dt * 0.35, frames);
     }
@@ -1131,8 +1257,68 @@ function loop(now: number) {
 
 // -------------------------------------------------------------- bootstrap
 
+/**
+ * Put a saved descent back on its feet.
+ *
+ * The picks are replayed through the very functions that applied them the first
+ * time, in the order they were made. That order is not incidental: a status is
+ * last-write-wins, so a shade who took doom and then swore to the storms is a
+ * different shade from one who did it the other way round, and only replaying
+ * reproduces which of them this is.
+ */
+function resumeRun(save: RunSave) {
+  mode = "solo";
+  director.depth = save.depth;
+  director.room = save.room;
+  runObols = save.obols;
+  runKills = save.kills;
+
+  for (const sh of save.shades) {
+    const p = addSeat(sh.seat, sh.cls);
+    for (const pick of sh.picks) {
+      if (pick[0] === "b") {
+        const b = boonById(pick[1]);
+        // `add` counts the level, so a boon listed twice comes back at two.
+        if (b) p.boons.add(b);
+      } else if (pick[0] === "h") {
+        const h = hammerById(pick[1]);
+        if (h) {
+          h.apply(p.boons);
+          p.boons.hammers.push(h.id);
+        }
+      } else if (pick[0] === "a") {
+        const a = ascendancyById(pick[1]);
+        if (a) p.ascend(a);
+      } else {
+        p.takeCapstone();
+      }
+      // `ascend` and `takeCapstone` write their own entry; the rest need one.
+      if (pick[0] === "b" || pick[0] === "h") p.picks.push(pick);
+    }
+    for (const s of sh.spurned) p.boons.spurned.add(s);
+
+    p.castAmmo = 3 + p.boons.extraCastAmmo;
+    p.hp = Math.max(1, Math.round(p.maxHp * sh.hp));
+  }
+
+  director.buildChamber();
+  startRun();
+}
+
 async function boot() {
   const choice = await menu.choose();
+  if (choice.mode === "continue") {
+    const save = loadRun();
+    // The save is read again here rather than trusted from the menu: it is the
+    // only read whose result is actually played, and the file could have been
+    // cleared by another tab in between.
+    if (save) {
+      resumeRun(save);
+      return;
+    }
+    boot();
+    return;
+  }
   if (choice.mode !== "solo") localName = choice.name;
   if (choice.mode === "solo") {
     mode = "solo";

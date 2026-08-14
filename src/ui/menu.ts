@@ -14,9 +14,11 @@ import { DEFAULTS, saveSettings, settings } from './settings';
 import { LANG_LABEL, LANGS, language, setLanguage, t, type Key, type Lang } from './i18n';
 import { PANTHEON_ORDER, PANTHEONS, pantheonName, roundel } from '../game/pantheons';
 import { titleArt } from './art';
+import { loadRun } from '../game/save';
 
 export type MenuChoice =
   | { mode: 'solo'; cls: ClassId }
+  | { mode: 'continue' }
   | { mode: 'host'; room: string; url: string; name: string; cls: ClassId }
   | { mode: 'join'; room: string; url: string; name: string; cls: ClassId };
 
@@ -43,6 +45,7 @@ const CONTROLS: [Key, Key][] = [
   ['controls.call', 'controls.call.how'],
   ['controls.concord', 'controls.concord.how'],
   ['controls.dash', 'controls.dash.how'],
+  ['controls.sheet', 'controls.sheet.how'],
   ['controls.pause', 'controls.pause.how'],
   ['controls.touch', 'controls.touch.how'],
   ['controls.p2', 'controls.p2.how'],
@@ -184,7 +187,27 @@ export class Menu {
           return r;
         };
 
-        row(t('menu.play'), () => setupScreen(), true);
+        /*
+         * A descent left part-finished is the first thing offered, above a new
+         * one — it is the only row on this screen the player is in the middle
+         * of, and burying it under "descend" invites starting over by reflex and
+         * losing the run to a misclick.
+         *
+         * Read fresh on every build of this screen rather than cached: the
+         * player reaches the title again after a wipe, and by then there is
+         * nothing to resume.
+         */
+        const saved = loadRun();
+        if (saved) {
+          const r = row(t('menu.continue'), () => {
+            this.hide();
+            resolve({ mode: 'continue' });
+          }, true);
+          const aside = el('span', 'e-menu-aside', t('menu.continue.at', { n: saved.depth }));
+          r.replaceChild(aside, r.lastChild as HTMLElement);
+        }
+
+        row(t('menu.play'), () => setupScreen(), !saved);
         // The reliquary is only offered once there is something to spend or
         // something spent — a first-time player has no idea what an obol is yet.
         if (meta.obols > 0 || meta.runs > 0) {
@@ -296,23 +319,41 @@ export class Menu {
           ornament('small')
         );
 
+        /*
+         * Four groups rather than one flat list. On a landscape window the gate
+         * lays the solo half beside the co-op half and spans the title and the
+         * foot across both — a single 720×1128 column does not fit a 1080p
+         * screen, and the room it needs is sitting unused to either side.
+         *
+         * The groups are `display: contents` until that breakpoint, so a phone
+         * still gets exactly the one column this screen was drawn as, with
+         * every margin below resolving as if they were not here.
+         */
+        const group = (cls: string, kids: HTMLElement[]) => {
+          const g = el('div', cls);
+          g.append(...kids);
+          return g;
+        };
+
         this.show(
           [
             el('div', 'e-gate-tick tl'),
             el('div', 'e-gate-tick tr'),
             head,
-            row(t('menu.field.name'), name),
-            picker,
-            blurb,
-            solo,
-            el('div', 'ldiv', t('menu.online')),
-            row(t('menu.field.relay'), url),
-            hostBtn,
-            row(t('menu.field.code'), code),
-            joinBtn,
-            back,
-            this.status,
-            ornament('foot'),
+            group('e-gate-col solo', [
+              row(t('menu.field.name'), name),
+              picker,
+              blurb,
+              solo,
+            ]),
+            group('e-gate-col coop', [
+              el('div', 'ldiv', t('menu.online')),
+              row(t('menu.field.relay'), url),
+              hostBtn,
+              row(t('menu.field.code'), code),
+              joinBtn,
+            ]),
+            group('e-gate-foot', [back, this.status, ornament('foot')]),
           ],
           'e-gate'
         );

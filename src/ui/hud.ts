@@ -5,8 +5,12 @@ import type { DamageEvent } from '../game/world';
 import { clamp } from '../core/math';
 import { ROOMS, type RoomKind } from '../game/rewards';
 import { PANTHEONS, pantheonName, roundel } from '../game/pantheons';
+import { BoonSet, boonById } from '../game/boons';
+import { hammerById, hammerColor, hammerSlotLabel } from '../game/hammers';
+import { ascendancyById } from '../game/ascendancy';
+import type { StatusKind } from '../game/enemy';
 import type { ClassId } from '../game/classes';
-import { onLanguageChange, roman, t } from './i18n';
+import { onLanguageChange, roman, t, type Key } from './i18n';
 import { ascArt, godArt, shadeArt } from './art';
 
 const el = (tag: string, cls?: string, text?: string) => {
@@ -95,6 +99,208 @@ interface SeatUi {
   lastBoonCount: number;
 }
 
+// --------------------------------------------------------------- the build
+
+/** The three slots a status can ride on. */
+const SLOTS = ['attack', 'special', 'cast'] as const;
+type Slot = (typeof SLOTS)[number];
+
+/**
+ * Which statuses a single card grants, found by running its own `apply` on a
+ * throwaway BoonSet.
+ *
+ * Read rather than declared: a boon's promise lives in its `apply` and nowhere
+ * else, and a second table saying what each one does is a table that goes stale
+ * the first time somebody retunes a card without updating it.
+ */
+function statusesOf(apply: (b: BoonSet) => void): Partial<Record<Slot, StatusKind>> {
+  const probe = new BoonSet();
+  apply(probe);
+  const out: Partial<Record<Slot, StatusKind>> = {};
+  if (probe.statusOnAttack) out.attack = probe.statusOnAttack;
+  if (probe.statusOnSpecial) out.special = probe.statusOnSpecial;
+  if (probe.statusOnCast) out.cast = probe.statusOnCast;
+  return out;
+}
+
+/** One card the shade is actually holding. */
+interface Held {
+  kind: 'boon' | 'hammer' | 'asc' | 'capstone';
+  key: string;
+  name: string;
+  desc: string;
+  /** Small line above the name: the throne, the slot, the branch. */
+  kicker: string;
+  accent: string;
+  numeral?: string;
+  roundel?: string;
+  ink?: string;
+  /** How many times taken. Only a boon is ever above one. */
+  level: number;
+  /** What this card puts on each slot, if anything. */
+  sets: Partial<Record<Slot, StatusKind>>;
+  /** Slots whose status this card set but no longer owns. */
+  overruled: Slot[];
+}
+
+/**
+ * The build, read back out of the order it was assembled in.
+ *
+ * The picks are walked rather than the BoonSet, because the BoonSet is a sum and
+ * a sum cannot say what it replaced. A status is last-write-wins: take shock on
+ * your Attack and then burn on your Attack and the shock is simply gone, with
+ * nothing on screen ever having said so. Walking the order is what recovers
+ * which card currently owns each slot — and therefore which cards are holding a
+ * promise the build no longer keeps.
+ */
+function readBuild(p: Player) {
+  const held: Held[] = [];
+  const byKey = new Map<string, Held>();
+  /** Slot -> key of the card that set it most recently. */
+  const owner: Partial<Record<Slot, string>> = {};
+  /** Every slot each card ever set, so supersession can be worked out at the end. */
+  const claimed = new Map<string, Set<Slot>>();
+
+  const note = (h: Held, sets: Partial<Record<Slot, StatusKind>>) => {
+    const mine = claimed.get(h.key) ?? new Set<Slot>();
+    for (const s of SLOTS) {
+      if (!sets[s]) continue;
+      owner[s] = h.key;
+      mine.add(s);
+    }
+    claimed.set(h.key, mine);
+  };
+
+  const add = (h: Held, sets: Partial<Record<Slot, StatusKind>>) => {
+    h.sets = sets;
+    const seen = byKey.get(h.key);
+    if (seen) {
+      seen.level++;
+    } else {
+      byKey.set(h.key, h);
+      held.push(h);
+    }
+    note(byKey.get(h.key)!, sets);
+  };
+
+  for (const pick of p.picks) {
+    if (pick[0] === 'b') {
+      const b = boonById(pick[1]);
+      if (!b) continue;
+      const th = PANTHEONS[b.pantheon];
+      add(
+        {
+          kind: 'boon',
+          key: 'b:' + b.id,
+          name: b.name,
+          desc: b.desc,
+          kicker: pantheonName(b.pantheon),
+          accent: th.css,
+          numeral: th.numeral,
+          roundel: roundel(b.pantheon),
+          ink: th.ink,
+          level: 1,
+          sets: {},
+          overruled: [],
+        },
+        statusesOf(b.apply)
+      );
+    } else if (pick[0] === 'h') {
+      const h = hammerById(pick[1]);
+      if (!h) continue;
+      add(
+        {
+          kind: 'hammer',
+          key: 'h:' + h.id,
+          name: h.name,
+          desc: h.desc,
+          kicker: hammerSlotLabel(h),
+          accent: hammerColor(h),
+          level: 1,
+          sets: {},
+          overruled: [],
+        },
+        statusesOf(h.apply)
+      );
+    } else if (pick[0] === 'a') {
+      const a = ascendancyById(pick[1]);
+      if (!a) continue;
+      add(
+        {
+          kind: 'asc',
+          key: 'a:' + a.id,
+          name: a.name,
+          desc: a.desc,
+          kicker: a.title,
+          accent: a.css,
+          level: 1,
+          sets: {},
+          overruled: [],
+        },
+        statusesOf(a.apply)
+      );
+    } else if (p.asc) {
+      const c = p.asc.capstone;
+      add(
+        {
+          kind: 'capstone',
+          key: 'c:' + c.id,
+          name: c.name,
+          desc: c.desc,
+          kicker: p.asc.name,
+          accent: p.asc.css,
+          level: 1,
+          sets: {},
+          overruled: [],
+        },
+        statusesOf(c.apply)
+      );
+    }
+  }
+
+  for (const h of held) {
+    h.overruled = [...(claimed.get(h.key) ?? [])].filter((s) => owner[s] !== h.key);
+  }
+
+  return { held, owner };
+}
+
+/**
+ * What every card adds up to.
+ *
+ * Only the figures that accumulate from more than one place — those are the ones
+ * no single card can tell you, and the reason this section exists at all. A flag
+ * granted once, like a second Special or the plague, is already spelled out by
+ * the card that granted it and is not repeated here.
+ *
+ * Anything still sitting at its starting value is left out entirely: a list of
+ * things you did not take is a list nobody reads.
+ */
+function totals(p: Player): [string, string][] {
+  const b = p.boons;
+  const rows: [string, string][] = [];
+  const pct = (n: number) => `${n >= 0 ? '+' : ''}${Math.round(n * 100)}%`;
+  const put = (key: string, on: boolean, value: string) => {
+    if (on) rows.push([t(key as Key), value]);
+  };
+
+  rows.push([t('sheet.hp'), String(p.maxHp)]);
+  put('sheet.attack', b.attackMul !== 1, pct(b.attackMul - 1));
+  put('sheet.special', b.specialMul !== 1, pct(b.specialMul - 1));
+  put('sheet.cast', b.castMul !== 1, pct(b.castMul - 1));
+  // Lower is faster, which is the opposite of how it should read on a sheet.
+  put('sheet.attackSpeed', b.attackSpeedMul !== 1, pct(1 - b.attackSpeedMul));
+  put('sheet.reach', b.attackReachMul !== 1, pct(b.attackReachMul - 1));
+  put('sheet.move', b.moveMul !== 1, pct(b.moveMul - 1));
+  put('sheet.crit', b.critChance !== 0.05, `${Math.round(b.critChance * 100)}%`);
+  put('sheet.critMul', b.critMul !== 2, `×${b.critMul.toFixed(1)}`);
+  put('sheet.lifesteal', b.lifesteal > 0, `${Math.round(b.lifesteal * 100)}%`);
+  put('sheet.ammo', b.extraCastAmmo > 0, `+${b.extraCastAmmo}`);
+  put('sheet.attackPierce', b.attackPierce > 0, `+${b.attackPierce}`);
+  put('sheet.castPierce', b.castPierce > 0, `+${b.castPierce}`);
+  return rows;
+}
+
 /** Seat colours, as CSS. Matches PLAYER_TINTS in game/player.ts. */
 const PLATE_TINTS = ['#ff6a3d', '#4fc3ff', '#9d6bff', '#5fe08a'];
 
@@ -129,6 +335,7 @@ export class Hud {
   private bossLag = el('i');
   private bossTitle = el('div');
   private gatePrompt = el('div');
+  private sheet = el('div');
   private v3 = new THREE.Vector3();
 
   /**
@@ -185,6 +392,9 @@ export class Hud {
 
     this.banner.id = 'banner';
     this.root.appendChild(this.banner);
+
+    this.sheet.id = 'e-sheet';
+    this.root.appendChild(this.sheet);
 
     this.gatePrompt.id = 'gateprompt';
     this.root.appendChild(this.gatePrompt);
@@ -428,6 +638,127 @@ export class Hud {
     this.concord.classList.toggle('show', ready >= 2 && live >= 2);
 
     this.hurt.style.opacity = worst < 0.34 ? String(0.35 + (0.34 - worst) * 1.6) : '0';
+  }
+
+  // ------------------------------------------------------------ the sheet
+
+  get sheetOpen() {
+    return this.sheet.classList.contains('show');
+  }
+
+  /** True while a throne is mid-offer. The sheet must not land on top of it. */
+  get offerOpen() {
+    return this.choice.classList.contains('show');
+  }
+
+  closeSheet() {
+    this.sheet.classList.remove('show');
+    this.sheet.innerHTML = '';
+  }
+
+  /**
+   * Everything this shade is carrying, and what it adds up to.
+   *
+   * Built fresh on every open rather than kept in sync: it is read for a few
+   * seconds at a time and a stale build sheet is worse than no build sheet.
+   *
+   * Only what was taken. A roguelike offers three cards and gives you one, so a
+   * list of the two you turned down is a list of things that never happened —
+   * the screen is a record of the shade you built, not of the ones you didn't.
+   */
+  openSheet(p: Player) {
+    const { held, owner } = readBuild(p);
+    const wrap = el('div', 'e-sheet-inner');
+
+    wrap.append(
+      el('div', 'e-sheet-kicker', t('sheet.kicker')),
+      el('div', 'e-sheet-name', p.asc ? p.asc.name : p.def.name),
+      el('div', 'e-sheet-sub', p.asc ? p.asc.title : p.def.title)
+    );
+
+    /*
+     * What your hits carry, first and on its own.
+     *
+     * This is the one thing the game never told anyone: a status is
+     * last-write-wins, so a second card on the same slot silently unseats the
+     * first. Stating the three slots outright means the answer is a fact on
+     * screen rather than something to be inferred from a pile of cards.
+     */
+    const carried = el('div', 'e-sheet-carried');
+    carried.appendChild(el('div', 'e-sheet-head', t('sheet.carried')));
+    for (const s of SLOTS) {
+      const key = owner[s];
+      const from = key && held.find((h) => h.key === key);
+      const row = el('div', 'e-carry' + (from ? '' : ' none'));
+      const status = from ? from.sets[s] : null;
+      row.append(
+        el('span', 'e-carry-slot', t(`sheet.slot.${s}` as Key)),
+        el('span', 'e-carry-what', status ? t(`status.${status}` as Key) : t('sheet.plain'))
+      );
+      if (from) row.style.setProperty('--tint', from.accent);
+      carried.appendChild(row);
+    }
+    wrap.appendChild(carried);
+
+    // --- the cards, in the order they were taken -------------------------
+    if (held.length) {
+      wrap.appendChild(el('div', 'e-sheet-head', t('sheet.held')));
+      const list = el('div', 'e-sheet-list');
+      for (const h of held) {
+        const card = el('div', 'e-sheet-card' + (h.overruled.length ? ' overruled' : ''));
+        card.style.setProperty('--tint', h.accent);
+
+        const mark = h.roundel ? el('i', 'e-sheet-mark', h.numeral) : el('i', 'e-sheet-bar');
+        if (h.roundel) {
+          mark.style.background = h.roundel;
+          if (h.ink) mark.style.color = h.ink;
+        } else {
+          mark.style.background = h.accent;
+        }
+
+        const body = el('div', 'e-sheet-body');
+        const line = el('div', 'e-sheet-line');
+        line.append(el('span', 'e-sheet-kick', h.kicker), el('span', 'e-sheet-title', h.name));
+        // Levels as pips, the same shorthand the offer screen uses for a boon
+        // being stacked, so "taken twice" reads the same in both places.
+        if (h.level > 1) {
+          const pips = el('span', 'e-sheet-pips');
+          for (let i = 0; i < h.level; i++) pips.appendChild(el('i'));
+          line.appendChild(pips);
+        }
+        body.append(line, el('div', 'e-sheet-desc', h.desc));
+
+        /*
+         * The part of this card that is no longer in force. Named, not merely
+         * greyed: "your Attack no longer carries this" is the sentence the
+         * player needed, and a dimmed row alone does not say it.
+         */
+        if (h.overruled.length) {
+          const slots = h.overruled.map((s) => t(`sheet.slot.${s}` as Key)).join(' · ');
+          body.appendChild(el('div', 'e-sheet-dead', t('sheet.overruled', { slots })));
+        }
+
+        card.append(mark, body);
+        list.appendChild(card);
+      }
+      wrap.appendChild(list);
+    }
+
+    // --- what it all comes to --------------------------------------------
+    const sums = totals(p);
+    wrap.appendChild(el('div', 'e-sheet-head', t('sheet.totals')));
+    const grid = el('div', 'e-sheet-totals');
+    for (const [label, value] of sums) {
+      const row = el('div', 'e-total');
+      row.append(el('span', '', label), el('b', '', value));
+      grid.appendChild(row);
+    }
+    wrap.appendChild(grid);
+
+    wrap.appendChild(el('div', 'e-sheet-foot', t('sheet.close')));
+
+    this.sheet.replaceChildren(wrap);
+    this.sheet.classList.add('show');
   }
 
   /** Pass the live boss, or null when there isn't one. */

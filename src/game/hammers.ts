@@ -87,6 +87,9 @@ export const HAMMERS: Hammer[] = [
   }),
 ];
 
+/** Mirrors `boonById`. A run save names hammers by id and has to find them again. */
+export const hammerById = (id: string) => HAMMERS.find((h) => h.id === id);
+
 const SLOT_COLOR: Record<Hammer['slot'], string> = {
   ATTACK: '#ffb04a',
   SPECIAL: '#ff6f9c',

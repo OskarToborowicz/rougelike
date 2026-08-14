@@ -12,6 +12,9 @@ import {
   type ClassId,
 } from "./classes";
 import { defFor, type Ascendancy } from "./ascendancy";
+// Type-only: save.ts describes a Player's choices but never constructs one, and
+// keeping the import erased is what stops the two files from forming a cycle.
+import type { Pick } from "./save";
 
 export const PLAYER_TINTS = [0xff6a3d, 0x4fc3ff, 0x9d6bff, 0x5fe08a];
 
@@ -159,6 +162,13 @@ export class Player implements Actor {
   /** The branch taken halfway down, or null while the run is still generic. */
   asc: Ascendancy | null = null;
   hasCapstone = false;
+  /**
+   * Every choice this shade has made, in order. The BoonSet holds what they add
+   * up to; this holds what they *were*, which is the only form that survives
+   * being written to disk and read back by a differently balanced build. See
+   * game/save.ts.
+   */
+  picks: Pick[] = [];
 
   constructor(
     public id: number,
@@ -188,6 +198,7 @@ export class Player implements Actor {
     if (this.asc) return;
     this.asc = a;
     a.apply(this.boons);
+    this.picks.push(['a', a.id]);
     this.refreshDef();
   }
 
@@ -196,6 +207,7 @@ export class Player implements Actor {
     if (!this.asc || this.hasCapstone) return;
     this.hasCapstone = true;
     this.asc.capstone.apply(this.boons);
+    this.picks.push(['c']);
     this.refreshDef();
   }
 
@@ -203,6 +215,7 @@ export class Player implements Actor {
   renounce() {
     this.asc = null;
     this.hasCapstone = false;
+    this.picks.length = 0;
     this.refreshDef();
   }
 
