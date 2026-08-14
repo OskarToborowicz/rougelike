@@ -1530,6 +1530,51 @@
   color: rgba(230, 223, 208, 0.72);
 }
 
+/*
+ * The forking.
+ *
+ * Same tablet, cut deeper. A branch is the only card in a descent that cannot
+ * be stacked on later, so it wears its own metal on the edge rather than only
+ * on the mason's mark, and the name is set in the display face at full size.
+ */
+.e-card.asc {
+  --branch: var(--e-stone-mid);
+  padding: 30px 32px;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--branch) 55%, transparent),
+    0 1px 0 rgba(255, 253, 246, 0.45) inset,
+    0 -3px 0 rgba(90, 84, 74, 0.3) inset,
+    0 14px 32px rgba(0, 0, 0, 0.66);
+}
+
+.e-card.asc .e-seal {
+  height: 78px;
+  width: 10px;
+}
+
+.e-card.asc .e-card-name {
+  font-size: 1.14em;
+  letter-spacing: 0.06em;
+}
+
+/*
+ * The branch's metal, cut into the stone rather than laid on it. Mixed toward
+ * the ink and not away from it: the samurai's is a near-white steel, and at any
+ * lighter weight its kicker vanishes into the marble it is printed on.
+ */
+.e-card.asc .e-card-kicker {
+  color: color-mix(in srgb, var(--branch) 30%, var(--e-cut));
+}
+
+.e-card.asc:hover,
+.e-card.asc:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--branch),
+    0 1px 0 rgba(255, 253, 246, 0.55) inset,
+    0 -3px 0 rgba(90, 84, 74, 0.3) inset,
+    0 22px 48px rgba(0, 0, 0, 0.78);
+}
+
 .e-offer-foot {
   margin-top: 14px;
   display: flex;

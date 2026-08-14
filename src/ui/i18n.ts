@@ -153,9 +153,13 @@ const EN = {
   // ------------------------------------------------------------- card rounds
   'round.hammer': 'HAMMER',
   'round.empower': 'EMPOWER',
+  'round.ascend': 'THE FORKING',
+  'round.capstone': 'THE OATH KEPT',
   'round.sub.boon': 'a boon for {seat}',
   'round.sub.hammer': 'a weapon upgrade for {seat}',
   'round.sub.pom': 'strengthen a boon of {seat}',
+  'round.sub.ascend': 'what {seat} becomes, for the rest of the descent',
+  'round.sub.capstone': 'the last word of the path {seat} took',
   'round.answersOver': '{god} answers over him',
   'round.spurned': '{pantheon} will not offer again this descent.',
   'round.choosing': '{name} is choosing',
@@ -333,6 +337,54 @@ const EN = {
   'class.mage.title': 'storm-sworn',
   'class.mage.blurb':
     'Slow, heavy orbs that burst on impact. Weakest body, largest hits.',
+
+  // ------------------------------------------------------------ ascendancies
+  'asc.samurai.name': 'SAMURAI',
+  'asc.samurai.title': 'the drawn cut',
+  'asc.samurai.desc':
+    'Strike 28% faster, +12% critical chance and heavier crits. The finisher narrows and lengthens. Thinner in the body: 96 health.',
+  'asc.samurai-iai.name': 'Iaijutsu',
+  'asc.samurai-iai.desc':
+    'Crits hit far harder, your Attack marks foes for doom, and the Special all but skips its wind-up for 42 damage.',
+
+  'asc.barbarian.name': 'BARBARIAN',
+  'asc.barbarian.title': 'the red thirst',
+  'asc.barbarian.desc':
+    '+35% Attack damage, +25% reach, wider sweeps and 6% lifesteal. 135 health, but every swing is 12% slower.',
+  'asc.barbarian-rage.name': 'Bloodrage',
+  'asc.barbarian-rage.desc':
+    'Below half health you deal +60% damage. A further 6% lifesteal to keep you there.',
+
+  'asc.elven.name': 'ELVEN ARCHER',
+  'asc.elven.title': 'the long wind',
+  'asc.elven.desc':
+    'Reload 30% faster and move 16% quicker, +2 Cast ammo, wider volley. Each bolt is lighter for it.',
+  'asc.elven-volley.name': 'Windrider Volley',
+  'asc.elven-volley.desc': 'Your volley fires twice, a beat apart, and fans wider still.',
+
+  'asc.sharpshooter.name': 'SHARPSHOOTER',
+  'asc.sharpshooter.title': 'one bolt, one throat',
+  'asc.sharpshooter.desc':
+    '30 damage a bolt across a longer lane, +45% Attack damage, +10% crit, and it punches through 2 more bodies. The reload is worse.',
+  'asc.sharp-headhunter.name': 'Headhunter',
+  'asc.sharp-headhunter.desc':
+    'Crits hit for far more, +8% critical chance, and your bolt pierces 3 further bodies.',
+
+  'asc.decay.name': 'MAGE OF ROT',
+  'asc.decay.title': 'the slow fuse',
+  'asc.decay.desc':
+    'Attack and Cast both doom what they touch. +30% Cast damage, 7% lifesteal, 86 health. The orb itself hits softer.',
+  'asc.decay-plague.name': 'Plague',
+  'asc.decay-plague.desc':
+    "A dying foe's affliction jumps to whatever stands nearest. A further 5% lifesteal.",
+
+  'asc.elemental.name': 'MAGE OF STORMS',
+  'asc.elemental.title': 'the gathered weather',
+  'asc.elemental.desc':
+    'The nova reaches further for 40 damage and sets the ground alight. +50% Special damage, bursting Cast, +5% crit.',
+  'asc.elemental-cataclysm.name': 'Cataclysm',
+  'asc.elemental-cataclysm.desc':
+    'The nova erupts twice, wider each time, and your Attack now shocks.',
 
   // ----------------------------------------------------------------- hammers
   'hammer.slot.ATTACK': 'ATTACK',
@@ -512,9 +564,13 @@ const PL: Partial<Record<Key, string>> = {
   // ------------------------------------------------------------------ oferta
   'round.hammer': 'MŁOT',
   'round.empower': 'WZMOCNIENIE',
+  'round.ascend': 'ROZDROŻE',
+  'round.capstone': 'PRZYSIĘGA DOPEŁNIONA',
   'round.sub.boon': 'dar dla {seat}',
   'round.sub.hammer': 'ulepszenie broni dla {seat}',
   'round.sub.pom': 'wzmocnij dar gracza {seat}',
+  'round.sub.ascend': 'czym {seat} stanie się do końca zejścia',
+  'round.sub.capstone': 'ostatnie słowo ścieżki, którą obrał {seat}',
   'round.answersOver': '{god} odpowiada ponad nim',
   'round.spurned': '{pantheon} nie złoży już oferty w tym zejściu.',
   'round.choosing': '{name} wybiera',
@@ -689,6 +745,54 @@ const PL: Partial<Record<Key, string>> = {
   'class.mage.title': 'zaprzysiężony burzy',
   'class.mage.blurb':
     'Powolne, ciężkie kule wybuchające przy trafieniu. Najsłabsze ciało, największe ciosy.',
+
+  // ------------------------------------------------------------- ascendancje
+  'asc.samurai.name': 'SAMURAJ',
+  'asc.samurai.title': 'dobyte ostrze',
+  'asc.samurai.desc':
+    'Tniesz o 28% szybciej, +12% szansy na cios krytyczny i cięższe kryty. Finiszer zwęża się i wydłuża. Za to ciało jest cieńsze: 96 zdrowia.',
+  'asc.samurai-iai.name': 'Iaijutsu',
+  'asc.samurai-iai.desc':
+    'Kryty biją znacznie mocniej, Atak naznacza wroga zgubą, a Specjał niemal traci zamach i zadaje 42 obrażenia.',
+
+  'asc.barbarian.name': 'BARBARZYŃCA',
+  'asc.barbarian.title': 'czerwone pragnienie',
+  'asc.barbarian.desc':
+    '+35% obrażeń Ataku, +25% zasięgu, szersze zamachy i 6% kradzieży życia. 135 zdrowia, ale każdy cios jest o 12% wolniejszy.',
+  'asc.barbarian-rage.name': 'Szał Krwi',
+  'asc.barbarian-rage.desc':
+    'Poniżej połowy zdrowia zadajesz +60% obrażeń. Kolejne 6% kradzieży życia, żebyś tam został.',
+
+  'asc.elven.name': 'ELFI ŁUCZNIK',
+  'asc.elven.title': 'długi wiatr',
+  'asc.elven.desc':
+    'Przeładowanie o 30% szybsze, ruch o 16% szybszy, +2 ładunki Czaru, szersza salwa. Każdy bełt jest za to lżejszy.',
+  'asc.elven-volley.name': 'Salwa Wichru',
+  'asc.elven-volley.desc': 'Twoja salwa strzela dwukrotnie, uderzenie po uderzeniu, i rozchodzi się jeszcze szerzej.',
+
+  'asc.sharpshooter.name': 'STRZELEC WYBOROWY',
+  'asc.sharpshooter.title': 'jeden bełt, jedno gardło',
+  'asc.sharpshooter.desc':
+    '30 obrażeń na bełt na dłuższej linii, +45% obrażeń Ataku, +10% krytyka i przebicie 2 ciał więcej. Przeładowanie jest gorsze.',
+  'asc.sharp-headhunter.name': 'Łowca Głów',
+  'asc.sharp-headhunter.desc':
+    'Kryty biją o wiele mocniej, +8% szansy na krytyka, a bełt przebija 3 ciała więcej.',
+
+  'asc.decay.name': 'MAG ROZKŁADU',
+  'asc.decay.title': 'powolny lont',
+  'asc.decay.desc':
+    'Atak i Czar naznaczają zgubą wszystko, czego dotkną. +30% obrażeń Czaru, 7% kradzieży życia, 86 zdrowia. Sama kula uderza słabiej.',
+  'asc.decay-plague.name': 'Zaraza',
+  'asc.decay-plague.desc':
+    'Przypadłość konającego wroga przeskakuje na tego, kto stoi najbliżej. Kolejne 5% kradzieży życia.',
+
+  'asc.elemental.name': 'MAG ŻYWIOŁÓW',
+  'asc.elemental.title': 'zebrana pogoda',
+  'asc.elemental.desc':
+    'Nowa sięga dalej, zadaje 40 obrażeń i podpala ziemię. +50% obrażeń Specjału, wybuchowy Czar, +5% krytyka.',
+  'asc.elemental-cataclysm.name': 'Kataklizm',
+  'asc.elemental-cataclysm.desc':
+    'Nowa wybucha dwa razy, za każdym razem szerzej, a Twój Atak razi teraz prądem.',
 
   // ------------------------------------------------------------------- młoty
   'hammer.slot.ATTACK': 'ATAK',

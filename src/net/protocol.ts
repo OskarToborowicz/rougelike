@@ -36,15 +36,21 @@ export function decodeFrame(w: WireFrame): Frame {
 
 /**
  * [id, seat, x, z, facing, hp, maxHp, stateIdx, dead, castAmmo, callGauge,
- *  revive, iframes, classIdx, usingSpecial, moveSpeed]
+ *  revive, iframes, classIdx, usingSpecial, moveSpeed, ascIdx]
  *
  * `moveSpeed` is the *effective* top speed after boons. The guest predicts its
  * own movement and has no idea what boons the host applied, so sending the
  * derived number keeps prediction and simulation on the same footing.
+ *
+ * `ascIdx` indexes ASCENDANCY_ORDER, or -1 before the fork. It travels because
+ * a branch changes the colour a shade's bolts and trails are drawn in, and the
+ * guest draws those from its own copy. The capstone deliberately does not: it
+ * moves damage and timing, both of which are resolved host-side, and nothing on
+ * a guest's screen would look any different for knowing about it.
  */
 export type WirePlayer = [
   number, number, number, number, number, number, number, number,
-  number, number, number, number, number, number, number, number
+  number, number, number, number, number, number, number, number, number
 ];
 
 /** [id, kindIdx, x, z, facing, hp, maxHp, stateIdx, dead, enraged, flash, statusBits] */

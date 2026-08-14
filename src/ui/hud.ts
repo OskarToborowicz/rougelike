@@ -7,7 +7,7 @@ import { ROOMS, type RoomKind } from '../game/rewards';
 import { PANTHEONS, pantheonName, roundel } from '../game/pantheons';
 import type { ClassId } from '../game/classes';
 import { onLanguageChange, roman, t } from './i18n';
-import { godArt, shadeArt } from './art';
+import { ascArt, godArt, shadeArt } from './art';
 
 const el = (tag: string, cls?: string, text?: string) => {
   const n = document.createElement(tag);
@@ -48,6 +48,11 @@ export interface Card {
   accent: string;
   /** Drawn in the rival's own colour rather than the screen's amber. */
   rival?: boolean;
+  /**
+   * A fork in the class rather than another card on the pile. Drawn heavier,
+   * because it is the one pick in a run that cannot be added to later.
+   */
+  branch?: boolean;
   /** Levels held, and levels on the track, for a boon being stacked. */
   pips?: number;
   pipsOf?: number;
@@ -66,8 +71,10 @@ export interface OfferView {
   roundel?: string;
   ink?: string;
   throne?: string;
-  /** God id, for the plate art. */
+  /** God id, or ascendancy id, for the plate art. */
   art?: string;
+  /** Which roster `art` names. Gods are the default because they came first. */
+  artKind?: 'god' | 'asc';
 }
 
 interface SeatUi {
@@ -481,8 +488,11 @@ export class Hud {
 
       // --- the god ------------------------------------------------------
       const plate = el('div', 'e-offer-god');
+      const sigil = (view.title[0] ?? '?').toUpperCase();
       const art = view.art
-        ? godArt(view.art, (view.title[0] ?? '?').toUpperCase())
+        ? view.artKind === 'asc'
+          ? ascArt(view.art, sigil)
+          : godArt(view.art, sigil)
         : el('div', 'e-art missing');
       art.style.setProperty('--tint', view.accent);
       plate.append(art, el('div', 'e-scrim'));
@@ -517,10 +527,14 @@ export class Hud {
       };
 
       cards.forEach((card, i) => {
-        const c = el('button', 'e-card' + (card.rival ? ' rival' : ''));
+        const c = el(
+          'button',
+          'e-card' + (card.rival ? ' rival' : '') + (card.branch ? ' asc' : ''),
+        );
         // The interrupting throne's own metal drives the whole card, not just
         // the seal — a rival from netjer must not arrive wearing the legion's red.
         if (card.rival) c.style.setProperty('--rival', card.accent);
+        if (card.branch) c.style.setProperty('--branch', card.accent);
         const row = el('div', 'e-card-row');
 
         const seal = el('span', 'e-seal');

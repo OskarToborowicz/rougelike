@@ -6,6 +6,7 @@ import {
   BOSS_PATTERNS,
   Enemy,
   STATUS_COLOR,
+  STATUS_KINDS,
   type BossPattern,
   type EnemyKind,
   type StatusKind,
@@ -346,7 +347,9 @@ export class World {
       damage: a.dmg * p.boons.attackMul,
       team: 'player',
       life: 0.85,
-      pierce: 1,
+      // The sharpshooter's whole argument for a slower reload: one bolt, more
+      // bodies. See ascendancy.ts.
+      pierce: 1 + p.boons.attackPierce,
       hit: new Set(),
       color: p.def.accent,
       trail: '#9ee06a',
@@ -1233,7 +1236,14 @@ export class World {
       b && b.perDownedAlly > 0
         ? 1 + b.perDownedAlly * this.players.filter((x) => x !== source && x.dead).length
         : 1;
-    const final = Math.round(amount * fallen * (crit ? b!.critMul : 1));
+    // Bloodrage. Read live off current health for the same reason Worth More
+    // Fallen is: the barbarian's payoff has to swing with the fight, and a
+    // banked figure would let it be earned once and kept while safe.
+    const rage =
+      b && b.frenzy > 0 && source && !source.dead && source.hp < source.maxHp * 0.5
+        ? 1 + b.frenzy
+        : 1;
+    const final = Math.round(amount * fallen * rage * (crit ? b!.critMul : 1));
     e.hurt(final);
     e.vel.x += nx * push;
     e.vel.z += nz * push;
@@ -1273,6 +1283,7 @@ export class World {
     }
 
     if (e.dead) {
+      if (b?.contagion && source) this.spread(e, final, source);
       // Obols drop from the kill itself, so the payout tracks what you actually
       // fought rather than how far you happened to walk.
       this.onKill?.(e);
@@ -1388,6 +1399,37 @@ export class World {
       '#ff8a3c',
       0.8
     );
+  }
+
+  /**
+   * Plague. Whatever was rotting the body that just fell jumps to the nearest
+   * thing still standing.
+   *
+   * Only one neighbour, and only one that is not already carrying it — the
+   * decay mage's capstone is meant to keep a pack dying in sequence, not to
+   * blanket the room from a single kill.
+   */
+  private spread(from: Enemy, hit: number, source: Player) {
+    const carried = STATUS_KINDS.filter((k) => from.status[k] > 0);
+    if (!carried.length) return;
+
+    for (const status of carried) {
+      const near = this.enemies
+        .filter((o) => !o.dead && o !== from && o.status[status] <= 0 && dist2(o.pos, from.pos) < 25)
+        .sort((a, c) => dist2(a.pos, from.pos) - dist2(c.pos, from.pos))[0];
+      if (!near) continue;
+      // Half the blow that carried it, so a chain fades instead of compounding.
+      this.afflict(near, status, hit * 0.5, source);
+      this.fx.slash(
+        (from.pos.x + near.pos.x) / 2,
+        (from.pos.z + near.pos.z) / 2,
+        Math.atan2(near.pos.x - from.pos.x, near.pos.z - from.pos.z),
+        0.4,
+        Math.hypot(near.pos.x - from.pos.x, near.pos.z - from.pos.z) / 2,
+        0x7fc98a,
+        0.25,
+      );
+    }
   }
 
   private afflict(e: Enemy, status: StatusKind, hit: number, source: Player) {

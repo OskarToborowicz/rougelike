@@ -82,5 +82,9 @@ export const shadeArt = (cls: ClassId, sigil: string, tint?: string) =>
 export const godArt = (god: string, sigil: string) =>
   artSlot(`${ART}/god-${god}.jpg`, { sigil });
 
+/** The branch's plate on the forking screen. Same slot, different roster. */
+export const ascArt = (asc: string, sigil: string) =>
+  artSlot(`${ART}/asc-${asc}.jpg`, { sigil });
+
 /** Backdrop for a throne, if one is ever wanted. Unused by the three screens. */
 export const throneArt = (p: PantheonId) => artSlot(`${ART}/throne-${p}.jpg`);

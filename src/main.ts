@@ -46,6 +46,13 @@ import {
   recordRun,
   type MetaState,
 } from "./game/meta";
+import {
+  ascendanciesOf,
+  ASCEND_DEPTH,
+  CAPSTONE_DEPTH,
+  type Ascendancy,
+  type Capstone,
+} from "./game/ascendancy";
 
 const host = document.getElementById("app")!;
 const stage = new Stage(host);
@@ -76,19 +83,24 @@ const hideGates = () => gates.forEach((g) => g.hide());
 /**
  * Seat labels. The class matters more than the shade's name once four people are
  * on screen — you need to know at a glance whose health bar is the fragile mage.
+ * Once a branch is sworn to, that is what the plate reads instead: the whole
+ * point of ascending is that the shade is no longer just its class.
  */
-const seatLabel = (seat: number, cls: ClassId) =>
-  t("hud.seat", { n: seat + 1, cls: CLASSES[cls].name });
+const seatLabel = (seat: number, cls: ClassId, asc: Ascendancy | null = null) =>
+  t("hud.seat", { n: seat + 1, cls: asc ? asc.name : CLASSES[cls].name });
 
 // Seat titles are written once when the seat is created, so switching language
 // mid-run has to go back and re-title them.
 onLanguageChange(() => {
   const seated = mode === "guest" ? remote.playerList : world.players;
-  for (const p of seated) hud.setSeatName(p.seat, seatLabel(p.seat, p.cls));
+  for (const p of seated) hud.setSeatName(p.seat, seatLabel(p.seat, p.cls, p.asc));
 });
 
 /** Which network id owns which seat. Seat 0 is always the local host player. */
 const seatOwner = new Map<number, number>();
+
+/** Guest-side: seats whose plate has already been re-titled for a branch. */
+const guestAscended = new Set<number>();
 
 let mode: "solo" | "host" | "guest" = "solo";
 let paused = true;
@@ -128,6 +140,7 @@ const net = new Net({
       // The host owned the simulation, so there is nothing left to play.
       running = false;
       remote.clear();
+      guestAscended.clear();
       hud.reset();
       boot();
       menu.setStatus(t("net.lostHost"));
@@ -402,7 +415,7 @@ const runBoonRound = (pantheon: PantheonId, god: string) => {
     view: (p) => ({
       title: godName(god),
       accent: PANTHEONS[pantheon].css,
-      subtitle: t("round.sub.boon", { seat: seatLabel(p.seat, p.cls) }),
+      subtitle: t("round.sub.boon", { seat: seatLabel(p.seat, p.cls, p.asc) }),
       epithet: godEpithet(god),
       quote: godQuote(god),
       numeral: PANTHEONS[pantheon].numeral,
@@ -449,7 +462,7 @@ const runHammerRound = () =>
     view: (p) => ({
       title: t("round.hammer"),
       accent: "#ffb04a",
-      subtitle: t("round.sub.hammer", { seat: seatLabel(p.seat, p.cls) }),
+      subtitle: t("round.sub.hammer", { seat: seatLabel(p.seat, p.cls, p.asc) }),
     }),
     choices: (p) => offerHammers(p.boons, p.cls, 3),
     card: (_p, h) => ({
@@ -472,7 +485,7 @@ const runPomRound = () =>
     view: (p) => ({
       title: t("round.empower"),
       accent: "#d6a6ff",
-      subtitle: t("round.sub.pom", { seat: seatLabel(p.seat, p.cls) }),
+      subtitle: t("round.sub.pom", { seat: seatLabel(p.seat, p.cls, p.asc) }),
     }),
     choices: (p) => shuffle(p.boons.taken.slice()).slice(0, 3),
     card: (p, b) => ({
@@ -486,6 +499,62 @@ const runPomRound = () =>
     }),
     apply: (p, b) => p.boons.upgrade(b),
     ring: 0xd6a6ff,
+  });
+
+/**
+ * The forking.
+ *
+ * One chamber past the first guardian, the class splits. Unlike every other
+ * round this one is not a build decision that stacks on the last — it is the
+ * only choice in the run that cannot be added to later, which is why it gets its
+ * own moment instead of riding a door.
+ */
+const runAscendRound = () =>
+  runCardRound<Ascendancy>({
+    view: (p) => ({
+      title: t("round.ascend"),
+      accent: "#e8d6a8",
+      subtitle: t("round.sub.ascend", { seat: seatLabel(p.seat, p.cls, p.asc) }),
+    }),
+    // An empty list skips the seat entirely, which is what makes a second call
+    // — or a guest who joined after the fork — harmless.
+    choices: (p) => (p.asc ? [] : ascendanciesOf(p.cls)),
+    card: (_p, a) => ({
+      id: a.id,
+      name: a.name,
+      desc: a.desc,
+      kicker: a.title,
+      accent: a.css,
+      branch: true,
+    }),
+    apply: (p, a) => {
+      p.ascend(a);
+      hud.setSeatName(p.seat, seatLabel(p.seat, p.cls, p.asc));
+    },
+    ring: 0xe8d6a8,
+  });
+
+/** The branch's last word. One card, because this is a rite and not a choice. */
+const runCapstoneRound = () =>
+  runCardRound<Capstone>({
+    view: (p) => ({
+      title: t("round.capstone"),
+      accent: p.asc?.css ?? "#e8d6a8",
+      subtitle: t("round.sub.capstone", { seat: seatLabel(p.seat, p.cls, p.asc) }),
+      art: p.asc?.id,
+      artKind: "asc",
+    }),
+    choices: (p) => (p.asc && !p.hasCapstone ? [p.asc.capstone] : []),
+    card: (p, c) => ({
+      id: c.id,
+      name: c.name,
+      desc: c.desc,
+      kicker: p.asc?.title ?? "",
+      accent: p.asc?.css ?? "#e8d6a8",
+      branch: true,
+    }),
+    apply: (p) => p.takeCapstone(),
+    ring: 0xe8d6a8,
   });
 
 // Dev-only handle. Combat and reward states that take minutes to reach by
@@ -506,6 +575,8 @@ if (import.meta.env.DEV) {
     runBoonRound,
     runHammerRound,
     runPomRound,
+    runAscendRound,
+    runCapstoneRound,
     seatOwner,
     get openOffers() {
       return openOffers;
@@ -601,6 +672,12 @@ async function onChamberCleared() {
   paused = true;
 
   if (reward) await grantReward(reward);
+
+  // After the door's payout, so the throne that was speaking gets to finish
+  // before the run asks what this shade is going to become. Both depths sit one
+  // chamber past a guardian — see ascendancy.ts.
+  if (director.depth === ASCEND_DEPTH) await runAscendRound();
+  else if (director.depth === CAPSTONE_DEPTH) await runCapstoneRound();
 
   const wasBiome = director.biome.id;
   director.nextChamber();
@@ -708,6 +785,10 @@ async function onWipe() {
     // Rebuild from that seat's own upgrades — in co-op the host must not hand
     // its own purchases to a guest's shade, or take theirs away.
     p.boons = applyMeta(new BoonSet(), seatMeta.get(p.seat) ?? meta);
+    // The branch goes with the build. `renounce` puts `def` back to the bare
+    // class, which is what the line below already assumes.
+    p.renounce();
+    hud.setSeatName(p.seat, seatLabel(p.seat, p.cls));
     p.maxHp = CLASSES[p.cls].maxHp + p.boons.metaMaxHp;
     p.hp = p.maxHp;
     p.dead = false;
@@ -815,6 +896,7 @@ async function abandonRun() {
   for (const p of world.players) stage.root.remove(p.mesh);
   world.players.length = 0;
   remote.clear();
+  guestAscended.clear();
   audio.stopMusic();
   hud.reset();
   seatOwner.clear();
@@ -856,7 +938,13 @@ function loop(now: number) {
     // Seats appear on a guest as the host's roster arrives, not up front.
     for (const p of remote.playerList) {
       if (!hud.hasSeat(p.seat)) {
-        hud.addSeat(p.seat, seatLabel(p.seat, p.cls), p.cls);
+        hud.addSeat(p.seat, seatLabel(p.seat, p.cls, p.asc), p.cls);
+        if (p.asc) guestAscended.add(p.seat);
+      } else if (p.asc && !guestAscended.has(p.seat)) {
+        // A plate is titled once, when its seat appears. A branch sworn to later
+        // in the descent has to come back and rewrite it.
+        guestAscended.add(p.seat);
+        hud.setSeatName(p.seat, seatLabel(p.seat, p.cls, p.asc));
       }
     }
 

@@ -62,6 +62,17 @@ export class BoonSet {
   /** Names of the hammers taken, for the HUD. */
   hammers: string[] = [];
 
+  // --- what an ascendancy grants ----------------------------------------
+  // Same argument as the meta block below: a branch changes numbers, and those
+  // numbers stack here with everything else rather than in a parallel system.
+  // Each of these has exactly one place that reads it, all in World.
+  /** Extra damage while below half health. Zero means no branch granted it. */
+  frenzy = 0;
+  /** Extra bodies the *basic* bolt punches through, on top of its own two. */
+  attackPierce = 0;
+  /** A dying foe's status jumps to whatever is standing nearest. */
+  contagion = false;
+
   // --- permanent upgrades, bought between runs --------------------------
   // These live here rather than in a parallel stat system so a run's modifiers
   // stack in exactly one place. See meta.ts.

@@ -49,6 +49,20 @@ initial.
 
 Size: **760 × 900** or larger at the same 0.84:1 ratio.
 
+## Ascendancy plates
+
+Same slot as the god plates, same composition rules — they fill the left half of
+the offer screen when a class forks, and again when its capstone is granted. Two
+per class; any you skip fall back to the empty state.
+
+| Class | Files |
+| --- | --- |
+| Warrior | `asc-samurai.jpg`, `asc-barbarian.jpg` |
+| Marksman | `asc-elven.jpg`, `asc-sharpshooter.jpg` |
+| Mage | `asc-decay.jpg`, `asc-elemental.jpg` |
+
+Size: **760 × 900** or larger at the same 0.84:1 ratio.
+
 ## Throne backdrops (optional)
 
 `throne-<id>.jpg`, ids as above (`throne-choir.jpg` and so on). Wired up in

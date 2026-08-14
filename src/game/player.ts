@@ -11,6 +11,7 @@ import {
   type ClassDef,
   type ClassId,
 } from "./classes";
+import { defFor, type Ascendancy } from "./ascendancy";
 
 export const PLAYER_TINTS = [0xff6a3d, 0x4fc3ff, 0x9d6bff, 0x5fe08a];
 
@@ -149,7 +150,15 @@ export class Player implements Actor {
 
   /** True while the special is running, so the swing resolver knows which shape to use. */
   usingSpecial = false;
-  readonly def: ClassDef;
+  /**
+   * The shape this shade fights with. Not readonly: an ascendancy replaces it
+   * mid-run, and `currentAttack` reads it live so the new weapon lands on the
+   * very next swing. See ascendancy.ts.
+   */
+  def: ClassDef;
+  /** The branch taken halfway down, or null while the run is still generic. */
+  asc: Ascendancy | null = null;
+  hasCapstone = false;
 
   constructor(
     public id: number,
@@ -165,6 +174,51 @@ export class Player implements Actor {
     this.callGauge = Math.min(1, boons.metaStartCall);
     this.speed = this.def.speed;
     this.build(tint);
+  }
+
+  /**
+   * Swear to a branch.
+   *
+   * Two halves, on purpose: the numbers go into the BoonSet, where the whole run
+   * already stacks, and only the *shape* of the weapon replaces `def`. Nothing
+   * here touches the rig — `attack` and `weapon` are the two fields an
+   * ascendancy may not move, because the body was built around them once.
+   */
+  ascend(a: Ascendancy) {
+    if (this.asc) return;
+    this.asc = a;
+    a.apply(this.boons);
+    this.refreshDef();
+  }
+
+  /** The branch's last word. Only ever granted once, and only after `ascend`. */
+  takeCapstone() {
+    if (!this.asc || this.hasCapstone) return;
+    this.hasCapstone = true;
+    this.asc.capstone.apply(this.boons);
+    this.refreshDef();
+  }
+
+  /** Back to the bare class. The descent restarted; the oath did not survive it. */
+  renounce() {
+    this.asc = null;
+    this.hasCapstone = false;
+    this.refreshDef();
+  }
+
+  /**
+   * Rebuild `def` from the class plus whatever has been sworn to, then re-derive
+   * the two stats the constructor copies out of it. Health is granted rather
+   * than restored — an ascendancy that raises the ceiling should hand you the
+   * difference, but must not quietly heal a shade that walked in hurt.
+   */
+  private refreshDef() {
+    this.def = defFor(this.cls, this.asc, this.hasCapstone);
+    const ceiling = this.def.maxHp + this.boons.metaMaxHp;
+    const gained = Math.max(0, ceiling - this.maxHp);
+    this.maxHp = ceiling;
+    this.hp = clamp(this.hp + gained, 1, this.maxHp);
+    this.speed = this.def.speed;
   }
 
   /**

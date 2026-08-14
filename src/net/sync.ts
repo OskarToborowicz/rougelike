@@ -4,6 +4,7 @@ import { Player, PLAYER_TINTS, type PlayerState } from "../game/player";
 import { Enemy, STATUS_KINDS, type EnemyKind, type EnemyState } from "../game/enemy";
 import { BoonSet } from "../game/boons";
 import { CLASS_ORDER } from "../game/classes";
+import { ASCENDANCIES, ASCENDANCY_ORDER } from "../game/ascendancy";
 import type { FxBus } from "../render/fxbus";
 import { clamp } from "../core/math";
 import { stepMovement } from "../game/locomotion";
@@ -67,6 +68,7 @@ export function buildSnapshot(
     Math.max(0, CLASS_ORDER.indexOf(p.cls)),
     p.usingSpecial ? 1 : 0,
     r(p.speed * p.boons.moveMul),
+    p.asc ? ASCENDANCY_ORDER.indexOf(p.asc.id) : -1,
   ]);
 
   const enemies: WireEnemy[] = world.enemies.map((e) => [
@@ -200,6 +202,7 @@ export class RemoteView {
         clsIdx,
         spec,
         moveSpeed,
+        ascIdx,
       ] = w;
       seenP.add(id);
       let p = this.players.get(id);
@@ -218,6 +221,13 @@ export class RemoteView {
         this.players.set(id, p);
         this.scene.add(p.mesh);
       }
+      // The branch is host-authoritative like everything else, but it still has
+      // to land on the guest's own copy: `def` carries the accent this client
+      // draws that shade's bolts and trails in. `ascend` guards against a second
+      // call, so re-applying it every snapshot costs nothing.
+      const asc = ascIdx >= 0 ? ASCENDANCIES[ASCENDANCY_ORDER[ascIdx]] : null;
+      if (asc && !p.asc) p.ascend(asc);
+
       p.usingSpecial = !!spec;
       poses.set(id, { x, z });
       // The local shade's facing is predicted, not replicated — it follows the
