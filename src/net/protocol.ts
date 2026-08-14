@@ -38,9 +38,12 @@ export function decodeFrame(w: WireFrame): Frame {
  * [id, seat, x, z, facing, hp, maxHp, stateIdx, dead, castAmmo, callGauge,
  *  revive, iframes, classIdx, usingSpecial, moveSpeed]
  *
- * `moveSpeed` is the *effective* top speed after boons. The guest predicts its
- * own movement and has no idea what boons the host applied, so sending the
- * derived number keeps prediction and simulation on the same footing.
+ * `moveSpeed` is the *effective* top speed after boons — speed times moveMul,
+ * already multiplied. A guest predicts its own movement from it and must pass a
+ * multiplier of 1 alongside it, never its own `boons.moveMul`, or the figure is
+ * squared and the shade runs ahead of the body the host is simulating. The
+ * guest's BoonSet holds the real multiplier now that builds travel, which is
+ * exactly what makes this easy to get wrong.
  *
  * The build does not ride here. It is a list of ids, not a number, and it
  * changes a few times a descent rather than thirty times a second — see

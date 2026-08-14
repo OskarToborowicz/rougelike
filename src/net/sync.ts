@@ -352,7 +352,11 @@ export class RemoteView {
       stagger: p.stagger,
     };
     for (const step of this.pending) {
-      stepMovement(replayed, step.frame, step.dt, p.boons.moveMul);
+      // 1, never `p.boons.moveMul`. `p.speed` is the host's *effective* figure,
+      // which already has the multiplier folded in — see WirePlayer. Applying it
+      // again squares it, and the shade predicts itself running 34% ahead of the
+      // body the host is simulating. That is what rubberbanding is made of.
+      stepMovement(replayed, step.frame, step.dt, 1);
     }
 
     // A small disagreement is smoothed away over the next few frames; a large
@@ -380,7 +384,9 @@ export class RemoteView {
 
     // Only a living shade with input drives itself forward.
     if (!p.dead && frame) {
-      stepMovement(p, frame, dt, p.boons.moveMul);
+      // 1 for the same reason as in `reconcile` above: `p.speed` already carries
+      // the multiplier. These two must agree exactly or every frame disagrees.
+      stepMovement(p, frame, dt, 1);
       p.facing = Math.atan2(frame.aimX, frame.aimY);
       if (seq !== null) this.pending.push({ seq, frame, dt });
       // Roughly two seconds of unacked input; past that the link is gone.
