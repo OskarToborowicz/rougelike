@@ -29,7 +29,7 @@ export interface ClassDef {
   /** Colour of this class's weapon trails and projectiles. */
   accent: number;
   castDamage: number;
-  weapon: "sword" | "crossbow" | "staff";
+  weapon: "sword" | "bow" | "book";
 }
 
 /**
@@ -114,9 +114,9 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     attack: "bolt",
     maxHp: 82,
     speed: 9.1,
-    // A crossbow trades the bow's rhythm for weight: the shot leaves almost
-    // instantly, then the long recover *is* the reload. Damage per bolt is up so
-    // the class still trades evenly at range despite firing less often.
+    // The shot leaves almost instantly and the long recover *is* the next arrow
+    // being drawn. Damage per shot is up to pay for it, so the class still
+    // trades evenly at range despite firing less often than the warrior swings.
     combo: [
       {
         wind: 0.04,
@@ -140,7 +140,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     },
     accent: 0x9ee06a,
     castDamage: 22,
-    weapon: "crossbow",
+    weapon: "bow",
   },
 
   mage: {
@@ -180,7 +180,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     },
     accent: 0xb07cff,
     castDamage: 34,
-    weapon: "staff",
+    weapon: "book",
   },
 };
 

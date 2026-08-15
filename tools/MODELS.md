@@ -1,7 +1,15 @@
 # Model pipeline
 
-Every `.glb` in `public/models` goes through `prep_model.py` before it ships.
-This file is why, and what the numbers mean.
+There are two ways a `.glb` gets into `public/models`, and the difference is
+where the model came from:
+
+- **Generated** — a sculpt out of ComfyUI, cleaned up by `prep_model.py`. Every
+  enemy and every prop takes this route. Most of this file is about it.
+- **Authored** — built from primitives by `build_shades.py`, which is how the
+  three player bodies and their weapons are made. See *Authored shades* below.
+
+Both end in the same place: `npm run models` measures whatever is in the
+directory and does not care which route a file took.
 
 ## From ComfyUI to the arena
 
@@ -147,6 +155,46 @@ animation and tint code looks up by string.
 Multi-part rigs are never joined. `warrior.glb` is seven named nodes (`LegL`,
 `ArmR`, `Pelvis`, …) that `Player.animateBody()` drives **by name**; joining
 them would silently break every lookup. The budget is split across the parts.
+
+## Authored shades
+
+`build_shades.py` builds `archer.glb`, `mage.glb` and their two weapons out of
+lofted cross-sections, and `warrior.glb` was made the same way by hand before
+it existed. Run it inside Blender:
+
+```python
+exec(open(r"tools/build_shades.py", encoding="utf-8").read())
+build_all(r"public/models", r"some/scratch/dir")
+```
+
+Three reasons a player body is not generated like everything else:
+
+**The rig is named nodes, and the pivot is the joint.** `animateBody` rotates
+`Pelvis` / `Torso` / `Head` / `ArmL` / `ArmR` / `LegL` / `LegR` by name — there
+is no skinning. `prep_model.py --split humanoid` can carve those out of a single
+sculpt by measuring where the geometry sits, but the shoulder then turns around
+wherever the plane landed. Building the parts puts the origin *on* the joint.
+The sorceress has five of them: a robe hem cut in two so a leg can swing through
+it walks like a pair of scissors.
+
+**Materials carry meaning.** These export with `export_materials="EXPORT"` and
+`loadAuthoredRig` repaints only the one called `Crest` with the seat colour, so
+the palette in the file is what you see: near-black leather and cloth, aged
+gold on the few pieces meant to read as reliquary, and one cloth garment per
+shade — the archer's shoulder mantle, the sorceress' — carrying the player's
+colour. Everything below it stays black on purpose. A shade painted seat-colour
+from collar to floor is legible from orbit and is not the art direction.
+
+**Silhouette is the whole budget.** The game camera is a 42° lens at 52° up and
+seventeen units out, which leaves a 2.1-unit body about 115 pixels tall. Judge
+these with `stage("archer", path)`, which puts the weapon in hand, the seat
+colour on the crest, and the camera exactly there. Anything that only reads in
+the close-up shot is not paying for itself.
+
+Both bodies land around 3.8k and 3.6k triangles against the 8k player budget,
+so there is room — but note the weapons are authored **in game units** and never
+go through `fitToHeight`, because `player.ts` parents them at `(0.55, 0, 0)`
+under the swing pivot. Their size in the file is their size on screen.
 
 ## Keeping the raws
 

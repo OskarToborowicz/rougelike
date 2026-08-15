@@ -29,6 +29,7 @@ const ROLE = {
   // common one it would otherwise share with them.
   'tartarus_hoplit.glb': { role: 'elite' },
   'mage.glb': { role: 'player' },
+  'archer.glb': { role: 'player' },
   'pillar.glb': { role: 'prop' },
   'portal.glb': { role: 'prop' },
   'gate.glb': { role: 'prop' },
@@ -42,8 +43,12 @@ const ROLE = {
   'warrior.glb': { role: 'player', pivot: 'authored' },
 
   // The pivot is the grip: player.ts parents it at (0.55, 0, 0) under the swing
-  // pivot, and it never goes through fitToHeight.
+  // pivot, and it never goes through fitToHeight. Same for the bow, pivoted on
+  // its riser, and the grimoire, pivoted on its spine — both authored in game
+  // units by tools/build_shades.py, so their size here is their size on screen.
   'warrior_sword.glb': { role: 'player', pivot: 'authored' },
+  'archer_bow.glb': { role: 'player', pivot: 'authored' },
+  'mage_book.glb': { role: 'player', pivot: 'authored' },
 };
 
 /*

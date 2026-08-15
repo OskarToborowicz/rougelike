@@ -349,14 +349,14 @@ export class World {
   }
 
   /**
-   * The marksman's crossbow bolt: flatter and faster than an arrow, and it
-   * pierces two bodies. Reach crosses the arena, so the class's whole game is
-   * holding a clean line long enough to be worth the reload.
+   * The marksman's arrow: flat, fast, and it pierces two bodies. Reach crosses
+   * the arena, so the class's whole game is holding a clean line long enough to
+   * be worth the draw. `bolt` throughout is the projectile *kind* the renderer
+   * and the audio bus key off, not a statement about the weapon.
    */
   private fireBolt(p: Player, a: AttackShape, spread: number) {
     const angle = p.facing + spread;
     const speed = 46;
-    // Short and stubby next to an arrow — a bolt, thrown hard.
     const mesh = makeBolt(p.def.accent, 0.14, '#c8ff9a', 0xdcffc0);
     mesh.scale.set(0.8, 0.8, 2.4);
     mesh.rotation.y = angle;

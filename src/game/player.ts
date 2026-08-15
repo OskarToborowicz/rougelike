@@ -58,10 +58,11 @@ type RigJoint = keyof typeof RIG_JOINTS;
  * primitive rig, which is a finished character and not a placeholder.
  *
  * `tint` is how the seat colour gets onto the model, and it depends on what the
- * file brings with it. The warrior was built with named materials, so only its
- * plume takes the colour and the armour keeps its own. A generated sculpt has
- * one nameless material and no UVs — nothing to pick out — so the whole body
- * wears it, which at this camera distance is what tells four players apart.
+ * file brings with it. All three were built with named materials, so only the
+ * piece called `Crest` takes the colour — the warrior's plume, and the cloak on
+ * the other two — while the leather, hair and gold keep what they were painted.
+ * `whole` remains for a bare sculpt, which arrives with one nameless material
+ * and nothing to pick out.
  */
 const AUTHORED_RIGS: Partial<
   Record<ClassId, { body: string; weapon?: string; height: number; tint: "crest" | "whole" }>
@@ -72,11 +73,28 @@ const AUTHORED_RIGS: Partial<
     height: 2.1,
     tint: "crest",
   },
-  mage: { body: "/models/mage.glb", height: 2.1, tint: "whole" },
+  archer: {
+    body: "/models/archer.glb",
+    weapon: "/models/archer_bow.glb",
+    height: 2.1,
+    tint: "crest",
+  },
+  mage: {
+    body: "/models/mage.glb",
+    weapon: "/models/mage_book.glb",
+    height: 2.1,
+    tint: "crest",
+  },
 };
 
 /** The sword's resting guard angle, and the pose every swing returns to. */
 const REST_SWORD_Y = -0.5;
+/**
+ * The bow's, which is not the same number: a bow rests turned across the body
+ * so its curve reads from the front, where a crossbow sat levelled down the aim
+ * line. Point it straight ahead and it is a vertical stick.
+ */
+const REST_BOW_Y = -0.2;
 
 // Easing shared by the weapon rig. Attack animation is all about *where* the
 // time goes: a linear sweep reads as a machine, and the eye reads acceleration
@@ -492,8 +510,8 @@ export class Player implements Actor {
     if (any) this.rig = found;
 
     // A class with no weapon file keeps the procedural one buildWeapon made —
-    // it is already parented to weaponPivot and already animates, so the mage's
-    // staff swings exactly as it did before its body arrived.
+    // it is already parented to weaponPivot and already animates, so a weapon
+    // swings exactly as it did before its body arrived.
     if (!weaponSrc) return;
 
     // The blade rides the same offset the primitive one did, so every pose in
@@ -506,6 +524,10 @@ export class Player implements Actor {
     });
     addOutline(held, 0.03);
     for (const child of [...this.weaponPivot.children]) {
+      // The mage's focus light is not part of the placeholder — it is what
+      // keeps her lit in a dark room, and it belongs to the class rather than
+      // to whichever mesh happens to be carrying it. Everything else goes.
+      if ((child as THREE.Light).isLight) continue;
       this.weaponPivot.remove(child);
       const m = child as THREE.Mesh;
       if (m.isMesh && !m.userData.sharedGeometry) m.geometry.dispose();
@@ -515,7 +537,7 @@ export class Player implements Actor {
 
   /**
    * The weapon is the class read. At this camera distance the bodies are near
-   * identical, so sword / bow / staff has to carry the whole silhouette
+   * identical, so sword / bow / book has to carry the whole silhouette
    * difference — and each one rests at a different angle so even an idle player
    * is recognisable.
    */
@@ -556,73 +578,77 @@ export class Player implements Actor {
       return;
     }
 
-    if (this.def.weapon === "crossbow") {
-      // Crossbow: a stock pointing down the aim line with a short steel prod
-      // across it. The hard T is what separates it from the sword at this
-      // camera distance — a bow's curve reads round, this reads square.
+    if (this.def.weapon === "bow") {
+      // Bow held upright with the limbs curving out along the aim line and the
+      // string on the near side, matching archer_bow.glb — this is what shows
+      // for the frames before that file lands, and a shape change on arrival
+      // would read as a glitch.
       const group = new THREE.Group();
-      const stock = new THREE.Mesh(
-        new THREE.BoxGeometry(0.13, 0.11, 0.95),
+      const grip = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.05, 0.34, 6),
         wood,
       );
-      stock.position.set(0.5, 0, 0.5);
-      stock.castShadow = true;
-      group.add(stock);
+      grip.position.set(0.5, 0, 0.05);
+      grip.castShadow = true;
+      group.add(grip);
 
-      // The prod, angled slightly forward at the tips like a steel bow.
       for (const s of [-1, 1]) {
         const limb = new THREE.Mesh(
-          new THREE.BoxGeometry(0.42, 0.05, 0.07),
-          steel,
+          new THREE.TubeGeometry(
+            new THREE.CatmullRomCurve3([
+              new THREE.Vector3(0.5, s * 0.1, 0.06),
+              new THREE.Vector3(0.5, s * 0.36, 0.085),
+              new THREE.Vector3(0.5, s * 0.6, 0.05),
+              new THREE.Vector3(0.5, s * 0.79, -0.015),
+            ]),
+            6,
+            0.022,
+            5,
+            false,
+          ),
+          wood,
         );
-        limb.position.set(0.5 + s * 0.21, 0.02, 0.82);
-        limb.rotation.set(0, s * 0.22, s * 0.1);
         limb.castShadow = true;
         group.add(limb);
       }
 
-      // String drawn back to the catch, plus the loaded bolt riding the groove.
+      // String from tip to tip, and the arrow already on it.
       const string = new THREE.Mesh(
-        new THREE.BoxGeometry(0.84, 0.02, 0.02),
+        new THREE.CylinderGeometry(0.008, 0.008, 1.58, 4),
         glow,
       );
-      string.position.set(0.5, 0.05, 0.44);
+      string.position.set(0.5, 0, -0.015);
       group.add(string);
-      const bolt = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.022, 0.022, 0.62, 5),
+      const arrow = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.012, 0.012, 0.66, 5),
         glow,
       );
-      bolt.rotation.x = Math.PI / 2;
-      bolt.position.set(0.5, 0.09, 0.66);
-      group.add(bolt);
+      arrow.rotation.x = Math.PI / 2;
+      arrow.position.set(0.5, 0.012, 0.3);
+      group.add(arrow);
 
-      // Trigger guard hanging under the stock, so the underside isn't a slab.
-      const guard = new THREE.Mesh(
-        new THREE.BoxGeometry(0.08, 0.14, 0.1),
-        trim,
-      );
-      guard.position.set(0.5, -0.11, 0.28);
-      group.add(guard);
-
-      this.weapon = stock;
+      this.weapon = grip;
       this.weaponPivot.add(group);
       return;
     }
 
-    // Staff: long shaft, planted upright, with a floating focus stone.
-    const shaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.05, 0.06, 2.3, 7),
-      wood,
-    );
-    shaft.position.set(0.5, 0.25, 0.2);
-    shaft.rotation.set(0.22, 0, -0.14);
-    shaft.castShadow = true;
-    const stone = new THREE.Mesh(new THREE.IcosahedronGeometry(0.19, 0), glow);
-    stone.position.set(0.66, 1.42, 0.42);
+    // Grimoire: held open across the palm, the sigil on the page doing the work
+    // the staff's focus stone used to. The light is the reason the mage is
+    // visible in a dark room, so it stays with the book.
+    const cover = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.34), wood);
+    cover.position.set(0.5, 0, 0.06);
+    cover.rotation.set(0.16, 0, 0);
+    cover.castShadow = true;
+    const page = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.02, 0.28), trim);
+    page.position.set(0.5, 0.04, 0.06);
+    page.rotation.copy(cover.rotation);
+    const sigil = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.01, 0.16), glow);
+    sigil.position.set(0.56, 0.06, 0.06);
+    sigil.rotation.set(0.16, 0.78, 0);
     const halo = new THREE.PointLight(this.def.accent, 4, 4.5, 2);
-    halo.position.copy(stone.position);
-    this.weapon = shaft;
-    this.weaponPivot.add(shaft, stone, halo);
+    halo.position.set(0.52, 0.3, 0.08);
+    this.weapon = cover;
+    this.weaponPivot.add(cover, page, sigil, halo);
   }
 
   get isBusy() {
@@ -827,9 +853,14 @@ export class Player implements Actor {
   }
 
   private animateWeapon(dt: number) {
-    const rest = this.def.weapon === "sword" ? REST_SWORD_Y : -0.05;
+    const rest =
+      this.def.weapon === "sword"
+        ? REST_SWORD_Y
+        : this.def.weapon === "bow"
+          ? REST_BOW_Y
+          : -0.05;
     let targetY = rest;
-    let targetX = this.def.weapon === "staff" ? 0 : 0.1;
+    let targetX = this.def.weapon === "book" ? 0 : 0.1;
 
     if (this.state === "attack") {
       const a = this.currentAttack;
@@ -879,26 +910,31 @@ export class Player implements Actor {
         return;
       }
 
-      if (this.def.weapon === "crossbow") {
-        // Level it on the wind-up, kick on release, then crank it down through
-        // the recover — the reload is most of the animation, and seeing it is
-        // how the player learns the shot has a cost.
-        const aim = clamp(this.stateT / a.wind, 0, 1);
+      if (this.def.weapon === "bow") {
+        // Turn into the draw through the wind-up, loose, then let it settle
+        // back to rest across the whole recover — which is the next arrow being
+        // nocked. Parking the bow at full extension until the next shot is what
+        // made the old two-pose version read as a prop rather than a weapon.
         if (this.stateT < a.wind) {
-          this.weaponPivot.rotation.y = -0.05 + aim * 0.05;
-          this.weaponPivot.rotation.x = 0.1 - aim * 0.1;
+          const draw = easeOut(this.stateT / a.wind);
+          this.weaponPivot.rotation.y = lerp(REST_BOW_Y, -0.58, draw);
+          this.weaponPivot.rotation.x = lerp(0.1, 0.2, draw);
           return;
         }
-        const after = (this.stateT - a.wind) / (a.active + a.recover);
-        // Sharp kick up, then a slow crank back to level as the string resets.
-        const kick = Math.exp(-after * 9);
-        const reload = Math.sin(clamp(after, 0, 1) * Math.PI);
-        this.weaponPivot.rotation.x = -0.34 * kick + 0.42 * reload;
-        this.weaponPivot.rotation.y = -0.28 * reload;
+        const after = clamp(
+          (this.stateT - a.wind) / Math.max(0.0001, a.active + a.recover),
+          0,
+          1,
+        );
+        // The snap forward is fast and short; the settle owns the rest of it.
+        const loose = Math.exp(-after * 11);
+        const settle = smoothstep(after);
+        this.weaponPivot.rotation.y = lerp(0.16, REST_BOW_Y, settle);
+        this.weaponPivot.rotation.x = lerp(0.1, -0.14, loose) + settle * 0.04;
         return;
       }
 
-      // Staff: raise it overhead through the wind-up, then drive it down. The
+      // Book: raise it open through the wind-up, then drive it down. The
       // release used to snap between two fixed poses in a single frame, which
       // is why the thrust had no weight — now it drives through and settles.
       if (this.stateT < a.wind) {
@@ -907,15 +943,15 @@ export class Player implements Actor {
         this.weaponPivot.rotation.y = lerp(-0.05, -0.25, k);
         return;
       }
-      const staffEnd = a.wind + a.active;
-      if (this.stateT < staffEnd) {
+      const bookEnd = a.wind + a.active;
+      if (this.stateT < bookEnd) {
         const k = easeOutCubic((this.stateT - a.wind) / a.active);
         this.weaponPivot.rotation.x = lerp(-0.9, 0.62, k);
         this.weaponPivot.rotation.y = lerp(-0.25, 0.24, k);
         return;
       }
       const settle = smoothstep(
-        clamp((this.stateT - staffEnd) / Math.max(0.0001, a.recover), 0, 1),
+        clamp((this.stateT - bookEnd) / Math.max(0.0001, a.recover), 0, 1),
       );
       this.weaponPivot.rotation.x = lerp(0.62, 0, settle);
       this.weaponPivot.rotation.y = lerp(0.24, -0.05, settle);
@@ -928,7 +964,7 @@ export class Player implements Actor {
       const k = clamp(this.stateT / 0.18, 0, 1);
       // Out hard, back soft — one sine hump over the whole cast.
       const push = Math.sin(k * Math.PI);
-      const reach = this.def.weapon === "staff" ? 0.75 : 0.5;
+      const reach = this.def.weapon === "book" ? 0.75 : 0.5;
       this.weaponPivot.rotation.x = lerp(targetX, -reach, easeOutCubic(push));
       this.weaponPivot.rotation.y = lerp(rest, rest * 0.2, push);
       return;

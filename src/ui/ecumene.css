@@ -158,16 +158,17 @@
 }
 
 /*
- * Desaturated hard, on purpose. Full-colour art next to grey marble reads as a
- * photograph pasted into a carving; pulled down to near-monochrome with the
- * contrast raised, it reads as the relief it is supposed to be.
+ * Held back from full colour, but no longer near-monochrome. The old grey wash
+ * made every portrait read as the same stone; keeping a light desaturation and
+ * pushing what colour survives back up leaves the art tinted rather than dead,
+ * and the raised contrast still keeps it sitting in the frame as a relief.
  */
 .e-art > img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
-  filter: grayscale(0.88) contrast(1.22) brightness(0.82);
+  filter: grayscale(0.3) saturate(1.25) contrast(1.14) brightness(0.95);
 }
 
 .e-art.missing::after {
@@ -313,7 +314,7 @@
  * opacity and the grey wash that used to help it recede are both gone.
  */
 .e-title-art > .e-art > img {
-  filter: grayscale(0.7) contrast(1.24) brightness(1.02);
+  filter: grayscale(0.2) saturate(1.3) contrast(1.16) brightness(1.05);
   mix-blend-mode: multiply;
   opacity: 1;
 }

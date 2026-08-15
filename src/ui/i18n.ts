@@ -334,9 +334,9 @@ const EN = {
   'class.warrior.blurb':
     'Blade and dash. Toughest of the three, and the only one who heals by closing in.',
   'class.archer.name': 'MARKSMAN',
-  'class.archer.title': 'bolt-sworn',
+  'class.archer.title': 'bow-sworn',
   'class.archer.blurb':
-    'Crossbow bolts that punch through a line. Fragile and fastest on foot, but every shot costs a reload.',
+    'Arrows that punch through a line. Fragile and fastest on foot, but every shot costs a full draw.',
   'class.mage.name': 'MAGE',
   'class.mage.title': 'storm-sworn',
   'class.mage.blurb':
@@ -394,17 +394,17 @@ const EN = {
   'asc.elven.name': 'ELVEN ARCHER',
   'asc.elven.title': 'the long wind',
   'asc.elven.desc':
-    'Reload 30% faster and move 16% quicker, +2 Cast ammo, wider volley. Each bolt is lighter for it.',
+    'Draw 30% faster and move 16% quicker, +2 Cast ammo, wider volley. Each arrow is lighter for it.',
   'asc.elven-volley.name': 'Windrider Volley',
   'asc.elven-volley.desc': 'Your volley fires twice, a beat apart, and fans wider still.',
 
   'asc.sharpshooter.name': 'SHARPSHOOTER',
-  'asc.sharpshooter.title': 'one bolt, one throat',
+  'asc.sharpshooter.title': 'one arrow, one throat',
   'asc.sharpshooter.desc':
-    '30 damage a bolt across a longer lane, +45% Attack damage, +10% crit, and it punches through 2 more bodies. The reload is worse.',
+    '30 damage an arrow across a longer lane, +45% Attack damage, +10% crit, and it punches through 2 more bodies. The draw is worse.',
   'asc.sharp-headhunter.name': 'Headhunter',
   'asc.sharp-headhunter.desc':
-    'Crits hit for far more, +8% critical chance, and your bolt pierces 3 further bodies.',
+    'Crits hit for far more, +8% critical chance, and your arrow pierces 3 further bodies.',
 
   'asc.decay.name': 'MAGE OF ROT',
   'asc.decay.title': 'the slow fuse',
@@ -778,9 +778,9 @@ const PL: Partial<Record<Key, string>> = {
   'class.warrior.blurb':
     'Ostrze i unik. Najwytrzymalszy z trójki i jedyny, który leczy się, wchodząc w zwarcie.',
   'class.archer.name': 'STRZELEC',
-  'class.archer.title': 'zaprzysiężony bełtowi',
+  'class.archer.title': 'zaprzysiężony cięciwie',
   'class.archer.blurb':
-    'Bełty kuszy przebijające całą linię wrogów. Kruchy i najszybszy, ale każdy strzał kosztuje przeładowanie.',
+    'Strzały przebijające całą linię wrogów. Kruchy i najszybszy, ale każdy strzał kosztuje pełny naciąg.',
   'class.mage.name': 'MAG',
   'class.mage.title': 'zaprzysiężony burzy',
   'class.mage.blurb':
@@ -837,17 +837,17 @@ const PL: Partial<Record<Key, string>> = {
   'asc.elven.name': 'ELFI ŁUCZNIK',
   'asc.elven.title': 'długi wiatr',
   'asc.elven.desc':
-    'Przeładowanie o 30% szybsze, ruch o 16% szybszy, +2 ładunki Czaru, szersza salwa. Każdy bełt jest za to lżejszy.',
+    'Naciąg o 30% szybszy, ruch o 16% szybszy, +2 ładunki Czaru, szersza salwa. Każda strzała jest za to lżejsza.',
   'asc.elven-volley.name': 'Salwa Wichru',
   'asc.elven-volley.desc': 'Twoja salwa strzela dwukrotnie, uderzenie po uderzeniu, i rozchodzi się jeszcze szerzej.',
 
   'asc.sharpshooter.name': 'STRZELEC WYBOROWY',
-  'asc.sharpshooter.title': 'jeden bełt, jedno gardło',
+  'asc.sharpshooter.title': 'jedna strzała, jedno gardło',
   'asc.sharpshooter.desc':
-    '30 obrażeń na bełt na dłuższej linii, +45% obrażeń Ataku, +10% krytyka i przebicie 2 ciał więcej. Przeładowanie jest gorsze.',
+    '30 obrażeń na strzałę na dłuższej linii, +45% obrażeń Ataku, +10% krytyka i przebicie 2 ciał więcej. Naciąg jest wolniejszy.',
   'asc.sharp-headhunter.name': 'Łowca Głów',
   'asc.sharp-headhunter.desc':
-    'Kryty biją o wiele mocniej, +8% szansy na krytyka, a bełt przebija 3 ciała więcej.',
+    'Kryty biją o wiele mocniej, +8% szansy na krytyka, a strzała przebija 3 ciała więcej.',
 
   'asc.decay.name': 'MAG ROZKŁADU',
   'asc.decay.title': 'powolny lont',
