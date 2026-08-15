@@ -23,6 +23,11 @@ const ROLE = {
   'minotaur.glb': { role: 'boss' },
   'boss.glb': { role: 'boss' },
   'vampire.glb': { role: 'common' },
+  'tartarus_beast.glb': { role: 'common' },
+  // The brute is the heavy, not the crowd — it arrives one or two at a time
+  // behind a wave of wretches, so it buys the elite budget rather than the
+  // common one it would otherwise share with them.
+  'tartarus_hoplit.glb': { role: 'elite' },
   'mage.glb': { role: 'player' },
   'pillar.glb': { role: 'prop' },
   'portal.glb': { role: 'prop' },

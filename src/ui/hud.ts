@@ -448,7 +448,6 @@ export class Hud {
     plate.append(
       el('div', 'e-shadow'),
       el('div', 'e-out'),
-      el('div', 'e-spark'),
       hp,
       revive,
       el('div', 'e-call-track'),

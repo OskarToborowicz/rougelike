@@ -29,11 +29,34 @@ interface Archetype {
 export const ARCHETYPES: Record<EnemyKind, Archetype> = {
   wretch: {
     hp: 42,
-    radius: 0.5,
+    /*
+     * Measured against the sculpt, not guessed. The beast is a quadruped: 2.09
+     * long against the 1.0 this used to describe, so a swing at its head or its
+     * tail passed through and hit nothing. Half the animal was decoration.
+     *
+     * 0.68 puts the circle at 1.36 across, which covers the body between the
+     * shoulders and leaves only the snout and the tail-tip outside — the parts a
+     * player reads as "reach", not as "mass". Matching the full 2.09 would mean
+     * hitting empty floor a stride behind it, which is the same lie inverted.
+     */
+    radius: 0.68,
     speed: 4.6,
-    // Cold slate against a warm ochre floor. Foes sharing the room's hue is why
-    // the first passes read as camouflage.
-    color: 0x37457e,
+    /*
+     * Deep crimson. The gradient is drawn from this, so it is the whole animal.
+     *
+     * Two things it has to stay clear of, and both pushed it darker and cooler
+     * than a plain red:
+     *
+     * Asphodel is a red room — floor #3a2018, walls #3a0e10 — and a foe sharing
+     * the room's hue is exactly the camouflage the old cold slate was chosen to
+     * avoid. This sits far enough above those in both lightness and saturation
+     * to cut out against them.
+     *
+     * The wind-up telegraph is also red, and much hotter: a near-pure emissive
+     * orange that ramps over the tell. That signal has to stay the loudest red
+     * on screen, so the body leans away from orange rather than toward it.
+     */
+    color: 0x872634,
     trim: 0xc9a24a,
     scale: 1,
     contact: 10,
@@ -55,7 +78,13 @@ export const ARCHETYPES: Record<EnemyKind, Archetype> = {
   },
   brute: {
     hp: 140,
-    radius: 0.92,
+    /*
+     * The hoplite is 2.58 across and 1.65 deep — the width is shield and spear,
+     * the depth is the man. 1.05 sets the circle at 2.10, between the two: a
+     * swing at the shield connects, and the overhang left outside is the
+     * equipment, which is what a player expects to be reaching past.
+     */
+    radius: 1.05,
     speed: 3.1,
     color: 0x5b3382,
     trim: 0xe0663a,
@@ -132,7 +161,22 @@ const AUTHORED: Partial<Record<EnemyKind, { url: string; height: number }>> = {
   // The wretch is the foe the run is mostly made of — every chamber opens with
   // a pack of them. 1.9 against the player's 2.1 keeps it readably smaller
   // without turning it into vermin.
-  wretch: { url: '/models/vampire.glb', height: 1.9 },
+  //
+  // The beast is wider than it is tall — 1.96 x 1.41 x 1.60 against the
+  // vampire's upright build. `fitToHeight` scales on height alone, so asking for
+  // the old 1.9 would blow it out to 2.6 across against a 0.5 collision radius:
+  // a body two and a half times the width of the thing it actually fights with.
+  // 1.5 keeps the footprint honest and still reads taller than the player's
+  // knee. See tools/MODELS.md.
+  wretch: { url: '/models/tartarus_beast.glb', height: 1.5 },
+  // The brute, as a spear-and-shield hoplite. Upright, so unlike the beast it
+  // fits on height honestly.
+  //
+  // 1.75 is not the height you see: the archetype's `scale` of 1.7 multiplies
+  // whatever `fitToHeight` sets, so this lands at 2.98 — half again the player's
+  // 2.1 and well under Erinys at 4.4. The heavy has to read as the thing you
+  // deal with before it reaches you, without being mistaken for a boss.
+  brute: { url: '/models/tartarus_hoplit.glb', height: 1.75 },
 };
 
 /**
@@ -236,6 +280,18 @@ export class Enemy implements Actor {
   private heads: THREE.Group[] = [];
   /** The disc on the floor. Kept when an authored mesh replaces the rig. */
   private shadow?: THREE.Object3D;
+  /**
+   * The body, under the pivot that carries facing.
+   *
+   * Everything that animates lives in here rather than on `mesh`, because `mesh`
+   * owns world placement: its `rotation.y` is rewritten to the facing every
+   * frame, so a pitch put there would be a pitch around the world's X axis and
+   * the beast would rear sideways whenever it happened to be walking east. In
+   * here, +Z is the direction it is looking, and a lunge is one number.
+   *
+   * The ground shadow deliberately stays outside — a shadow does not lunge.
+   */
+  private body = new THREE.Group();
   targetId = -1;
   mesh = new THREE.Group();
   a: Archetype;
@@ -302,14 +358,14 @@ export class Enemy implements Actor {
       arm.position.set(s * 0.46, 0.92, 0.12);
       arm.rotation.x = -0.35;
       arm.castShadow = true;
-      this.mesh.add(arm);
+      this.body.add(arm);
     }
 
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffd166 });
     for (const s of [-1, 1]) {
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), eyeMat);
       eye.position.set(s * 0.1, 1.54, 0.3);
-      this.mesh.add(eye);
+      this.body.add(eye);
     }
 
     this.buildKindMarks(trimMat, boneMat);
@@ -320,7 +376,8 @@ export class Enemy implements Actor {
     );
     shadow.position.y = 0.03;
 
-    this.mesh.add(body, shoulders, skull, shadow);
+    this.body.add(body, shoulders, skull);
+    this.mesh.add(this.body, shadow);
     addOutline(this.mesh, 0.032);
     this.mesh.scale.setScalar(a.scale);
     this.mesh.position.y = -1.2; // rises out of the floor on spawn
@@ -341,12 +398,20 @@ export class Enemy implements Actor {
    * cut-out under the arena's point lights.
    *
    * Which of ours depends on one thing: whether the sculpt was unwrapped. With
-   * UVs it wears the very same painted skin the primitive rig built, so the
-   * light-to-dark ramp and the armour banding carry across and the sculpt sits
-   * in the same visual language as every other foe. Without them there is
-   * nothing to sample, and a flat coat in the archetype's colour is the honest
-   * fallback. Either way the material belongs to this class, so the tell glow,
-   * the hit flash and the status tints keep driving it.
+   * UVs it wears the same painted skin the primitive rig does — but *without the
+   * armour banding*. Those bands were drawn for a cylinder: on a torso they read
+   * as plates strapped round a chest, and the cylindrical unwrap that feeds them
+   * only knows height, so on a whole creature the same stripes run straight
+   * across the legs, the shield and the spear. A sculpted body came out looking
+   * like a deckchair.
+   *
+   * What survives is the part that was never about a cylinder: the vertical
+   * light-to-dark ramp, which grounds anything with a top and a bottom, and the
+   * grime speckle that keeps the flats from reading as vector shapes.
+   *
+   * Without UVs there is nothing to sample, and a flat coat in the archetype's
+   * colour is the honest fallback. Either way the material belongs to this
+   * class, so the tell glow, the hit flash and the status tints keep driving it.
    */
   private async loadAuthoredMesh() {
     const want = AUTHORED[this.kind];
@@ -363,9 +428,15 @@ export class Enemy implements Actor {
 
     let mat: THREE.MeshStandardMaterial;
     if (unwrapped) {
-      // Reuse rather than rebuild: bodyMat already carries this enemy's own skin
-      // canvas, and flashMats already points at it.
+      // Reuse the material rather than rebuild it — flashMats already points at
+      // it — but repaint the canvas without the bands. See the note above.
       mat = this.bodyMat;
+      mat.map?.dispose();
+      mat.map = makeBodySkin(hexString(this.a.color), hexString(this.a.trim), {
+        plates: 0,
+        rags: false,
+      });
+      mat.needsUpdate = true;
     } else {
       mat = new THREE.MeshStandardMaterial({
         color: this.a.color,
@@ -380,9 +451,10 @@ export class Enemy implements Actor {
     fitToHeight(body, want.height);
     this.flashMats = [mat];
 
-    for (const child of [...this.mesh.children]) {
-      if (child === this.shadow || (child as THREE.PointLight).isPointLight) continue;
-      this.mesh.remove(child);
+    // The rig lives under `body` now, so that is what gets emptied. The shadow
+    // and any halo sit on `mesh` beside it and are left alone by construction.
+    for (const child of [...this.body.children]) {
+      this.body.remove(child);
       child.traverse((o) => {
         const m = o as THREE.Mesh;
         if (m.isMesh && !m.userData.sharedGeometry) m.geometry.dispose();
@@ -394,7 +466,7 @@ export class Enemy implements Actor {
     this.heads = [];
 
     addOutline(body, 0.032);
-    this.mesh.add(body);
+    this.body.add(body);
   }
 
   /**
@@ -409,7 +481,7 @@ export class Enemy implements Actor {
       horn.position.set(0, 1.76, 0.02);
       horn.rotation.x = -0.35;
       horn.castShadow = true;
-      this.mesh.add(horn);
+      this.body.add(horn);
       return;
     }
 
@@ -432,7 +504,7 @@ export class Enemy implements Actor {
       sack.scale.set(1, 1.2, 0.8);
       sack.position.set(-0.36, 0.86, -0.24);
       sack.castShadow = true;
-      this.mesh.add(staff, orb, sack);
+      this.body.add(staff, orb, sack);
       return;
     }
 
@@ -450,7 +522,7 @@ export class Enemy implements Actor {
       mound.scale.set(1.3, 0.55, 1.3);
       mound.position.y = 0.4;
       mound.castShadow = true;
-      this.mesh.add(mound);
+      this.body.add(mound);
 
       // Bone spurs around the rim. Sunk into the dome so they read as part of
       // the carcass — free-floating ribs just looked like scattered debris.
@@ -460,7 +532,7 @@ export class Enemy implements Actor {
         spur.position.set(Math.cos(a) * 1.16, 0.42, Math.sin(a) * 1.16);
         spur.rotation.set(Math.PI / 2.6, 0, -a);
         spur.castShadow = true;
-        this.mesh.add(spur);
+        this.body.add(spur);
       }
 
       for (const s of [-1, 0, 1]) {
@@ -484,7 +556,7 @@ export class Enemy implements Actor {
         neck.add(skull, eye);
         neck.rotation.z = s * -0.22;
         this.heads.push(neck);
-        this.mesh.add(neck);
+        this.body.add(neck);
       }
 
       const halo = new THREE.PointLight(0xa8e04a, 8, 10, 2);
@@ -517,7 +589,7 @@ export class Enemy implements Actor {
       tip.position.set(0.72, 1.15, 1.45);
       tip.rotation.x = Math.PI / 2;
 
-      this.mesh.add(crest, helm, shield, spear, tip);
+      this.body.add(crest, helm, shield, spear, tip);
       return;
     }
 
@@ -543,7 +615,7 @@ export class Enemy implements Actor {
         pivot.add(wing);
         pivot.rotation.y = s * -0.45;
         this.wings.push(pivot);
-        this.mesh.add(pivot);
+        this.body.add(pivot);
       }
 
       // Crown of horns and the whip she lashes with.
@@ -552,7 +624,7 @@ export class Enemy implements Actor {
         horn.position.set(s * 0.16, 1.86, -0.04);
         horn.rotation.set(-0.3, 0, s * 0.34);
         horn.castShadow = true;
-        this.mesh.add(horn);
+        this.body.add(horn);
       }
       const whip = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.02, 1.7, 6), trimMat);
       whip.position.set(0.62, 1.0, 0.45);
@@ -561,7 +633,10 @@ export class Enemy implements Actor {
 
       const halo = new THREE.PointLight(0xff2a55, 9, 9, 2);
       halo.position.set(0, 1.8, 0);
-      this.mesh.add(whip, halo);
+      this.body.add(whip);
+      // A light, not a limb — it stays on the pivot so a lunge does not drag the
+      // whole room's glow forward with it.
+      this.mesh.add(halo);
       return;
     }
 
@@ -575,7 +650,7 @@ export class Enemy implements Actor {
       spike.position.set(s * 0.5, 1.36, 0);
       spike.rotation.z = s * -0.55;
       spike.castShadow = true;
-      this.mesh.add(horn, spike);
+      this.body.add(horn, spike);
     }
   }
 
@@ -655,9 +730,11 @@ export class Enemy implements Actor {
       this.mesh.rotation.x = damp(this.mesh.rotation.x, 1.2, 8, dt);
       this.mesh.scale.multiplyScalar(1 - dt * 1.2);
     } else {
-      const speed = Math.hypot(this.vel.x, this.vel.z);
-      this.bob += dt * (5 + speed);
-      this.mesh.position.y = Math.abs(Math.sin(this.bob)) * (speed > 0.4 ? 0.1 : 0.03);
+      // The bob moved onto `body` with the rest of the gait — `mesh` is where
+      // the spawn rise and the death sink live, and the ground shadow hangs off
+      // it. While that carried the bob, the shadow lifted off the floor with
+      // every step.
+      this.mesh.position.y = 0;
     }
 
     // Two distinct emissive languages, never confusable:
@@ -707,7 +784,173 @@ export class Enemy implements Actor {
     });
     if (this.heads.length) this.bob += dt * 1.6;
 
-    const puff = this.state === 'tell' ? 1 + tellHeat * 0.12 : 1;
-    if (this.state !== 'dead') this.mesh.scale.setScalar(this.a.scale * puff);
+    if (this.state !== 'dead') this.mesh.scale.setScalar(this.a.scale);
+    this.animateBody(dt);
   }
+
+  /**
+   * The walk.
+   *
+   * These sculpts have no skeleton — they arrive as one mesh, and the pipeline's
+   * humanoid splitter cannot help here: it classifies by position, so the
+   * hoplite's shield came out as part of its right leg and the tip of its spear
+   * as part of its head. A leg that swings a shield is worse than a leg that
+   * does not move.
+   *
+   * So the gait is carried by the whole body, which is how a heavy thing reads
+   * at this camera distance anyway: weight thrown from one side to the other,
+   * the body dropping as it lands and rising as it pushes off. Two cues do most
+   * of the work — the roll and the bob — and they run at the same rate a stride
+   * would, one full cycle per two steps.
+   */
+  private gait(): {
+    rate: number;
+    bob: number;
+    roll: number;
+    pitch: number;
+    sway: number;
+    yaw: number;
+    lean: number;
+  } {
+    // A quadruped's gait is quick and low, and it pitches: the shoulders drop
+    // as the forelegs take the weight. There is no side-to-side lurch in it.
+    if (this.kind === 'wretch') {
+      return { rate: 1.35, bob: 0.055, roll: 0.035, pitch: 0.05, sway: 0.02, yaw: 0.03, lean: 0.04 };
+    }
+    /*
+     * Armoured, slow, and — the part that decides the whole animation — with no
+     * legs to show. The sculpt is a cloaked figure: below the waist it is one
+     * shaggy hem with boots poking out, so there is nothing to swing even if the
+     * body were cut into parts.
+     *
+     * What is left is what a heavy walker actually reads by from this camera:
+     * the mass thrown from side to side, and the shoulders turning against the
+     * hips. The yaw is the strongest cue here — it is the one thing a rigid prop
+     * being slid across the floor never does.
+     */
+    if (this.kind === 'brute') {
+      return { rate: 0.62, bob: 0.055, roll: 0.13, pitch: 0.02, sway: 0.06, yaw: 0.12, lean: 0.05 };
+    }
+    // The primitive rigs, which were only ever a bob. Kept close to what they
+    // did before so nothing that already looked right changes.
+    return { rate: 1.0, bob: 0.05, roll: 0.02, pitch: 0, sway: 0, yaw: 0, lean: 0 };
+  }
+
+  private animateBody(dt: number) {
+    const speed = Math.hypot(this.vel.x, this.vel.z);
+    const g = this.gait();
+    this.bob += dt * (5 + speed) * g.rate;
+
+    // Amplitude follows how fast it is actually travelling, so a foe held still
+    // by a tell or a stagger settles rather than marching on the spot. Never
+    // quite zero: a body perfectly rigid between steps reads as a prop.
+    const stride = clamp(speed / this.moveSpeed, 0, 1);
+    const amp = 0.25 + stride * 0.75;
+
+    // The bob is doubled because a stride has two footfalls, and `abs` makes
+    // each one a landing rather than a float.
+    const bobY = Math.abs(Math.sin(this.bob)) * g.bob * amp;
+    // Roll and sway run at half that — one full lean per stride, not per step.
+    const rollZ = Math.sin(this.bob * 0.5) * g.roll * amp;
+    const swayX = Math.cos(this.bob * 0.5) * g.sway * amp;
+    // Pitch rides the footfall, a quarter-cycle behind the bob: the body tips
+    // forward as it comes down, not as it rises.
+    const pitchX = Math.sin(this.bob * 2 - Math.PI / 2) * g.pitch * amp;
+    // Shoulders against hips, a quarter-cycle off the roll — the body turns into
+    // the side the weight has just left.
+    const yawY = Math.sin(this.bob * 0.5 - Math.PI / 2) * g.yaw * amp;
+    // And a constant lean into the direction of travel, which is the difference
+    // between a thing that walks and a thing being slid.
+    const leanX = stride * g.lean;
+
+    this.animateBite(dt, { bobY, rollZ, swayX, pitchX: pitchX + leanX, yawY });
+  }
+
+  /**
+   * The bite.
+   *
+   * This was a 12% swell of the whole body over the wind-up, which on the old
+   * primitive rig read as a creature drawing breath. On a sculpted quadruped it
+   * reads as inflation — the thing visibly gets bigger and then is somehow the
+   * same size again, which is not a movement any animal makes.
+   *
+   * A bite is anticipation and release instead: coil back onto the haunches over
+   * the wind-up, then throw the whole body forward on the frame the damage
+   * lands, jaws first. Nothing here is a limb, because the sculpt has no rig —
+   * it is all the body's own weight, which is what sells a lunge anyway.
+   *
+   * Only the shapes that close to contact do it. A lobber throws from eleven
+   * units away and would look ridiculous snapping at the air.
+   */
+  private animateBite(
+    dt: number,
+    gait: { bobY: number; rollZ: number; swayX: number; pitchX: number; yawY: number },
+  ) {
+    const melee = this.a.attackRange <= 4;
+    let back = 0;
+    let pitch = 0;
+    let drop = 0;
+
+    if (melee) {
+      if (this.state === 'tell') {
+        // Loaded late, not linearly: a wind-up that eases in is a creature
+        // gathering itself, one that ramps evenly is a machine extending.
+        const k = clamp(this.stateT / this.a.tell, 0, 1) ** 2;
+        back = -0.34 * k;
+        pitch = -0.20 * k;
+        drop = -0.10 * k;
+      } else if (this.state === 'strike') {
+        // The whole throw is spent in the first 60ms — the damage has already
+        // landed by then, and an attack whose animation lags its hitbox is one
+        // the player learns to distrust.
+        const k = clamp(this.stateT / 0.06, 0, 1);
+        back = -0.34 + 0.86 * k;
+        pitch = -0.20 + 0.62 * k;
+        drop = -0.10 + 0.04 * k;
+      } else if (this.state === 'recover') {
+        // Held a beat at full extension, then drawn back. Snapping straight
+        // home would undo the weight the lunge just bought.
+        const k = clamp((this.stateT - 0.06) / 0.24, 0, 1) ** 0.6;
+        back = 0.52 * (1 - k);
+        pitch = 0.42 * (1 - k);
+        drop = -0.06 * (1 - k);
+      }
+    }
+
+    /*
+     * Damped rather than assigned, so a state that ends early bleeds out instead
+     * of popping — and so every other state simply falls back to rest.
+     *
+     * Except the throw itself, which is followed almost exactly. At the gentler
+     * rate the body reached full extension around 160ms, a tenth of a second
+     * after the damage had already landed, and an attack whose picture arrives
+     * that far behind its hitbox is one the player stops reading.
+     */
+    const k = clamp(dt * (this.state === 'strike' ? 60 : 22), 0, 1);
+    this.lungeZ += (back - this.lungeZ) * k;
+    this.lungeY += (drop - this.lungeY) * k;
+    this.lungeX += (pitch - this.lungeX) * k;
+
+    /*
+     * Summed, not assigned. The lunge and the walk both want the same three
+     * axes, and whichever wrote last would win — a bite that cancelled the gait
+     * would snap the body flat for a fifth of a second in the middle of the one
+     * move the player is watching most closely.
+     *
+     * The lunge is damped state and the gait is a plain oscillation, so keeping
+     * them in separate fields and adding them here is what lets each stay
+     * correct on its own.
+     */
+    this.body.position.z = this.lungeZ;
+    this.body.position.y = this.lungeY + gait.bobY;
+    this.body.position.x = gait.swayX;
+    this.body.rotation.x = this.lungeX + gait.pitchX;
+    this.body.rotation.z = gait.rollZ;
+    this.body.rotation.y = gait.yawY;
+  }
+
+  /** The lunge, held apart from the gait so the two can be summed. */
+  private lungeZ = 0;
+  private lungeY = 0;
+  private lungeX = 0;
 }

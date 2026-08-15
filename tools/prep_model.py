@@ -527,4 +527,6 @@ if __name__ == "__main__":
                 opts["place"] = False
             elif a == "--split":
                 opts["split"] = rest[i + 1]
+            elif a == "--unwrap":
+                opts["unwrap"] = rest[i + 1]
         prep(argv[0], argv[1], **opts)

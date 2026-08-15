@@ -930,24 +930,6 @@
   opacity: 1;
 }
 
-/* The one thing still alive on a downed plate. */
-.e-plate .e-spark {
-  position: absolute;
-  left: 50%;
-  top: 44%;
-  transform: translate(-50%, -50%);
-  width: 8px;
-  height: 8px;
-  pointer-events: none;
-  background: var(--e-sanguine);
-  animation: e-ember 1.8s ease-in-out infinite;
-  opacity: 0;
-}
-
-.e-plate.downed .e-spark {
-  opacity: 1;
-}
-
 .e-plate.downed .e-hp,
 .e-plate.downed .e-shadow,
 .e-plate.downed .e-call,
