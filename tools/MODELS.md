@@ -205,8 +205,12 @@ pale ginger woman in an orange breastplate.
 `loadAuthoredRig` repaints only the one called `Crest` with the seat colour, so
 the palette in the file is what you see: near-black leather and cloth, aged
 gold on the few pieces meant to read as reliquary, and one piece per shade —
-the archer's shoulder mantle, the sorceress' chest plate and pauldrons —
-carrying the player's colour. Everything else stays black on purpose. A shade
+the archer's shoulder mantle, the sorceress' pauldrons — carrying the player's
+colour. Keep that piece *small*. `Crest` is not a colour, it is a slot: whatever
+wears the name is repainted per seat at load, so naming a garment `Crest`
+dresses the character in the lobby's hue instead of her own. Her corset and
+cups carried it once and she arrived on screen as an orange figure, where the
+reference sheet has her in black armour with gold on it. Everything else stays black on purpose. A shade
 painted seat-colour from collar to floor is legible from orbit and is not the
 art direction. Pick that piece for what a camera 52° up can see, which is the
 top of a shoulder and nothing below the belt.

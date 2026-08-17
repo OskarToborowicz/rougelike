@@ -1209,13 +1209,22 @@ def sorceress():
     # It is one offset off the body's own section, so it can never pinch through
     # her: a plate authored as its own profile has to be re-tuned every time the
     # waist does.
+    #
+    # Black, and that is not a colour choice — it is which material name the
+    # piece carries. `Crest` is repainted at load with the *seat* colour, so
+    # every surface given that name wears the player's orange or blue or purple
+    # rather than what the palette says. Named `Crest`, the corset and the cups
+    # made three quarters of the front of her one flat seat colour, and the
+    # reference sheet has her in black armour with gold on it. The seat colour
+    # is a co-op read, not her costume: it belongs on the smallest piece that a
+    # camera 52 degrees up can still see, which is the pauldrons below.
     P["Torso"].add(
         column(
             [(z, cx, cy, rx + 0.013, ry + 0.013) for (z, cx, cy, rx, ry) in BODICE if z <= 1.462],
             n=16,
             e=2.2,
         ),
-        "Crest",
+        "Leather",
     )
     # Wide enough to reach the corset's top ring at the *sides*, not only at the
     # front. Narrower cups leave a band of bare rib between the two pieces of
@@ -1223,7 +1232,7 @@ def sorceress():
     cups = {}
     for s in (-1, 1):
         cups[s] = ((s * 0.084, -0.066, 1.508), (0.084, 0.072, 0.082))
-        P["Torso"].add(blob(*cups[s], n=12, m=7), "Crest")
+        P["Torso"].add(blob(*cups[s], n=12, m=7), "Leather")
 
     # Front of whatever is actually in front of her at a given height — the
     # corset below 1.462, bare sternum above it. One function, so the chain does
@@ -1306,9 +1315,12 @@ def sorceress():
     # swings under it — which is also the only version that cannot push through
     # the deltoid when the arm comes forward.
     #
-    # Three spikes each, fanning back to front. This is the piece a player sees
-    # from directly above, so it and the chest plate are what carry the seat
-    # colour; everything else on her stays black, which is the sheet.
+    # Three spikes each, fanning back to front. These are the *only* pieces on
+    # her that carry the seat colour, and they are chosen for what a camera 52
+    # degrees up can see, which is the top of a shoulder and nothing below the
+    # belt. Everything else stays black, which is the sheet: she is a woman in
+    # black armour with gold on it, wearing a coloured pauldron, not a woman
+    # dressed in whichever hue the lobby handed out.
     for s in (-1, 1):
         # Two overlapping lames rather than one cap. A single ellipsoid over a
         # shoulder is a disc seen from the side — it has one silhouette and one
