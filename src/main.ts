@@ -124,6 +124,183 @@ let steadyShotSpread = 0;
 let steadyShotHeld = false;
 const frames = new Map<number, Frame | null>();
 
+// ---------------------------------------------------------------- dev archer review
+
+/**
+ * A deliberately URL-gated art-review room. It uses the real World and Player
+ * animation paths, but removes combat noise so a pose can be compared from the
+ * same four angles without racing the first enemy wave.
+ *
+ * `import.meta.env.DEV` makes the whole entry point inert in production, while
+ * the query flag keeps ordinary local play exactly the same as before.
+ */
+const archerTestEnabled =
+  import.meta.env.DEV && new URLSearchParams(location.search).get("archerTest") === "1";
+
+type ArcherTestPose = "idle" | "lpm" | "ppm";
+
+const archerTest = {
+  pose: "idle" as ArcherTestPose,
+  aimX: 0,
+  aimY: 1,
+};
+
+const archerTestFrame = (): Frame => {
+  const held: Frame["held"] = new Set();
+  if (archerTest.pose === "ppm") held.add("special");
+  return {
+    moveX: 0,
+    moveY: 0,
+    aimX: archerTest.aimX,
+    aimY: archerTest.aimY,
+    pressed: new Set(),
+    held,
+  };
+};
+
+/** Freeze the requested moment without replacing any of the actual rig work. */
+function prepareArcherTestPlayer(p: Player) {
+  p.pos.set(0, 0, 0);
+  p.vel.set(0, 0, 0);
+  p.hp = p.maxHp;
+  p.dead = false;
+  p.stagger = 0;
+  p.iframes = 1;
+  p.facing = Math.atan2(archerTest.aimX, archerTest.aimY);
+
+  if (archerTest.pose === "ppm") {
+    p.state = "idle";
+    p.stateT = 0;
+    p.attackHitDone = true;
+    p.usingSpecial = true;
+    p.specialCharging = true;
+    p.specialCharge = 1.5;
+    p.specialVolleyCount = 7;
+    return;
+  }
+
+  p.specialCharging = false;
+  p.specialCharge = 0;
+  p.usingSpecial = false;
+
+  if (archerTest.pose === "lpm") {
+    p.state = "attack";
+    // Hold immediately before the loose: fully aimed and drawn, without
+    // spawning an arrow on every review frame.
+    p.stateT = p.currentAttack.wind * 0.45;
+    p.attackHitDone = true;
+  } else {
+    p.state = "idle";
+    p.stateT = 0;
+    p.attackHitDone = false;
+  }
+}
+
+function installArcherTestControls() {
+  const panel = document.createElement("aside");
+  panel.id = "archer-test-controls";
+  panel.setAttribute("aria-label", "Archer visual test controls");
+  Object.assign(panel.style, {
+    position: "fixed",
+    top: "12px",
+    left: "12px",
+    zIndex: "10000",
+    display: "grid",
+    gap: "8px",
+    padding: "10px",
+    color: "#f5e9cb",
+    background: "rgba(10, 8, 12, 0.92)",
+    border: "1px solid #b99858",
+    font: "600 12px system-ui, sans-serif",
+    boxShadow: "0 6px 24px rgba(0, 0, 0, 0.45)",
+  });
+
+  const title = document.createElement("strong");
+  title.textContent = "ARCHER TEST";
+  const status = document.createElement("div");
+  status.setAttribute("role", "status");
+
+  const poseRow = document.createElement("div");
+  poseRow.setAttribute("role", "group");
+  poseRow.setAttribute("aria-label", "Pose");
+  const viewRow = document.createElement("div");
+  viewRow.setAttribute("role", "group");
+  viewRow.setAttribute("aria-label", "View direction");
+  for (const row of [poseRow, viewRow]) {
+    Object.assign(row.style, { display: "flex", gap: "5px", flexWrap: "wrap" });
+  }
+
+  const buttons: HTMLButtonElement[] = [];
+  const button = (
+    label: string,
+    group: HTMLElement,
+    active: () => boolean,
+    select: () => void,
+  ) => {
+    const el = document.createElement("button");
+    el.type = "button";
+    el.textContent = label;
+    el.setAttribute("aria-label", label);
+    Object.assign(el.style, {
+      padding: "5px 8px",
+      color: "#f5e9cb",
+      background: "#231b21",
+      border: "1px solid #715f45",
+      cursor: "pointer",
+      font: "inherit",
+    });
+    el.addEventListener("click", () => {
+      select();
+      refresh();
+    });
+    group.append(el);
+    buttons.push(el);
+    const refreshButton = () => {
+      const on = active();
+      el.setAttribute("aria-pressed", String(on));
+      el.style.background = on ? "#745326" : "#231b21";
+      el.style.borderColor = on ? "#e9bd67" : "#715f45";
+    };
+    return refreshButton;
+  };
+
+  const refreshers = [
+    button("Idle", poseRow, () => archerTest.pose === "idle", () => (archerTest.pose = "idle")),
+    button("LPM draw", poseRow, () => archerTest.pose === "lpm", () => (archerTest.pose = "lpm")),
+    button("PPM full", poseRow, () => archerTest.pose === "ppm", () => (archerTest.pose = "ppm")),
+    button("Front (+Z)", viewRow, () => archerTest.aimX === 0 && archerTest.aimY === 1, () => {
+      archerTest.aimX = 0;
+      archerTest.aimY = 1;
+    }),
+    button("Right (+X)", viewRow, () => archerTest.aimX === 1 && archerTest.aimY === 0, () => {
+      archerTest.aimX = 1;
+      archerTest.aimY = 0;
+    }),
+    button("Back (-Z)", viewRow, () => archerTest.aimX === 0 && archerTest.aimY === -1, () => {
+      archerTest.aimX = 0;
+      archerTest.aimY = -1;
+    }),
+    button("Left (-X)", viewRow, () => archerTest.aimX === -1 && archerTest.aimY === 0, () => {
+      archerTest.aimX = -1;
+      archerTest.aimY = 0;
+    }),
+  ];
+
+  function refresh() {
+    refreshers.forEach((fn) => fn());
+    status.textContent = `${archerTest.pose.toUpperCase()} · aim (${archerTest.aimX}, ${archerTest.aimY})`;
+  }
+
+  // The game listens on window. Keep review-panel clicks from becoming LPM
+  // input while still exposing ordinary semantic buttons to browser automation.
+  panel.addEventListener("mousedown", (event) => event.stopPropagation());
+  panel.addEventListener("mouseup", (event) => event.stopPropagation());
+  panel.addEventListener("contextmenu", (event) => event.stopPropagation());
+  panel.append(title, poseRow, viewRow, status);
+  document.body.append(panel);
+  refresh();
+}
+
 const net = new Net({
   onRole: (role, _id, room) => {
     mode = role === "host" ? "host" : "guest";
@@ -1007,9 +1184,11 @@ function applySettings() {
       else if (mat) mat.needsUpdate = true;
     });
   }
-  stage.shakeScale = settings.shake;
-  stage.zoomScale = settings.zoom;
-  stage.steady = settings.steadyCam;
+  // The review room is a close, repeatable product shot. Ordinary local play
+  // still reads every value from Settings exactly as before.
+  stage.shakeScale = archerTestEnabled ? 0 : settings.shake;
+  stage.zoomScale = archerTestEnabled ? 0.15 : settings.zoom;
+  stage.steady = archerTestEnabled || settings.steadyCam;
 }
 
 /** Leave the run and go back to the title screen. */
@@ -1111,6 +1290,12 @@ function loop(now: number) {
     if (!paused && !pauseHeld) {
       frames.clear();
 
+      if (archerTestEnabled) {
+        world.clearEnemies();
+        const archer = world.players[0];
+        if (archer) prepareArcherTestPlayer(archer);
+      }
+
       for (const p of world.players) {
         const owner = [...seatOwner.entries()].find(
           ([, pid]) => pid === p.id,
@@ -1118,14 +1303,19 @@ function loop(now: number) {
 
         frames.set(
           p.id,
-          owner === undefined
+          archerTestEnabled
+            ? archerTestFrame()
+            : owner === undefined
             ? withAssist(input.sample(p.seat, p.pos.x, p.pos.z), p, world.enemies)
             : (net.remoteFrames.get(owner) ?? null),
         );
       }
 
-      world.update(dt, frames);
-      director.update(dt);
+      // A backgrounded browser can return with the full 50 ms clamp. Keeping
+      // the review tick at 60 Hz prevents that one catch-up frame from stepping
+      // past the held LPM wind-up before a screenshot is taken.
+      world.update(archerTestEnabled ? Math.min(dt, 1 / 60) : dt, frames);
+      if (!archerTestEnabled) director.update(dt);
 
       if (world.livePlayers.length === 0 && !clearedHandled) {
         clearedHandled = true;
@@ -1389,7 +1579,22 @@ async function boot() {
   // owner table says it is, and it arrives with the first snapshot.
 }
 
-boot();
+if (archerTestEnabled) {
+  // Do not call startRun(): the review room must neither overwrite a saved
+  // climb nor unlock/start audio merely because an art screenshot was opened.
+  mode = "solo";
+  addSeat(0, "archer");
+  running = true;
+  paused = false;
+  menu.hide();
+  const testHud = document.getElementById("ui");
+  if (testHud) testHud.style.display = "none";
+  reshapeArena();
+  world.clearEnemies();
+  installArcherTestControls();
+} else {
+  boot();
+}
 
 // Dev handle: lets the arena be inspected from the console without a debug build.
 if (import.meta.env.DEV) {

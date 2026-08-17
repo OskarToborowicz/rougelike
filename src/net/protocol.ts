@@ -36,7 +36,8 @@ export function decodeFrame(w: WireFrame): Frame {
 
 /**
  * [id, seat, x, z, facing, hp, maxHp, stateIdx, dead, castAmmo, callGauge,
- *  revive, iframes, classIdx, usingSpecial, moveSpeed]
+ *  revive, iframes, classIdx, usingSpecial, specialCharging, specialCharge,
+ *  moveSpeed]
  *
  * `moveSpeed` is the *effective* top speed after boons — speed times moveMul,
  * already multiplied. A guest predicts its own movement from it and must pass a
@@ -51,7 +52,8 @@ export function decodeFrame(w: WireFrame): Frame {
  */
 export type WirePlayer = [
   number, number, number, number, number, number, number, number,
-  number, number, number, number, number, number, number, number
+  number, number, number, number, number, number, number, number,
+  number, number
 ];
 
 /** [id, kindIdx, x, z, facing, hp, maxHp, stateIdx, dead, enraged, flash, statusBits] */
