@@ -207,9 +207,9 @@
 #lobby.show {
   background:
     linear-gradient(rgba(9, 8, 7, 0.34), rgba(4, 4, 3, 0.7)),
-    var(--e-quarry-black),
+    url('/textures/gray_white.jpg'),
     var(--e-slab-dark);
-  background-size: auto, var(--e-quarry-field), auto;
+  background-size: auto, 1024px, auto;
   background-blend-mode: normal, screen, normal;
 }
 
@@ -360,8 +360,8 @@
 .e-tablet {
   position: relative;
   padding: 54px 56px 48px;
-  background: linear-gradient(rgba(28, 23, 20, 0.36), rgba(7, 6, 5, 0.68)), var(--e-quarry-black), var(--e-vein), var(--e-slab-dark);
-  background-size: auto, 420px, auto, auto;
+  background: linear-gradient(rgba(28, 23, 20, 0.36), rgba(7, 6, 5, 0.68)), url('/textures/gray_white.jpg'), var(--e-vein), var(--e-slab-dark);
+  background-size: auto, 1024px, auto, auto;
   background-blend-mode: normal, screen, normal, normal;
   box-shadow: var(--e-relief);
 }
@@ -441,8 +441,8 @@
   color: inherit;
   font: inherit;
   pointer-events: auto;
-  background: linear-gradient(rgba(18, 16, 14, 0.46), rgba(7, 6, 5, 0.7)), var(--e-quarry-black), var(--e-slab-dark);
-  background-size: auto, 240px, auto;
+  background: linear-gradient(rgba(18, 16, 14, 0.46), rgba(7, 6, 5, 0.7)), url('/textures/gray_white.jpg'), var(--e-slab-dark);
+  background-size: auto, 1024px, auto;
   background-blend-mode: normal, screen, normal;
   box-shadow:
     0 1px 0 rgba(255, 240, 205, 0.16) inset,
@@ -489,8 +489,8 @@
  */
 .e-menu-row.primary {
   padding: 19px 22px;
-  background: linear-gradient(rgba(34, 27, 23, 0.38), rgba(10, 8, 7, 0.64)), var(--e-quarry-black), var(--e-vein), var(--e-slab-dark);
-  background-size: auto, 240px, auto, auto;
+  background: linear-gradient(rgba(34, 27, 23, 0.38), rgba(10, 8, 7, 0.64)), url('/textures/gray_white.jpg'), var(--e-vein), var(--e-slab-dark);
+  background-size: auto, 1024px, auto, auto;
   background-blend-mode: normal, screen, normal, normal;
   box-shadow:
     0 0 0 1px rgba(176, 74, 48, 0.4),
@@ -509,8 +509,8 @@
 /* Lifted and lit, not recoloured — the stone stays the stone. */
 .e-menu-row:hover,
 .e-menu-row:focus-visible {
-  background: linear-gradient(rgba(48, 38, 31, 0.32), rgba(15, 12, 10, 0.58)), var(--e-quarry-black), var(--e-vein), linear-gradient(168deg, #352c27, #171312 55%, #2a211d);
-  background-size: auto, 240px, auto, auto;
+  background: linear-gradient(rgba(48, 38, 31, 0.32), rgba(15, 12, 10, 0.58)), url('/textures/gray_white.jpg'), var(--e-vein), linear-gradient(168deg, #352c27, #171312 55%, #2a211d);
+  background-size: auto, 1024px, auto, auto;
   background-blend-mode: normal, screen, normal, normal;
   transform: translateY(-1px);
   box-shadow:
