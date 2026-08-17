@@ -1,7 +1,8 @@
 import { settings } from '../ui/settings';
 
 /**
- * Every sound in the game, synthesised at runtime.
+ * Combat and interface sounds are synthesised at runtime. The run music is a
+ * streamed, looping asset routed through the same Web Audio graph.
  *
  * There are no audio files on purpose: the whole palette is oscillators and one
  * shared noise buffer, which keeps the download at zero bytes and lets a cue be
@@ -37,13 +38,12 @@ export class Audio {
   /** Last start time per cue, to collapse the duplicates a single frame emits. */
   private lastAt = new Map<string, number>();
 
-  /** Drone nodes, kept so intensity can be pushed at them each frame. */
-  private drone: {
-    filter: BiquadFilterNode;
+  /** The run track. A media element can only be connected to one context once. */
+  private track: {
+    element: HTMLAudioElement;
+    source: MediaElementAudioSourceNode;
     gain: GainNode;
-    beat: GainNode;
-    /** Every oscillator, so stopping the bed actually stops it. */
-    sources: OscillatorNode[];
+    active: boolean;
   } | null = null;
   private intensity = 0;
 
@@ -336,63 +336,32 @@ export class Audio {
 
   // ----------------------------------------------------------------- music
 
-  /**
-   * The bed under everything: a detuned drone plus a slow pulse.
-   *
-   * It is not a tune. A loop would wear out over a long run and there is no
-   * budget to compose one procedurally that doesn't — so this only tracks
-   * tension, opening the filter and pushing the pulse as a room heats up.
-   */
+  /** Start (or resume) the soundtrack at the beginning of a run. */
   startMusic() {
-    if (!this.ctx || !this.musicGain || this.drone) return;
+    if (!this.ctx || !this.musicGain) return;
     const t = this.ctx.currentTime;
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 220;
-    filter.Q.value = 1.2;
-
-    const gain = this.ctx.createGain();
-    gain.gain.value = 0.5;
-    filter.connect(gain);
-    gain.connect(this.musicGain);
-
-    const sources: OscillatorNode[] = [];
-
-    // Three oscillators a hair apart: the beating between them is the movement.
-    for (const f of [55, 55.4, 82.5]) {
-      const o = this.ctx.createOscillator();
-      o.type = 'sawtooth';
-      o.frequency.value = f;
-      const og = this.ctx.createGain();
-      og.gain.value = f > 80 ? 0.12 : 0.22;
-      o.connect(og);
-      og.connect(filter);
-      o.start(t);
-      sources.push(o);
+    if (!this.track) {
+      const element = document.createElement('audio');
+      element.src = '/audio/underworld-path-of-ash.wav';
+      element.loop = true;
+      element.preload = 'auto';
+      const source = this.ctx.createMediaElementSource(element);
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0.0001;
+      source.connect(gain);
+      gain.connect(this.musicGain);
+      this.track = { element, source, gain, active: false };
     }
-
-    // A heartbeat under the drone, gated by an LFO rather than a scheduler so
-    // it can never drift out of sync with itself.
-    const beat = this.ctx.createGain();
-    beat.gain.value = 0;
-    const pulseOsc = this.ctx.createOscillator();
-    pulseOsc.type = 'sine';
-    pulseOsc.frequency.value = 38;
-    const lfo = this.ctx.createOscillator();
-    lfo.type = 'sine';
-    lfo.frequency.value = 0.7;
-    const lfoGain = this.ctx.createGain();
-    lfoGain.gain.value = 0.09;
-    lfo.connect(lfoGain);
-    lfoGain.connect(beat.gain);
-    pulseOsc.connect(beat);
-    beat.connect(this.musicGain);
-    pulseOsc.start(t);
-    lfo.start(t);
-    sources.push(pulseOsc, lfo);
-
-    this.drone = { filter, gain, beat, sources };
+    if (this.track.active) return;
+    this.track.active = true;
+    this.track.gain.gain.cancelScheduledValues(t);
+    this.track.gain.gain.setValueAtTime(Math.max(0.0001, this.track.gain.gain.value), t);
+    this.track.gain.gain.setTargetAtTime(0.9, t, 0.35);
+    void this.track.element.play().catch(() => {
+      // Autoplay may still be blocked if a browser lost the initiating gesture.
+      // The next unlock/start call retries without breaking the run.
+      if (this.track) this.track.active = false;
+    });
   }
 
   /**
@@ -401,33 +370,23 @@ export class Audio {
    */
   setIntensity(v: number) {
     this.intensity = clamp(v, 0, 1);
-    if (!this.ctx || !this.drone) return;
-    const t = this.ctx.currentTime;
-    this.drone.filter.frequency.setTargetAtTime(200 + this.intensity * 900, t, 1.2);
-    this.drone.gain.gain.setTargetAtTime(0.35 + this.intensity * 0.4, t, 1.5);
   }
 
   stopMusic() {
-    if (!this.ctx || !this.drone) return;
-    // Let it fall away rather than cut: a hard stop on a drone is a click.
+    if (!this.ctx || !this.track || !this.track.active) return;
+    // Let it fall away rather than cut. Reset after the fade so every new run
+    // begins at the authored opening while pauses inside a run do not touch it.
     const t = this.ctx.currentTime;
-    this.drone.gain.gain.setTargetAtTime(0.0001, t, 0.25);
-    this.drone.beat.gain.setTargetAtTime(0.0001, t, 0.25);
-    const dying = this.drone;
-    this.drone = null;
+    const stopping = this.track;
+    stopping.active = false;
+    stopping.gain.gain.cancelScheduledValues(t);
+    stopping.gain.gain.setTargetAtTime(0.0001, t, 0.22);
     setTimeout(() => {
-      try {
-        // Stop the oscillators before dropping the nodes. Disconnecting alone
-        // only makes them inaudible — they keep running, and every return to
-        // the menu would leave another silent bed burning CPU.
-        for (const s of dying.sources) s.stop();
-        dying.gain.disconnect();
-        dying.beat.disconnect();
-        dying.filter.disconnect();
-      } catch {
-        /* already gone */
+      if (!stopping.active) {
+        stopping.element.pause();
+        stopping.element.currentTime = 0;
       }
-    }, 1500);
+    }, 1200);
   }
 }
 
