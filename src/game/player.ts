@@ -139,7 +139,13 @@ const REST: Record<ClassDef["weapon"], { y: number; x: number }> = {
  * this is that offset already subtracted off the bow hand. Negative x for the
  * same reason — the hand is nearer the centre line than the swing arm's reach.
  */
-const BOW_HOLD = { x: -0.308, y: 1.572, z: 0.504 };
+// The bow mesh carries its grip at local x=+0.55. Subtracting that authored
+// offset puts the visible grip exactly at the left hand, not merely somewhere
+// on the left side of the body.
+const BOW_HOLD = { x: -0.858, y: 1.572, z: 0.504 };
+const BOW_CARRY = { x: -0.84, y: 1.40, z: 0.30 };
+const HAND_L = new THREE.Vector3(-0.028, -0.24, 0.074);
+const HAND_R = new THREE.Vector3(0.028, -0.24, 0.074);
 
 /**
  * How long the string takes to leave the fingers.
@@ -149,6 +155,8 @@ const BOW_HOLD = { x: -0.308, y: 1.572, z: 0.504 };
  * eye reads as force.
  */
 const LOOSE_TIME = 0.05;
+/** Beat after release in which the string is visibly straight and empty. */
+const NOCK_DELAY = 0.12;
 
 // Easing shared by the weapon rig. Attack animation is all about *where* the
 // time goes: a linear sweep reads as a machine, and the eye reads acceleration
@@ -246,6 +254,10 @@ export class Player implements Actor {
    * as *nocking the next one* rather than as an arm going up and down.
    */
   private bowArrow: THREE.Object3D | null = null;
+  /** Root of the authored bow, scaled subtly to show its limbs loading. */
+  private bowBody: THREE.Object3D | null = null;
+  /** Two live segments from the bow tips to the nock. */
+  private bowString: THREE.LineSegments | null = null;
   /** How far the string is back, 0..1. Written by animateWeapon, read by the body. */
   private bowDraw = 0;
   /**
@@ -604,15 +616,42 @@ export class Player implements Actor {
     // The blade rides the same offset the primitive one did, so every pose in
     // animateWeapon lands where it always did.
     const held = instance(weaponSrc);
-    held.position.set(0.55, 0, 0);
+    held.position.set(this.def.weapon === "bow" ? 0 : 0.55, 0, 0);
     held.traverse((o) => {
       const m = o as THREE.Mesh;
-      if (m.isMesh) this.weapon = m;
+      if (!m.isMesh) return;
+      this.weapon = m;
+      // The authored string is part of the rigid export. Hide only that
+      // material slot on this instance; the animated V-string below replaces
+      // it, while wood, leather, arrow and outlines remain untouched.
+      const source = Array.isArray(m.material) ? m.material : [m.material];
+      const own = source.map((material) => {
+        const copy = material.clone();
+        if (/sinew/i.test(copy.name)) {
+          copy.transparent = true;
+          copy.opacity = 0;
+          copy.depthWrite = false;
+        }
+        return copy;
+      });
+      m.material = Array.isArray(m.material) ? own : own[0];
     });
     // The bow's arrow, if this weapon has one. Looked up rather than assumed:
     // every other weapon is a single node and gets `null`, which is the same
     // path a bow takes before its file lands.
     this.bowArrow = held.getObjectByName("ArcherArrow") ?? null;
+    this.bowBody = held.getObjectByName("ArcherBow") ?? held;
+    const stringGeometry = new THREE.BufferGeometry();
+    stringGeometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(new Float32Array(12), 3),
+    );
+    this.bowString = new THREE.LineSegments(
+      stringGeometry,
+      new THREE.LineBasicMaterial({ color: 0xb8f28a }),
+    );
+    this.bowString.renderOrder = 2;
+    this.bowBody.add(this.bowString);
     addOutline(held, 0.03);
     for (const child of [...this.weaponPivot.children]) {
       // The mage's focus light is not part of the placeholder — it is what
@@ -852,9 +891,15 @@ export class Player implements Actor {
     // Run bob — small, but it's the difference between sliding and walking.
     const speed = Math.hypot(this.vel.x, this.vel.z);
     const bobWas = this.bob;
-    this.bob += dt * (6 + speed * 1.4);
+    // The archer runs low and covers a little more ground per step. Giving him
+    // the common cadence made his long legs patter; slow only his phase so the
+    // warrior and mage retain their existing timing.
+    const cadence =
+      this.def.weapon === "bow" ? 4.25 + speed * 0.82 : 6 + speed * 1.4;
+    this.bob += dt * cadence;
+    const runBob = this.def.weapon === "bow" ? 0.15 : 0.09;
     this.mesh.position.y =
-      Math.abs(Math.sin(this.bob)) * (speed > 0.5 ? 0.09 : 0.02);
+      Math.abs(Math.sin(this.bob)) * (speed > 0.5 ? runBob : 0.02);
 
     // A footfall is the bottom of the bob, not a timer — so steps stay locked to
     // the legs at every speed, and stop dead the moment the player does.
@@ -873,6 +918,7 @@ export class Player implements Actor {
     // Body after the weapon: the sword arm reads its pose off weaponPivot, so
     // the hand has to be told where the hilt already went, not the frame after.
     this.animateBody(dt, speed);
+    if (this.def.weapon === "bow") this.pinBowToHands();
     for (const m of this.flashMats) {
       m.emissive.setRGB(this.flash, this.flash * 0.85, this.flash * 0.8);
       if (this.iframes > 0 && this.state === "dash") m.emissive.addScalar(0.25);
@@ -1033,7 +1079,103 @@ export class Player implements Actor {
     );
     r.cape.rotation.z = damp(r.cape.rotation.z, -stride * 0.16 * g, 6, dt);
 
-    if (this.def.weapon === "bow") this.poseArchery(r, g, attacking, dashing);
+    if (this.def.weapon === "bow") {
+      this.poseArcherLocomotion(r, g, stride, dashing, dt);
+      this.poseArchery(r, g, attacking, dashing);
+    }
+  }
+
+  /**
+   * Give the marksman a ready stance and a run of his own.
+   *
+   * The shared gait is deliberately upright because it also has to fit the
+   * armoured warrior and the robed mage. On the archer that left both long
+   * limbs almost straight whenever the bow was not fully aimed — visually a
+   * T-pose even though the authored arms point down. A marksman instead keeps
+   * his weight forward, knees soft and elbows tucked, then lengthens that same
+   * low stance into the run. `poseArchery` is applied afterwards, so drawing
+   * the string cleanly takes control of the upper body without snapping the
+   * legs back to the generic pose.
+   */
+  private poseArcherLocomotion(
+    r: Record<RigJoint, THREE.Object3D>,
+    g: number,
+    stride: number,
+    dashing: boolean,
+    dt: number,
+  ) {
+    if (dashing) {
+      r.pelvis.rotation.x = 0;
+      return;
+    }
+
+    // Keep a little of the ready stance while aiming. This makes firing during
+    // a run feel planted, while the arms are allowed to pass entirely to the
+    // bow pose as `aimHold` rises.
+    const freeArms = 1 - this.aimHold;
+    const crouch = 0.12 + g * 0.06;
+
+    r.pelvis.rotation.x = crouch * 0.34;
+    r.pelvis.rotation.y += -stride * 0.20 * g;
+    r.pelvis.rotation.z += Math.cos(this.bob) * 0.11 * g;
+    r.torso.rotation.x += 0.08 + g * 0.11 + Math.abs(stride) * 0.055 * g;
+    r.torso.rotation.y += stride * 0.17 * g;
+    r.torso.rotation.z += -stride * 0.10 * g;
+    // The gaze stays generally forward but arrives a fraction behind the
+    // shoulders. Tiny pitch/roll motion is enough to stop the head reading as
+    // welded to the torso without making the aim look careless.
+    r.head.rotation.x -= 0.025 + g * 0.035 + Math.abs(stride) * 0.055 * g;
+    r.head.rotation.y += -stride * 0.15 * g;
+    r.head.rotation.z += stride * 0.075 * g;
+
+    // A run is not two straight legs swinging like scissors. One side folds
+    // and reaches forward while the other extends behind to push off; half a
+    // cycle later they exchange jobs. The positive half-wave gives each role a
+    // full readable beat rather than blending both legs through the same pose.
+    const leadL = Math.max(0, stride) * g;
+    const leadR = Math.max(0, -stride) * g;
+    r.legL.rotation.x = -crouch - leadL * 1.02 + leadR * 0.46;
+    r.legR.rotation.x = -crouch - leadR * 1.02 + leadL * 0.46;
+    r.shinL.rotation.x = crouch * 1.8 + leadL * 1.48 + leadR * 0.05;
+    r.shinR.rotation.x = crouch * 1.8 + leadR * 1.48 + leadL * 0.05;
+
+    // The cape first streams back with speed, then ripples after each push-off.
+    // Its slower damping makes the cloth arrive behind the legs instead of
+    // looking rigidly parented to the torso.
+    const push = Math.abs(Math.cos(this.bob));
+    const flutter = Math.sin(this.bob * 2 - 0.65);
+    const drawLift = 0.34 * this.bowDraw * this.aimHold;
+    r.cape.rotation.x = damp(
+      r.cape.rotation.x,
+      -0.34 * g - 0.25 * push * g - 0.15 * flutter * g - drawLift,
+      3.7,
+      dt,
+    );
+    r.cape.rotation.z = damp(
+      r.cape.rotation.z,
+      -stride * 0.34 * g + Math.sin(this.bob * 0.5) * 0.09 * g,
+      4.4,
+      dt,
+    );
+
+    // Bent, close arms replace the long straight silhouette at rest. During a
+    // run they counter-swing, then fade out as the hands move onto the bow.
+    r.armL.rotation.x += freeArms * (-0.13 - stride * 0.30 * g);
+    r.armR.rotation.x += freeArms * (-0.10 + stride * 0.34 * g);
+    r.armL.rotation.y = lerp(r.armL.rotation.y, -0.16, freeArms);
+    r.armR.rotation.y = lerp(r.armR.rotation.y, 0.12, freeArms);
+    r.armL.rotation.z = lerp(r.armL.rotation.z, 0.08 + stride * 0.06 * g, freeArms);
+    r.armR.rotation.z = lerp(r.armR.rotation.z, -0.08 - stride * 0.06 * g, freeArms);
+    r.foreL.rotation.x = lerp(
+      r.foreL.rotation.x,
+      -0.52 - Math.max(0, stride) * 0.20 * g,
+      freeArms,
+    );
+    r.foreR.rotation.x = lerp(
+      r.foreR.rotation.x,
+      -0.46 - Math.max(0, -stride) * 0.24 * g,
+      freeArms,
+    );
   }
 
   /**
@@ -1079,6 +1221,10 @@ export class Player implements Actor {
     const since = attacking ? this.stateT - a.wind : 1;
     const kick = since >= 0 ? Math.exp(-since * 16) : 0;
     const draw = this.bowDraw;
+    const run = Math.sin(this.bob) * g;
+    const volleyTurn = attacking && this.usingSpecial
+      ? smoothstep(this.stateT / Math.max(0.01, a.wind))
+      : 0;
 
     // Every angle below was solved against the rig rather than eyed in, because
     // a draw is the one pose in the game where two hands have to meet a third
@@ -1093,13 +1239,28 @@ export class Player implements Actor {
       node.rotation.z = lerp(node.rotation.z, z, w);
     };
 
-    // Bow arm: out, level, and locked, and it does not move again until the
+    // Bow arm: the left hand holds the grip, level and locked, and it does not
+    // move again until the kick. Its pose and BOW_HOLD were solved to the same
+    // point, so the grip remains inside the palm instead of floating beside it.
     // kick. It is the sight — anything it does that the target did not ask for
     // is a miss, and an arm that drifts through the draw is what makes a shot
     // look unaimed. The elbow is left a hair off zero because a limb at exactly
     // no bend reads as a plank.
-    mix(r.armR, -1.41 + kick * 0.10, 0.04, -0.43);
-    r.foreR.rotation.x = lerp(r.foreR.rotation.x, -0.02 - kick * 0.10, w);
+    // The export's R/L labels are mirrored relative to the visible character,
+    // so authored ArmR is the player's left, bow-holding arm.
+    mix(
+      r.armR,
+      -1.48 + kick * 0.08 - run * 0.075,
+      0.02 + run * 0.055,
+      -0.42 - volleyTurn * 0.14 + run * 0.045,
+    );
+    // Almost straight, but not hyperextended: the slight elbow softness from
+    // the references keeps the bow arm anatomical while preserving its line.
+    r.foreR.rotation.x = lerp(r.foreR.rotation.x, -0.06 - kick * 0.08, w);
+    // PPM rolls the forearm with the horizontal bow and turns the upper arm a
+    // little, avoiding a weapon that rotates independently inside a fixed palm.
+    r.foreR.rotation.z = lerp(r.foreR.rotation.z, -volleyTurn * 1.18, w);
+    r.foreR.rotation.y = lerp(r.foreR.rotation.y, volleyTurn * 0.16, w);
 
     // String arm: from the bow, where the arrow is nocked, back to the jaw.
     // Both ends are solved poses and the draw runs between them, so the hand
@@ -1108,16 +1269,27 @@ export class Player implements Actor {
     // whole snap.
     mix(
       r.armL,
-      lerp(-1.80, -1.25, draw),
-      lerp(1.31, 0.60, draw),
-      lerp(0.52, 1.40, draw) - kick * 0.14,
+      lerp(-1.78, -1.08, draw) + run * 0.07,
+      lerp(1.28, 0.18, draw) - run * 0.06,
+      lerp(0.62, 1.78, draw) - kick * 0.12 - run * 0.08,
     );
-    r.foreL.rotation.x = lerp(r.foreL.rotation.x, lerp(-0.90, -1.60, draw) + kick * 0.20, w);
+    // At full draw the hand anchors by the jaw while the elbow remains high
+    // behind it, approximately continuing the arrow line.
+    r.foreL.rotation.x = lerp(r.foreL.rotation.x, lerp(-0.94, -1.82, draw) + kick * 0.18, w);
+    r.foreL.rotation.y = lerp(r.foreL.rotation.y, -0.16 * draw, w);
 
     // The chest opens into the draw and squares up at the loose. This is the
     // wind-up: the arms are in place before the string moves, so the only thing
     // left to grow is the turn between the shoulders.
-    r.torso.rotation.y += w * (0.30 * draw - 0.10 * kick);
+    // Opening the shoulders turns the model slightly to its right as the right
+    // hand comes back with the string, then squares it on release.
+    // Open away from the camera-side shoulder so the aiming silhouette is read
+    // from the back: left arm forward, right elbow receding behind the torso.
+    // Shoulders turn side-on; hips follow only a little. Rotating both equally
+    // made the entire shade corkscrew instead of opening the upper back.
+    r.torso.rotation.y += w * (-0.46 * draw + 0.10 * kick);
+    r.pelvis.rotation.y += w * -0.055 * draw;
+    r.torso.rotation.x += Math.abs(run) * 0.035;
     r.torso.rotation.x += w * (-0.05 - 0.06 * draw + 0.10 * kick);
     // The eyes stay on the target while the shoulders turn under them. Written
     // against the torso's *final* angle rather than subtracting the turn the
@@ -1171,7 +1343,9 @@ export class Player implements Actor {
   private holdBow(dt: number) {
     const rest = REST.bow;
     const attacking = this.state === "attack";
-    const want = attacking ? 1 : 0;
+    // A bow is carried ready, not slack. Idle and run therefore keep the full
+    // stance; only a dash temporarily gives it up.
+    const want = this.state === "dash" ? 0 : 1;
     // Rises fast, falls slow. Fast because the whole attack is 0.42s and a
     // stance that arrives late is a stance nobody sees; slow because a burst
     // has to stay one continuous aim with the draw cycling inside it, rather
@@ -1179,10 +1353,18 @@ export class Player implements Actor {
     this.aimHold = damp(this.aimHold, want, want > 0 ? 30 : 6, dt);
     const w = this.aimHold;
 
+    // Carried and aimed positions are both in the left hand. During a run the
+    // carry point follows the same phase as that arm, so the grip cannot slide
+    // through the palm while the shoulder and elbow move.
+    const gait = this.gaitAmp;
+    const stride = Math.sin(this.bob);
+    const carryX = BOW_CARRY.x + stride * 0.025 * gait;
+    const carryY = BOW_CARRY.y - stride * 0.085 * gait;
+    const carryZ = BOW_CARRY.z + Math.abs(stride) * 0.035 * gait;
     this.weaponPivot.position.set(
-      lerp(0, BOW_HOLD.x, w),
-      lerp(1.0, BOW_HOLD.y, w),
-      lerp(0, BOW_HOLD.z, w),
+      lerp(carryX, BOW_HOLD.x, w),
+      lerp(carryY, BOW_HOLD.y, w),
+      lerp(carryZ, BOW_HOLD.z, w),
     );
 
     // The draw, and it does not live where an attack animation usually puts it.
@@ -1195,22 +1377,36 @@ export class Player implements Actor {
     // draw runs backwards against the attack: it is already back when the
     // string goes, empty for a breath, and pulled again across the recovery.
     const since = attacking ? this.stateT - this.currentAttack.wind : -1;
-    if (!attacking) this.bowDraw = damp(this.bowDraw, 0, 8, dt);
+    if (!attacking) this.bowDraw = damp(this.bowDraw, 1, 14, dt);
     // Hard enough that the *first* shot of a burst is drawn too. Every later
     // one arrives already back off the previous recovery, but a shade opening
     // fire from a walk has forty milliseconds to nock, and firing a slack bow
     // once is enough to read as one.
-    else if (since < 0) this.bowDraw = damp(this.bowDraw, 1, 70, dt);
+    else if (since < 0) {
+      // RMB loads beyond the normal anchor before the volley. LMB starts from
+      // the already drawn ready pose and therefore remains immediate.
+      const load = this.usingSpecial
+        ? lerp(1, 1.22, smoothstep(this.stateT / this.currentAttack.wind))
+        : 1;
+      this.bowDraw = damp(this.bowDraw, load, 45, dt);
+    }
     else if (since < LOOSE_TIME) this.bowDraw = 1 - since / LOOSE_TIME;
+    else if (since < NOCK_DELAY) this.bowDraw = 0;
     else {
-      // Nocked again over the first three quarters of the recovery, so the
-      // string is home before the next shot can start and the shade is never
-      // caught firing an undrawn bow.
-      const nock = Math.max(0.05, this.currentAttack.recover * 0.75);
-      this.bowDraw = smoothstep((since - LOOSE_TIME) / nock);
+      // The right hand first reaches the now-straight string, then draws it to
+      // the jaw over the remaining recovery. Because recover is multiplied by
+      // attackSpeedMul for LMB, this visible draw speeds up with the stat too.
+      const nock = Math.max(0.05, (this.currentAttack.recover - NOCK_DELAY) * 0.9);
+      this.bowDraw = smoothstep((since - NOCK_DELAY) / nock);
     }
     this.poseArrow(since);
 
+    // The authored limbs already carry the recurved silhouette. Scaling the
+    // whole object to fake loading also squashed its grip and displaced both
+    // hands, so keep the wood rigid; the live V-string carries the draw.
+    if (this.bowBody) {
+      this.bowBody.scale.set(1, 1, 1);
+    }
     // Square to the target, and the kick. The rest pose turns the bow across
     // the body so its curve reads while it is being carried; held through a
     // shot that points the arrow thirty degrees off the thing being shot at,
@@ -1218,9 +1414,22 @@ export class Player implements Actor {
     // way. Aimed, the bow is a vertical line with an arrow on it pointing where
     // the damage lands.
     const flick = since >= 0 ? Math.exp(-since * 14) : 0;
-    this.weaponPivot.rotation.y = lerp(this.weaponPivot.rotation.y, -0.06, w);
+    const carryYaw = rest.y + stride * 0.10 * gait;
+    const carryRoll = rest.x - stride * 0.08 * gait;
+    this.weaponPivot.rotation.y = lerp(carryYaw, -0.06, w);
     this.weaponPivot.rotation.x =
-      lerp(this.weaponPivot.rotation.x, 0.08, w) - 0.16 * flick * w;
+      lerp(carryRoll, 0.08, w) - 0.16 * flick * w;
+    // The volley is fired with the bow horizontal. It rotates into place over
+    // the special wind-up and returns during recovery; LMB remains vertical.
+    const horizontal = this.usingSpecial && attacking
+      ? smoothstep(this.stateT / Math.max(0.01, this.currentAttack.wind))
+      : 0;
+    this.weaponPivot.rotation.z = lerp(
+      this.weaponPivot.rotation.z,
+      // Negative Z roll sends the upper bow tip to the character's right.
+      lerp((5 * Math.PI) / 180, Math.PI * 0.5, horizontal),
+      clamp(dt * 18, 0, 1),
+    );
   }
 
   private poseArrow(sinceLoose = -1) {
@@ -1228,6 +1437,52 @@ export class Player implements Actor {
     if (!arrow) return;
     arrow.position.z = -0.30 * this.bowDraw;
     arrow.visible = !(sinceLoose >= 0 && sinceLoose < 0.12);
+  }
+
+  /** Pin the grip and the string nock to the evaluated palms every frame. */
+  private pinBowToHands() {
+    const r = this.rig;
+    const bow = this.bowBody;
+    if (!r || !bow) return;
+
+    // The body pose has already rotated both shoulder/elbow chains. Sample the
+    // real end of the visually-left (authored R) forearm and place the grip there.
+    this.mesh.updateMatrixWorld(true);
+    const gripWorld = r.foreR.localToWorld(HAND_R.clone());
+    this.weaponPivot.position.copy(this.mesh.worldToLocal(gripWorld));
+
+    // Refresh after moving the bow, then express the visually-right palm in bow-local
+    // space. That exact point becomes both halves of the V-shaped live string.
+    this.mesh.updateMatrixWorld(true);
+    const nockWorld = r.foreL.localToWorld(HAND_L.clone());
+    const handNock = bow.worldToLocal(nockWorld);
+    // On release the hand lets go: the live string snaps to the bow's centre
+    // and becomes straight. As the hand reaches and pulls again, bowDraw moves
+    // that centre continuously back toward the palm.
+    const nock = handNock.multiplyScalar(clamp(this.bowDraw, 0, 1.22));
+    if (this.bowString) {
+      const p = this.bowString.geometry.getAttribute("position") as THREE.BufferAttribute;
+      p.setXYZ(0, 0, 0.79, -0.014);
+      p.setXYZ(1, nock.x, nock.y, nock.z);
+      p.setXYZ(2, nock.x, nock.y, nock.z);
+      p.setXYZ(3, 0, -0.79, -0.014);
+      p.needsUpdate = true;
+    }
+    if (this.bowArrow?.visible) {
+      // The nock is fixed in the right palm. Aim the authored +Z shaft through
+      // the wooden riser and another arrow-length fraction beyond it: an arrow
+      // crosses the bow at full draw; its point does not terminate in the grip.
+      const toRiser = nock.clone().multiplyScalar(-1);
+      const span = toRiser.length();
+      if (span > 0.001) {
+        this.bowArrow.position.copy(nock);
+        this.bowArrow.quaternion.setFromUnitVectors(
+          new THREE.Vector3(0, 0, 1),
+          toRiser.normalize(),
+        );
+        this.bowArrow.scale.set(1, 1, (span + 0.62) / 0.70);
+      }
+    }
   }
 
   private animateWeapon(dt: number) {

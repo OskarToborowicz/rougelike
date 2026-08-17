@@ -386,7 +386,15 @@ export class World {
     );
     mesh.scale.set(0.8, 0.8, 2.4);
     mesh.rotation.y = angle;
-    mesh.position.set(p.pos.x, 1.05, p.pos.z);
+    // Release at the bow, in front of the body. Starting at the actor centre
+    // made the first backwards-built tracer cross the shade and shine out from
+    // behind their back before the arrow had travelled a single frame.
+    const muzzle = 1.1;
+    mesh.position.set(
+      p.pos.x + Math.sin(angle) * muzzle,
+      1.05,
+      p.pos.z + Math.cos(angle) * muzzle,
+    );
     this.scene.add(mesh);
     this.projectiles.push({
       mesh,
@@ -405,6 +413,9 @@ export class World {
       owner: p,
       spin: false,
       tracer: markLight(mark, 0xdcffc0),
+      // Give the arrow enough distance to clear the body before laying down its
+      // first ribbon. Later ribbons retain the normal 35ms cadence.
+      trailT: 0.04,
       slot,
     });
     // The release itself. A volley fires five of these on one frame, so each
