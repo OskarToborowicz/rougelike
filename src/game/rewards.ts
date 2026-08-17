@@ -85,7 +85,7 @@ export interface Door {
  * door", chosen while you can still see how much health you have left. A door
  * whose contents are a surprise is just a corridor.
  *
- * `courted` is the set of thrones that have not been spurned this descent — a
+ * `courted` is the set of thrones that have not been spurned this climb — a
  * door promising a god who will not speak to you would be a dead end.
  */
 export function rollReward(kind: RewardKind, courted = PANTHEON_ORDER): Reward {
@@ -145,7 +145,7 @@ export function rollReward(kind: RewardKind, courted = PANTHEON_ORDER): Reward {
  * player is actually being offered: a harder fight for a stronger reward.
  */
 export function offerDoors(
-  depth: number,
+  rung: number,
   count = 2,
   hasBoons = false,
   courted = PANTHEON_ORDER
@@ -172,7 +172,7 @@ export function offerDoors(
 
   // Room types ramp in once the run has its footing, and never repeat across
   // doors — picking between two identical fights is not a choice either.
-  const roomPool: RoomKind[] = depth < 3 ? ['combat', 'combat'] : ['combat', 'elite', 'horde'];
+  const roomPool: RoomKind[] = rung < 3 ? ['combat', 'combat'] : ['combat', 'elite', 'horde'];
   const rooms = shuffle(roomPool.slice());
   return rewards.map((reward, i) => ({
     reward,

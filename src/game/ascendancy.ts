@@ -7,7 +7,7 @@ import { t, type Key } from '../ui/i18n';
  *
  * Boons and hammers make a run stronger; they never make it a different shade.
  * Halfway down, each class forks into one of two ascendancies and keeps it for
- * the rest of the descent — so the warrior you finish with is a samurai or a
+ * the rest of the climb — so the warrior you finish with is a samurai or a
  * barbarian, not a warrior who happened to take crit cards. Each branch closes
  * with a single capstone, which is the promise of that path finally paid.
  *
@@ -25,11 +25,11 @@ export type AscendancyId =
 
 /**
  * Where the tree branches, and where it closes. Both sit one chamber after a
- * boss, so an ascendancy is something the descent hands you for surviving a
+ * boss, so an ascendancy is something the climb hands you for surviving a
  * guardian rather than something that arrives between two ordinary rooms.
  */
-export const ASCEND_DEPTH = 5;
-export const CAPSTONE_DEPTH = 10;
+export const ASCEND_RUNG = 5;
+export const CAPSTONE_RUNG = 10;
 
 /**
  * How an ascendancy changes the weapon itself.

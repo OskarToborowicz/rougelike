@@ -78,18 +78,21 @@ by hand: the moment it guesses from a filename, a boss-sized common walks past.
 ## Running it
 
 Blender from the Windows Store cannot be launched from a shell — `WindowsApps`
-is ACL-locked — so the working route here is to run it *inside* Blender, from
-the Text Editor or over the MCP bridge:
+is ACL-locked. The Program Files install can, and headless is the fast route:
+build, export and render a check shot without ever opening the UI.
+
+```bash
+"/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --python tools/prep_model.py -- raw/minotaur.glb public/models/minotaur.glb --budget boss
+```
+
+`preview()` and `stage()` in `build_shades.py` render under `--background` too,
+which is what makes a silhouette worth iterating on from a shell at all.
+
+It also runs *inside* Blender, from the Text Editor or over the MCP bridge:
 
 ```python
 exec(open(r"tools/prep_model.py", encoding="utf-8").read())
 prep(r"raw/minotaur.glb", r"public/models/minotaur.glb", budget="boss", name="Minotaur")
-```
-
-With a normal Blender install it is also a one-liner:
-
-```bash
-blender --background --python tools/prep_model.py -- raw/minotaur.glb public/models/minotaur.glb --budget boss
 ```
 
 Then check what came out:
@@ -170,20 +173,43 @@ build_all(r"public/models", r"some/scratch/dir")
 Three reasons a player body is not generated like everything else:
 
 **The rig is named nodes, and the pivot is the joint.** `animateBody` rotates
-`Pelvis` / `Torso` / `Head` / `ArmL` / `ArmR` / `LegL` / `LegR` by name — there
-is no skinning. `prep_model.py --split humanoid` can carve those out of a single
+`Pelvis` / `Torso` / `Head` / `ArmL` / `ArmR` / `LegL` / `LegR` — and, where a
+model carries them, `ForearmL/R`, `ShinL/R` and `Cape` — by name; there is no
+skinning. `prep_model.py --split humanoid` can carve those out of a single
 sculpt by measuring where the geometry sits, but the shoulder then turns around
 wherever the plane landed. Building the parts puts the origin *on* the joint.
-The sorceress has five of them: a robe hem cut in two so a leg can swing through
-it walks like a pair of scissors.
+Both shades now carry all twelve. The sorceress needs the knees because she is
+armoured rather than robed and there is no hem left to hide a stride behind —
+bare legs and a heel are exactly what a player reads a walk off, and her `Cape`
+slot is floor-length hair, which wants the damped lag that slot already applies.
+The marksman needs the elbows for a different reason: **a draw is an elbow.**
+The bow arm locks straight while the string hand comes back past the jaw, and a
+limb of one piece cannot hold that shape — it can only swing like a pendulum,
+which is why the seven-node version read as a man raising his arms rather than
+as an archer. His `Cape` is the cloak, moved off the torso so it lags instead of
+turning with the chest on the same frame.
+
+**The palette is per shade, and its numbers are linear.** `BASE_PALETTE` is what
+both wear; `SHADE_PALETTE` overrides the tones that belong to one character, and
+`palette("mage")` at the top of each body function makes the right one live
+before any material is created. The sorceress owns black hair and dark skin
+there. Two traps: glTF carries a base colour *factor* that three uses as linear
+light, so 0.30 in the table lands near `#9a` on screen and a value that reads
+correctly as a hex colour will export twice as bright as intended; and the arena
+lights with a warm orange key that multiplies every one of these, so a skin tone
+judged in Blender's neutral preview arrives a step lighter and a step redder.
+The first sorceress was authored on the archer's tones and reached the game as a
+pale ginger woman in an orange breastplate.
 
 **Materials carry meaning.** These export with `export_materials="EXPORT"` and
 `loadAuthoredRig` repaints only the one called `Crest` with the seat colour, so
 the palette in the file is what you see: near-black leather and cloth, aged
-gold on the few pieces meant to read as reliquary, and one cloth garment per
-shade — the archer's shoulder mantle, the sorceress' — carrying the player's
-colour. Everything below it stays black on purpose. A shade painted seat-colour
-from collar to floor is legible from orbit and is not the art direction.
+gold on the few pieces meant to read as reliquary, and one piece per shade —
+the archer's shoulder mantle, the sorceress' chest plate and pauldrons —
+carrying the player's colour. Everything else stays black on purpose. A shade
+painted seat-colour from collar to floor is legible from orbit and is not the
+art direction. Pick that piece for what a camera 52° up can see, which is the
+top of a shoulder and nothing below the belt.
 
 **Silhouette is the whole budget.** The game camera is a 42° lens at 52° up and
 seventeen units out, which leaves a 2.1-unit body about 115 pixels tall. Judge
@@ -191,10 +217,26 @@ these with `stage("archer", path)`, which puts the weapon in hand, the seat
 colour on the crest, and the camera exactly there. Anything that only reads in
 the close-up shot is not paying for itself.
 
-Both bodies land around 3.8k and 3.6k triangles against the 8k player budget,
-so there is room — but note the weapons are authored **in game units** and never
+The marksman lands around 5.5k triangles and the sorceress 9.8k against the 16k
+player budget — half of her is bare skin, so the body has to *be* a body rather
+than an armour-shaped solid, and that is where the difference went. Watch
+`prims` rather than `tris` on a rig this articulated: 34 of the 36 allowed, and
+it is materials times nodes, which is exactly the pair that grows when a limb
+gains a joint.
+
+Note the weapons are authored **in game units** and never
 go through `fitToHeight`, because `player.ts` parents them at `(0.55, 0, 0)`
 under the swing pivot. Their size in the file is their size on screen.
+
+**A weapon may have moving parts, and `archer_bow.glb` does.** The nocked arrow
+is its own node — an *empty* called `ArcherArrow` with the shaft parented under
+it — and `animateWeapon` slides it back along the aim through the draw, hides it
+for a breath at the loose, and lets it return over the recovery. Two rules come
+out of that. The empty is not decoration: `addOutline` clones every mesh into a
+hull added as its **sibling**, so a mesh moved after that slides out of its own
+silhouette, and the node the game animates has to be a parent for the hull to
+land inside it. And `stage()` places only parents — a child node given the
+weapon's own offset is carried out of the weapon twice.
 
 ## Keeping the raws
 

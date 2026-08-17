@@ -46,7 +46,7 @@ export function buildSnapshot(
   n: number,
   owners: [number, number][],
   acks: [number, number][],
-  depth: number,
+  rung: number,
   label: string,
   paused: boolean,
   offers: WireOffer[] = [],
@@ -105,7 +105,7 @@ export function buildSnapshot(
     fx: fx.drain(),
     owners,
     acks,
-    depth,
+    rung,
     label,
     paused,
     offers,
@@ -158,7 +158,7 @@ export class RemoteView {
   private localAuth: Pose | null = null;
   private lastAck = 0;
   private lastTick = -1;
-  depth = 1;
+  rung = 1;
   label = "";
   paused = false;
   /** Player id this client controls, resolved from the snapshot's owner table. */
@@ -181,7 +181,7 @@ export class RemoteView {
     this.lastTick = snap.n;
     this.myPlayerId =
       snap.owners.find(([netId]) => netId === myNetId)?.[1] ?? -1;
-    this.depth = snap.depth;
+    this.rung = snap.rung;
     this.label = snap.label;
     this.paused = snap.paused;
 
@@ -345,6 +345,9 @@ export class RemoteView {
       pos: { x: this.localAuth.x, y: 0, z: this.localAuth.z },
       vel: { x: p.vel.x, y: 0, z: p.vel.z },
       facing: p.facing,
+      // Carried, not recomputed: the replay has to re-integrate the dash down
+      // the heading it was launched on, which is exactly what `facing` is not.
+      dashDir: p.dashDir,
       radius: p.radius,
       speed: p.speed,
       state: p.state as string,
@@ -372,6 +375,8 @@ export class RemoteView {
   }
 
   private correction = { x: 0, z: 0 };
+  /** Edge detector for the local shade entering a dash. See `predictLocal`. */
+  private wasDashing = false;
 
   /**
    * Predict one frame of the local shade from local input, before the host has
@@ -386,8 +391,23 @@ export class RemoteView {
     if (!p.dead && frame) {
       // 1 for the same reason as in `reconcile` above: `p.speed` already carries
       // the multiplier. These two must agree exactly or every frame disagrees.
+      // The guest latches its own dash the frame it first sees the state, off
+      // the input it is holding right then — the same rule the host applies,
+      // run against the same keys. Without it the local shade predicts a dash
+      // toward the cursor while the host sends it where the stick was held, and
+      // the correction spends the whole dash pulling one onto the other.
+      if (p.state === 'dash' && !this.wasDashing) {
+        p.dashDir =
+          frame.moveX || frame.moveY
+            ? Math.atan2(frame.moveX, frame.moveY)
+            : Math.atan2(frame.aimX, frame.aimY);
+        p.facing = p.dashDir;
+      }
+      this.wasDashing = p.state === 'dash';
+
       stepMovement(p, frame, dt, 1);
-      p.facing = Math.atan2(frame.aimX, frame.aimY);
+      // Aim owns facing except through a dash, which owns its own heading.
+      if (p.state !== 'dash') p.facing = Math.atan2(frame.aimX, frame.aimY);
       if (seq !== null) this.pending.push({ seq, frame, dt });
       // Roughly two seconds of unacked input; past that the link is gone.
       while (this.pending.length > 120) this.pending.shift();

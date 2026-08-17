@@ -630,7 +630,7 @@
   color: rgba(230, 223, 208, 0.34);
 }
 
-/* A throne that has been spurned this descent goes dark and stays dark. */
+/* A throne that has been spurned this climb goes dark and stays dark. */
 .e-throne.spurned .e-roundel {
   filter: grayscale(1) brightness(0.4);
 }
@@ -1542,7 +1542,7 @@
 /*
  * The forking.
  *
- * Same tablet, cut deeper. A branch is the only card in a descent that cannot
+ * Same tablet, cut deeper. A branch is the only card in a climb that cannot
  * be stacked on later, so it wears its own metal on the edge rather than only
  * on the mason's mark, and the name is set in the display face at full size.
  */
@@ -1631,7 +1631,7 @@
 /* =================================================== the rest of the screens */
 
 /*
- * Setup, rites, the canon, the reliquary, the waiting room and the pause menu
+ * Setup, settings, the key map, the reliquary, the waiting room and the pause menu
  * are not in the design doc, but they are the same game — so they take the same
  * amber, the same type, and the same hairline frames rather than staying on the
  * old violet panel.
@@ -1843,7 +1843,7 @@
   color: var(--e-ink-bright);
 }
 
-/* The segmented toggles in the rites screen. */
+/* The segmented toggles in the settings screen. */
 .ltoggle,
 .lsegbtn {
   font-family: var(--e-display);

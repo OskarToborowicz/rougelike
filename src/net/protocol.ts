@@ -46,7 +46,7 @@ export function decodeFrame(w: WireFrame): Frame {
  * exactly what makes this easy to get wrong.
  *
  * The build does not ride here. It is a list of ids, not a number, and it
- * changes a few times a descent rather than thirty times a second — see
+ * changes a few times a climb rather than thirty times a second — see
  * `builds` on the Snapshot.
  */
 export type WirePlayer = [
@@ -74,6 +74,10 @@ export type WireProjectile = [number, number, number, number, number, number];
 export type WireFx =
   | ['slash', number, number, number, number, number, number, number]
   | ['spark', number, number, number, number, string, number]
+  /** ['shot', x, z, facing, colour, spark colour, power] — a bow release. */
+  | ['shot', number, number, number, number, string, number]
+  /** ['tracer', x, z, facing, length, colour, life] — a length of arrow flight. */
+  | ['tracer', number, number, number, number, number, number]
   | ['burst', number, number, string, number]
   | ['ring', number, number, number, number, number]
   | ['trail', number, number, string]
@@ -107,7 +111,7 @@ export interface Snapshot {
    *
    * Sent as the choices rather than the numbers, exactly as the run save is
    * written, so one replay path serves both. Omitted from most snapshots — a
-   * build changes a few times a descent, not every tick.
+   * build changes a few times a climb, not every tick.
    */
   builds?: [number, string][];
   /**
@@ -116,7 +120,18 @@ export interface Snapshot {
    * the authoritative state.
    */
   acks: [number, number][];
-  depth: number;
+  /**
+   * How far up the climb the host is. Was `depth` while the run went the other
+   * way.
+   *
+   * Nothing here is version-negotiated — `hello` carries a room, a name and a
+   * class, and no build stamp — so a renamed field is only safe because host and
+   * guest always fetch the same bundle from the same origin. The one way to see
+   * a mismatch is a tab left open across a deploy, and the cure for that is a
+   * reload. Worth knowing before adding a field that a guest *reads* rather
+   * than one it merely ignores.
+   */
+  rung: number;
   label: string;
   /** Non-empty when the host wants a banner shown on every screen. */
   banner?: string;

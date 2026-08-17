@@ -16,7 +16,7 @@ import { arenaRadius, makeGlowTexture } from '../render/arena';
 import type { FxBus } from '../render/fxbus';
 import type { Frame } from '../core/input';
 import { angleDelta, clamp, damp, rand, TAU } from '../core/math';
-import { PANTHEONS } from './pantheons';
+import { markCss, markLight } from './pantheons';
 
 /**
  * A bolt: solid core, additive glow shell, and its own light. A bare sphere at
@@ -78,6 +78,12 @@ export interface Projectile {
   color: number;
   /** CSS colour for the particle trail this bolt leaves behind, if any. */
   trail?: string;
+  /**
+   * Colour of the solid ribbon this projectile draws along its flight, if any.
+   * Arrows get one; slow orbs do not — a ribbon on something that crawls reads
+   * as a smear rather than as speed.
+   */
+  tracer?: number;
   /** Who fired it — boons, lifesteal and crits are credited back to them. */
   owner?: Player;
   /** Splash radius on impact. Absent means a single-target hit. */
@@ -238,8 +244,8 @@ export class World {
       } else {
         // Ease-out so the dash pops on frame one and glides to a stop.
         const speed = (DASH.dist / DASH.time) * (1 - t * t) * 1.5;
-        p.vel.set(Math.sin(p.facing) * speed, 0, Math.cos(p.facing) * speed);
-        this.fx.dashTrail(p.pos.x, p.pos.z, '#8fd8ff');
+        p.vel.set(Math.sin(p.dashDir) * speed, 0, Math.cos(p.dashDir) * speed);
+        this.fx.dashTrail(p.pos.x, p.pos.z, markCss(b.marks.dash, '#8fd8ff'));
         if (b.dashDamage > 0) this.dashSweep(p);
       }
     } else if (p.state === 'attack') {
@@ -275,7 +281,13 @@ export class World {
         // The Call — solo or shared — resolved this frame and owns the shade.
       } else if (f.pressed.has('dash') && p.dashCd <= 0) {
         // Dash goes where you're moving if you're moving, else where you aim.
-        if (f.moveX || f.moveY) p.facing = Math.atan2(f.moveX, f.moveY);
+        // Latched into its own field, because `facing` does not hold still —
+        // writing the intent here and then integrating against `facing` meant
+        // the dash curved back onto the cursor within a third of its length.
+        p.dashDir = f.moveX || f.moveY ? Math.atan2(f.moveX, f.moveY) : p.facing;
+        // Lead with the body. The dash pose is a forward tuck with the knee up,
+        // and a shade travelling sideways in a forward tuck moonwalks.
+        p.facing = p.dashDir;
         p.state = 'dash';
         p.stateT = 0;
         p.dashCd = DASH.cooldown;
@@ -357,7 +369,21 @@ export class World {
   private fireBolt(p: Player, a: AttackShape, spread: number) {
     const angle = p.facing + spread;
     const speed = 46;
-    const mesh = makeBolt(p.def.accent, 0.14, '#c8ff9a', 0xdcffc0);
+    // Arrow, glow, trail, tracer and the flash at the release, all off one mark.
+    // The core is lightened rather than taken straight: `light` is a saturated
+    // hue and a bolt whose centre is the same value as its shell reads as a
+    // coloured hole. That is also exactly what the guest-side builder does with
+    // the colour it receives, so a marked bolt now looks the same on both
+    // screens where an unmarked one still does not.
+    const slot: DamageSlot = p.usingSpecial ? 'special' : 'attack';
+    const mark = p.boons.marks[slot];
+    const light = markLight(mark, p.def.accent);
+    const mesh = makeBolt(
+      light,
+      0.14,
+      markCss(mark, '#c8ff9a'),
+      mark ? lighten(light, 0.55) : 0xdcffc0,
+    );
     mesh.scale.set(0.8, 0.8, 2.4);
     mesh.rotation.y = angle;
     mesh.position.set(p.pos.x, 1.05, p.pos.z);
@@ -374,19 +400,22 @@ export class World {
       // bodies. See ascendancy.ts.
       pierce: 1 + p.boons.attackPierce,
       hit: new Set(),
-      color: p.def.accent,
-      trail: '#9ee06a',
+      color: light,
+      trail: markCss(mark, '#9ee06a'),
       owner: p,
       spin: false,
-      slot: p.usingSpecial ? 'special' : 'attack',
+      tracer: markLight(mark, 0xdcffc0),
+      slot,
     });
-    this.fx.hitSpark(
-      p.pos.x + Math.sin(angle) * 1.1,
-      p.pos.z + Math.cos(angle) * 1.1,
-      Math.sin(angle),
-      Math.cos(angle),
-      '#d8ffb0',
-      0.35
+    // The release itself. A volley fires five of these on one frame, so each
+    // one is dialled back — five full-power flashes is a white screen.
+    this.fx.shot(
+      p.pos.x,
+      p.pos.z,
+      angle,
+      markLight(mark, 0xdcffc0),
+      markCss(mark, '#d8ffb0'),
+      spread === 0 ? 1 : 0.55,
     );
     this.fx.sfx('bolt', p.pos.x, p.pos.z);
     this.fx.shake(0.06);
@@ -401,7 +430,14 @@ export class World {
   /** The mage's orb: slow, heavy, and it bursts in a small radius on contact. */
   private fireOrb(p: Player, a: AttackShape) {
     const speed = 15;
-    const mesh = makeBolt(p.def.accent, 0.3, '#c9a0ff', 0xe0c8ff);
+    const mark = p.boons.marks.attack;
+    const light = markLight(mark, p.def.accent);
+    const mesh = makeBolt(
+      light,
+      0.3,
+      markCss(mark, '#c9a0ff'),
+      mark ? lighten(light, 0.55) : 0xe0c8ff,
+    );
     mesh.position.set(p.pos.x, 1.1, p.pos.z);
     this.scene.add(mesh);
     this.projectiles.push({
@@ -414,8 +450,8 @@ export class World {
       life: 1.3,
       pierce: 0,
       hit: new Set(),
-      color: p.def.accent,
-      trail: '#a06cff',
+      color: light,
+      trail: markCss(mark, '#a06cff'),
       owner: p,
       /** Splash on impact — the mage's damage comes from grouping, not accuracy. */
       burst: 2.4,
@@ -437,10 +473,12 @@ export class World {
       this.damage(e, a.dmg * p.boons.specialMul, p, dx / (d || 1), dz / (d || 1), a.push, 'special');
       connected++;
     }
+    const mark = p.boons.marks.special;
+    const light = markLight(mark, p.def.accent);
     this.fx.sfx('swingHeavy', p.pos.x, p.pos.z);
-    this.fx.ring(p.pos.x, p.pos.z, p.def.accent, a.reach, 0.45);
-    this.fx.slash(p.pos.x, p.pos.z, p.facing, Math.PI * 2, a.reach, p.def.accent, 0.3);
-    this.fx.bloodBurst(p.pos.x, p.pos.z, '#b07cff', 1.4);
+    this.fx.ring(p.pos.x, p.pos.z, light, a.reach, 0.45);
+    this.fx.slash(p.pos.x, p.pos.z, p.facing, Math.PI * 2, a.reach, light, 0.3);
+    this.fx.bloodBurst(p.pos.x, p.pos.z, markCss(mark, '#b07cff'), 1.4);
     this.fx.shake(connected ? 0.75 : 0.4);
     if (connected) this.freeze(0.09);
   }
@@ -448,6 +486,13 @@ export class World {
   /** Melee: an arc test in front of the attacker. Generous, because whiffing feels bad. */
   private resolveSwing(p: Player, a: AttackShape, heavy: boolean) {
     const mul = heavy ? p.boons.specialMul : p.boons.attackMul;
+    // Whose swing this is. Steel-blue and amber are what a shade owns before
+    // any god has spoken to it; after that the arc, the sparks off a body and
+    // the ring under a heavy all burn the throne's own fire together — one of
+    // the three recoloured on its own reads as a bug rather than as a gift.
+    const mark = p.boons.marks[heavy ? 'special' : 'attack'];
+    const edge = markLight(mark, heavy ? 0xffb04a : 0xbfd4ff);
+    const sparks = markCss(mark, '#ffe6a8');
     /** Where the blade actually met something, and which way that thing was hit. */
     const contacts: { x: number; z: number; nx: number; nz: number }[] = [];
     for (const e of this.enemies) {
@@ -475,7 +520,7 @@ export class World {
       p.facing,
       a.arc,
       a.reach,
-      heavy ? 0xffb04a : 0xbfd4ff,
+      edge,
       heavy ? 0.32 : 0.24
     );
 
@@ -490,7 +535,7 @@ export class World {
        * was long, and a cleave through three foes still only lit up one spot.
        */
       for (const c of contacts) {
-        this.fx.hitSpark(c.x, c.z, c.nx, c.nz, '#ffe6a8', heavy ? 1.6 : 1);
+        this.fx.hitSpark(c.x, c.z, c.nx, c.nz, sparks, heavy ? 1.6 : 1);
       }
     } else {
       // A whoosh even on a whiff. Nothing was struck, so there is no impact to
@@ -500,11 +545,11 @@ export class World {
         p.pos.z + Math.cos(p.facing) * a.reach * 0.7,
         Math.sin(p.facing),
         Math.cos(p.facing),
-        '#8fa8ff',
+        markCss(mark, '#8fa8ff'),
         0.35
       );
     }
-    if (heavy) this.fx.ring(p.pos.x, p.pos.z, 0xffc07a, a.reach, 0.3);
+    if (heavy) this.fx.ring(p.pos.x, p.pos.z, markLight(mark, 0xffc07a), a.reach, 0.3);
   }
 
   private dashSweep(p: Player) {
@@ -533,10 +578,21 @@ export class World {
     // The bolt wears whichever throne has claimed this shade's Cast. Before any
     // of them has, it is the shade's own violet — the cast is a class ability
     // first and a god's instrument second.
-    const claimed = p.boons.taken.find((b) => b.slot === 'cast');
-    const color = claimed ? PANTHEONS[claimed.pantheon].color : 0xb07cff;
+    //
+    // This used to read the *first* card taken in the slot and paint it the
+    // throne's `color`, which is its marble: four of the seven stones are one
+    // off-white at this size, so half the thrones cast the same bolt. It now
+    // goes through the same mark every other slot uses — last card wins, and
+    // the colour is the throne's fire.
+    const mark = p.boons.marks.cast;
+    const color = markLight(mark, 0xb07cff);
     const speed = 20;
-    const mesh = makeBolt(color, 0.26, '#ff9fd0', 0xffc8e4);
+    const mesh = makeBolt(
+      color,
+      0.26,
+      markCss(mark, '#ff9fd0'),
+      mark ? lighten(color, 0.55) : 0xffc8e4,
+    );
     mesh.position.set(p.pos.x, 1.0, p.pos.z);
     this.scene.add(mesh);
     this.projectiles.push({
@@ -552,7 +608,7 @@ export class World {
       pierce: 1 + p.boons.castPierce,
       hit: new Set(),
       color,
-      trail: '#ff8fc8',
+      trail: markCss(mark, '#ff8fc8'),
       slot: 'cast',
     });
     this.fx.shake(0.1);
@@ -1186,11 +1242,19 @@ export class World {
       if (pr.spin !== false) pr.mesh.rotation.y += dt * 8;
       // Trails are time-based, not per-frame: sixty bolts each emitting every
       // frame saturates the particle pool and starves everything else of it.
-      if (pr.trail) {
+      if (pr.trail || pr.tracer !== undefined) {
         pr.trailT = (pr.trailT ?? 0) - dt;
         if (pr.trailT <= 0) {
-          this.fx.dashTrail(pr.pos.x, pr.pos.z, pr.trail);
-          pr.trailT = 0.055;
+          if (pr.tracer !== undefined) {
+            // One ribbon per emit, exactly as long as the distance covered
+            // since the last one, so the flight draws as an unbroken line
+            // however fast the arrow is or however the frame rate wanders.
+            const speed = Math.hypot(pr.vel.x, pr.vel.z);
+            const facing = Math.atan2(pr.vel.x, pr.vel.z);
+            this.fx.tracer(pr.pos.x, pr.pos.z, facing, speed * 0.05 + 0.4, pr.tracer, 0.14);
+          }
+          if (pr.trail) this.fx.dashTrail(pr.pos.x, pr.pos.z, pr.trail);
+          pr.trailT = pr.tracer !== undefined ? 0.035 : 0.055;
         }
       }
 
@@ -1223,6 +1287,18 @@ export class World {
             });
           }
           this.fx.hitSpark(pr.pos.x, pr.pos.z, pr.vel.x, pr.vel.z, '#ffffff', 0.9);
+          // An arrow punches through: a short lance of light out the far side,
+          // which is also what sells a pierce landing on the second body.
+          if (pr.tracer !== undefined) {
+            this.fx.tracer(
+              pr.pos.x,
+              pr.pos.z,
+              Math.atan2(pr.vel.x, pr.vel.z),
+              1.6,
+              pr.tracer,
+              0.18
+            );
+          }
           if (pr.pierce-- <= 0) done = true;
           break;
         }
@@ -1313,7 +1389,6 @@ export class World {
       this.fx.sfx('kill', e.pos.x, e.pos.z, e.a.scale);
       this.fx.bloodBurst(e.pos.x, e.pos.z, '#b3264a', e.a.scale);
       this.fx.ring(e.pos.x, e.pos.z, 0xff5a7a, 1.6 * e.a.scale, 0.35);
-      this.freeze(0.07);
       this.fx.shake(0.45 * e.a.scale);
     }
   }

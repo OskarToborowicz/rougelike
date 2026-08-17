@@ -11,7 +11,7 @@ import { Player, PLAYER_TINTS } from "./game/player";
 import { BoonSet, offerFrom, rivalOffer, type Boon } from "./game/boons";
 import type { WireCard, WireOffer, WireView } from "./net/protocol";
 import { CLASSES, type ClassId } from "./game/classes";
-import { biomeForDepth } from "./render/biome";
+import { biomeForRung } from "./render/biome";
 import { Director } from "./game/director";
 import { Gate } from "./game/gate";
 import { offerDoors, type Reward } from "./game/rewards";
@@ -48,8 +48,8 @@ import {
 } from "./game/meta";
 import {
   ascendanciesOf,
-  ASCEND_DEPTH,
-  CAPSTONE_DEPTH,
+  ASCEND_RUNG,
+  CAPSTONE_RUNG,
   type Ascendancy,
   type Capstone,
 } from "./game/ascendancy";
@@ -106,7 +106,7 @@ const guestAscended = new Set<number>();
 /**
  * Set whenever a shade's build changes, cleared once it has gone out.
  *
- * Builds are a list of ids, not a number, and they change a few times a descent
+ * Builds are a list of ids, not a number, and they change a few times a climb
  * — putting them in every snapshot would send the same few hundred bytes per
  * player thirty times a second to say nothing new.
  */
@@ -239,7 +239,7 @@ const director = new Director(world, () => world.players.length);
 
 /**
  * What this run has earned so far. Obols are banked the instant they drop —
- * these two only exist so the shore screen can show what *this* descent was
+ * these two only exist so the shore screen can show what *this* climb was
  * worth, separately from the lifetime purse.
  */
 let runObols = 0;
@@ -251,7 +251,7 @@ const seatMeta = new Map<number, MetaState>();
 // ------------------------------------------------------------- the run save
 
 /**
- * Only a descent this machine owns outright is written down.
+ * Only a climb this machine owns outright is written down.
  *
  * A co-op run lives on the host and is made of people, not state: resuming one
  * alone would mean inventing bodies for players who are not here, and a guest
@@ -260,11 +260,11 @@ const seatMeta = new Map<number, MetaState>();
  */
 const canSaveRun = () => mode === "solo";
 
-/** The descent as it stands, in the only form that survives a rebalance. */
+/** The climb as it stands, in the only form that survives a rebalance. */
 function snapshotRun(): RunSave {
   return {
     v: 1,
-    depth: director.depth,
+    rung: director.rung,
     room: director.room,
     obols: runObols,
     kills: runKills,
@@ -284,7 +284,7 @@ function snapshotRun(): RunSave {
  * Called where a chamber begins and nowhere else. Saving mid-fight would mean
  * serialising every enemy, every projectile and the wave the director is part
  * way through — and would hand the player a way to reload out of a blow already
- * in the air. The chamber threshold is the one moment a descent is fully
+ * in the air. The chamber threshold is the one moment a climb is fully
  * described by what has been chosen rather than by what is currently moving.
  */
 function checkpoint() {
@@ -294,7 +294,7 @@ function checkpoint() {
 
 /** Obols a corpse is worth. Bosses pay for the fight they actually were. */
 const bounty = (e: Enemy) =>
-  e.a.boss ? 60 + director.depth * 8 : Math.round(4 + e.a.hp / 24 + director.depth * 0.6);
+  e.a.boss ? 60 + director.rung * 8 : Math.round(4 + e.a.hp / 24 + director.rung * 0.6);
 
 world.onConcord = () => hud.showBanner(t("banner.concord"));
 
@@ -327,10 +327,10 @@ function startRun() {
  */
 function reshapeArena() {
   const guest = mode === "guest";
-  // A guest has no director of its own; depth and roster arrive in snapshots.
-  const depth = guest ? remote.depth : director.depth;
+  // A guest has no director of its own; rung and roster arrive in snapshots.
+  const rung = guest ? remote.rung : director.rung;
   const count = guest ? remote.playerList.length : world.players.length;
-  arena.rebuild(biomeForDepth(depth), Math.max(1, count));
+  arena.rebuild(biomeForRung(rung), Math.max(1, count));
 }
 
 /** A second local gamepad joins in solo/host play — couch co-op needs no menu. */
@@ -460,7 +460,7 @@ async function runCardRound<T extends { id: string }>(round: CardRound<T>) {
  * Two of its own boons, and — when it has a live quarrel with someone — a third
  * card from a rival, answering over its head. The rival's card is not better on
  * paper; what it costs is the throne that was offering, which will not come back
- * this descent. That is the whole decision.
+ * this climb. That is the whole decision.
  */
 const runBoonRound = (pantheon: PantheonId, god: string) => {
   // The rival wears one face for the whole round. `godOfPantheon` rolls, so
@@ -706,7 +706,7 @@ async function onChamberCleared() {
     world.livePlayers.some((p) => !p.boons.spurned.has(t)),
   );
   const doors = offerDoors(
-    director.depth,
+    director.rung,
     Math.random() < 0.25 ? 3 : 2,
     anyBoons,
     courted.length ? courted : PANTHEON_ORDER,
@@ -751,8 +751,8 @@ async function onChamberCleared() {
   // After the door's payout, so the throne that was speaking gets to finish
   // before the run asks what this shade is going to become. Both depths sit one
   // chamber past a guardian — see ascendancy.ts.
-  if (director.depth === ASCEND_DEPTH) await runAscendRound();
-  else if (director.depth === CAPSTONE_DEPTH) await runCapstoneRound();
+  if (director.rung === ASCEND_RUNG) await runAscendRound();
+  else if (director.rung === CAPSTONE_RUNG) await runCapstoneRound();
 
   const wasBiome = director.biome.id;
   director.nextChamber();
@@ -774,7 +774,7 @@ async function onChamberCleared() {
   hud.showBanner(
     director.biome.id !== wasBiome
       ? director.biome.name
-      : t("banner.chamber", { n: director.depth }),
+      : t("banner.chamber", { n: director.rung }),
   );
   paused = false;
 }
@@ -826,12 +826,12 @@ function visitShore(summary: RunSummary) {
 }
 
 /**
- * A wipe ends the run. Boons are lost, the descent restarts at chamber one —
+ * A wipe ends the run. Boons are lost, the climb restarts at chamber one —
  * the roguelike contract. Co-op only wipes when *everyone* is down, so a single
  * death is always recoverable by a partner.
  *
  * What is *not* lost is the obols: the shore screen goes up before the next
- * descent starts, so a failed run ends by making the next one stronger.
+ * climb starts, so a failed run ends by making the next one stronger.
  */
 async function onWipe() {
   paused = true;
@@ -846,8 +846,8 @@ async function onWipe() {
   world.projectiles.forEach((pr) => stage.root.remove(pr.mesh));
   world.projectiles.length = 0;
 
-  recordRun(director.depth);
-  // The descent is over, so there is nothing left to come back to. Cleared
+  recordRun(director.rung);
+  // The climb is over, so there is nothing left to come back to. Cleared
   // before the shore screen, not after: the player is about to sit on a menu
   // that can be closed, and a stale save would offer to resume a run they
   // already lost.
@@ -857,7 +857,7 @@ async function onWipe() {
   // not earn here.
   if (mode !== "guest") {
     await visitShore({
-      depth: director.depth,
+      rung: director.rung,
       kills: runKills,
       earned: runObols,
       won: false,
@@ -887,11 +887,11 @@ async function onWipe() {
     p.pos.set(Math.cos(a) * 2, 0, 3 + Math.sin(a) * 2);
     p.vel.set(0, 0, 0);
   }
-  director.depth = 1;
+  director.rung = 1;
   director.room = "combat";
   director.buildChamber();
-  // A wipe does not end the session, it starts the next descent in place — so
-  // that descent gets its chamber-one checkpoint here, the same one `startRun`
+  // A wipe does not end the session, it starts the next climb in place — so
+  // that climb gets its chamber-one checkpoint here, the same one `startRun`
   // writes. Without it the run that follows a death is the only one a player
   // cannot walk away from.
   checkpoint();
@@ -1012,9 +1012,9 @@ async function abandonRun() {
   hud.closeSheet();
   running = false;
   paused = true;
-  // Walking away still counts as a descent — the obols are already banked, and
-  // the deepest-chamber record should not depend on dying to earn it.
-  if (mode !== "guest") recordRun(director.depth);
+  // Walking away still counts as a climb — the obols are already banked, and
+  // the highest-chamber record should not depend on dying to earn it.
+  if (mode !== "guest") recordRun(director.rung);
   // Abandoning is a decision, not an interruption — the run is spent either way.
   clearRun();
   runObols = 0;
@@ -1033,7 +1033,7 @@ async function abandonRun() {
   audio.stopMusic();
   hud.reset();
   seatOwner.clear();
-  director.depth = 1;
+  director.rung = 1;
   director.room = "combat";
   director.buildChamber();
   boot();
@@ -1080,7 +1080,7 @@ function loop(now: number) {
         if (p.asc) guestAscended.add(p.seat);
       } else if (p.asc && !guestAscended.has(p.seat)) {
         // A plate is titled once, when its seat appears. A branch sworn to later
-        // in the descent has to come back and rewrite it.
+        // in the climb has to come back and rewrite it.
         guestAscended.add(p.seat);
         hud.setSeatName(p.seat, seatLabel(p.seat, p.cls, p.asc));
       }
@@ -1088,9 +1088,9 @@ function loop(now: number) {
 
     hud.update(
       remote.playerList,
-      remote.depth,
+      remote.rung,
       remote.label,
-      biomeForDepth(remote.depth).name,
+      biomeForRung(remote.rung).name,
     );
 
     hud.updateBoss(
@@ -1170,7 +1170,7 @@ function loop(now: number) {
 
     hud.update(
       world.players,
-      director.depth,
+      director.rung,
       director.label,
       director.biome.name,
       runObols,
@@ -1214,7 +1214,7 @@ function loop(now: number) {
           tick++,
           owners,
           acks,
-          director.depth,
+          director.rung,
           director.label,
           paused,
           openOffers,
@@ -1291,7 +1291,7 @@ function loop(now: number) {
 // -------------------------------------------------------------- bootstrap
 
 /**
- * Put a saved descent back on its feet.
+ * Put a saved climb back on its feet.
  *
  * The picks are replayed through the very functions that applied them the first
  * time, in the order they were made. That order is not incidental: a status is
@@ -1301,7 +1301,7 @@ function loop(now: number) {
  */
 function resumeRun(save: RunSave) {
   mode = "solo";
-  director.depth = save.depth;
+  director.rung = save.rung;
   director.room = save.room;
   runObols = save.obols;
   runKills = save.kills;

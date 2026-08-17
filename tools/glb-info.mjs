@@ -59,10 +59,25 @@ const ROLE = {
  * 8k). Four heroes at 8k, outline shells included, is 64k — less than the room
  * they stand in. The warrior stays well under either way.
  */
-const BUDGET = { common: 2000, elite: 4000, boss: 20000, prop: 8000, player: 8000 };
+const BUDGET = { common: 2000, elite: 4000, boss: 20000, prop: 8000, player: 16000 };
 
 /** Bytes on the wire. A phone on mobile data pays for every one of them. */
-const SIZE_BUDGET = { common: 150e3, elite: 300e3, boss: 600e3, prop: 300e3, player: 300e3 };
+const SIZE_BUDGET = { common: 150e3, elite: 300e3, boss: 600e3, prop: 300e3, player: 500e3 };
+
+/**
+ * Primitives per file — the budget nobody was keeping, and the one that
+ * actually costs.
+ *
+ * Triangles are close to free: four players at the raised budget draw 160k
+ * against a chamber's 85k of scenery, and no GPU made this decade cares. Draw
+ * calls are not. three.js batches nothing, so every primitive is its own call,
+ * `addOutline` clones each into a second, and the shadow pass draws both again
+ * — one mesh is three calls before anything moves. A model splits into a
+ * primitive per material per node, so this is really a ceiling on
+ * materials times joints, which is exactly the pair that grows when a rig gets
+ * articulated. Watch it when adding either.
+ */
+const PRIM_BUDGET = { common: 8, elite: 12, boss: 24, prop: 12, player: 36 };
 
 /**
  * Vertices per triangle. A welded closed mesh sits near 0.5; UV and material
@@ -147,8 +162,10 @@ function readGlb(file) {
   const acc = json.accessors ?? [];
   let tris = 0;
   let verts = 0;
+  let prims = 0;
   const attrs = new Set();
   for (const mesh of json.meshes ?? []) {
+    prims += mesh.primitives.length;
     for (const p of mesh.primitives) {
       if (p.indices != null) tris += acc[p.indices].count / 3;
       else if (p.attributes.POSITION != null) tris += acc[p.attributes.POSITION].count / 3;
@@ -171,6 +188,7 @@ function readGlb(file) {
     bytes: buf.length,
     tris,
     verts,
+    prims,
     meshes: (json.meshes ?? []).length,
     nodes: (json.nodes ?? []).map((n) => n.name).filter(Boolean),
     images: (json.images ?? []).length,
@@ -189,6 +207,10 @@ function violations(info, entry) {
   if (role && info.tris > tris) out.push(`${info.tris} tris over the ${role} budget of ${tris}`);
   if (role && info.bytes > bytes)
     out.push(`${(info.bytes / 1e3).toFixed(0)}kB over the ${role} budget of ${(bytes / 1e3).toFixed(0)}kB`);
+  if (role && info.prims > PRIM_BUDGET[role])
+    out.push(
+      `${info.prims} primitives over the ${role} budget of ${PRIM_BUDGET[role]} — each one is a draw call, doubled by the outline and drawn again for shadows`
+    );
   if (info.verts / info.tris > SPLIT_RATIO)
     out.push(
       `${(info.verts / info.tris).toFixed(2)} verts per tri — vertices are split, weld before exporting`
@@ -240,6 +262,7 @@ for (const f of files) {
     role: entry?.role ?? '—',
     tris: info.tris,
     'v/t': +(info.verts / info.tris).toFixed(2),
+    prims: info.prims,
     kB: +(info.bytes / 1e3).toFixed(0),
     pivot: `${(info.pivot.x * 100).toFixed(0)},${(info.pivot.z * 100).toFixed(0)}%`,
     attrs: info.attrs.map((a) => a.replace('TEXCOORD_0', 'UV').replace('POSITION', 'POS')).join('+'),

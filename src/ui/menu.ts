@@ -5,7 +5,7 @@ import { buy, canAfford, levelOf, meta, nextCost, UPGRADES } from '../game/meta'
 
 /** What a finished run is worth, shown at the top of the shore screen. */
 export interface RunSummary {
-  depth: number;
+  rung: number;
   kills: number;
   earned: number;
   won: boolean;
@@ -68,7 +68,7 @@ export class Menu {
   private bleed = el('div');
   private status = el('div', 'lstatus', '');
   private roster = el('div', 'lroster', '');
-  private startBtn = el('button', 'lbtn primary', t('menu.descend')) as HTMLButtonElement;
+  private startBtn = el('button', 'lbtn primary', t('menu.escape')) as HTMLButtonElement;
 
   /** Set while the pause overlay owns the screen. */
   private paused = false;
@@ -188,9 +188,9 @@ export class Menu {
         };
 
         /*
-         * A descent left part-finished is the first thing offered, above a new
+         * A climb left part-finished is the first thing offered, above a new
          * one — it is the only row on this screen the player is in the middle
-         * of, and burying it under "descend" invites starting over by reflex and
+         * of, and burying it under "escape" invites starting over by reflex and
          * losing the run to a misclick.
          *
          * Read fresh on every build of this screen rather than cached: the
@@ -203,7 +203,7 @@ export class Menu {
             this.hide();
             resolve({ mode: 'continue' });
           }, true);
-          const aside = el('span', 'e-menu-aside', t('menu.continue.at', { n: saved.depth }));
+          const aside = el('span', 'e-menu-aside', t('menu.continue.at', { n: saved.rung }));
           r.replaceChild(aside, r.lastChild as HTMLElement);
         }
 
@@ -380,7 +380,7 @@ export class Menu {
         const card = el('div', 'lsummary');
         card.append(
           el('div', 'lsumhead', t(summary.won ? 'shrine.won' : 'shrine.died')),
-          statLine(t('shrine.depth'), String(summary.depth)),
+          statLine(t('shrine.rung'), String(summary.rung)),
           statLine(t('shrine.kills'), String(summary.kills)),
           statLine(t('shrine.earned'), `${summary.earned} ◆`),
         );
@@ -390,7 +390,7 @@ export class Menu {
       const purse = el(
         'div',
         'lpurse',
-        t('shrine.purse', { obols: meta.obols, deepest: meta.deepest, runs: meta.runs })
+        t('shrine.purse', { obols: meta.obols, highest: meta.highest, runs: meta.runs })
       );
       rows.push(purse);
 

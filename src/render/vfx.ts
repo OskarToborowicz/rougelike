@@ -39,6 +39,50 @@ function crescent(outerRadius: number, thickness: number, arc: number, segments 
   return geo;
 }
 
+/**
+ * A tapered streak lying in the XZ plane, authored along +X from the origin:
+ * a lance of light that is thickest a third of the way along and comes to a
+ * point at both ends. Same trick as `crescent` — the vertex colour going black
+ * *is* the fade, so it never shows an edge against the floor.
+ */
+function streak(length: number, width: number, segments = 14) {
+  const pos: number[] = [];
+  const col: number[] = [];
+  const idx: number[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    // Front-loaded taper: a hot head with a tail that thins out behind it.
+    const taper = Math.sin(Math.PI * t ** 0.62);
+    const w = (width * taper) / 2;
+    const x = t * length;
+    pos.push(x, 0, -w, x, 0, w);
+    col.push(taper, taper, taper, taper, taper, taper);
+    if (i < segments) {
+      const o = i * 2;
+      idx.push(o, o + 1, o + 2, o + 1, o + 3, o + 2);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.setIndex(idx);
+  return geo;
+}
+
+/** The one material every additive flourish uses: no depth, no sorting, no seams. */
+function flare(color: number, opacity: number, vertexColors = true) {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    vertexColors,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: false,
+    side: THREE.DoubleSide,
+  });
+}
+
 interface Particle {
   sprite: THREE.Sprite;
   vx: number;
@@ -173,9 +217,25 @@ export class Vfx {
   }
 
   /**
-   * The painted slash arc. A ring sector that sweeps through the swing and fades —
-   * this, not the weapon mesh, is what the player actually reads as "I hit that".
-   * Every Hades attack has one; without it a melee swing reads as a stick waggle.
+   * The painted slash arc. A ring sector standing on the wedge the swing was
+   * actually tested against, which fades in place — this, not the weapon mesh,
+   * is what the player reads as "I hit that", so it has to be drawn where the
+   * hit happened and nowhere else.
+   *
+   * It used to be drawn somewhere else entirely, in three compounding ways: the
+   * crescents were built at `reach * 1.14` and `1.2`, then scaled from 0.78 up
+   * to 1.16 across their life, so the arc opened at 0.89 of the real reach and
+   * ended at 1.32 of it — under-selling a hit on the first frame and promising
+   * a third more range than the test allows on the last. On top of that the
+   * whole sector was rotated by `(1 - t) * arc * 0.45` as it faded, sliding
+   * nearly half an arc-width off the wedge that did the damage. At no point in
+   * its life did the painted arc agree with `resolveSwing`, which is why a
+   * swing looked like it came off the end of the blade instead of covering what
+   * it hit.
+   *
+   * Now: outer radius exactly `reach`, angular width exactly `arc`, centred on
+   * `facing`, and it does not travel. `update` still grows it — but into the
+   * wedge and no further. See `resolveSwing` in world.ts for the other half.
    */
   slash(
     x: number,
@@ -186,10 +246,12 @@ export class Vfx {
     color: number,
     life = 0.2
   ) {
-    // Two crescents: a wide tinted body and a tighter white leading edge.
+    // Two crescents: a wide tinted body and a tighter white leading edge. Both
+    // sit on the same outer radius — the leading edge *is* the reach, and the
+    // body is the band swept behind it.
     const layers: [number, number, number, number][] = [
-      [reach * 1.14, reach * 0.62, color, 0.6],
-      [reach * 1.2, reach * 0.26, 0xffffff, 0.95],
+      [reach, reach * 0.62, color, 0.6],
+      [reach, reach * 0.26, 0xffffff, 0.95],
     ];
     for (const [outer, thickness, c, op] of layers) {
       const mesh = new THREE.Mesh(
@@ -206,23 +268,133 @@ export class Vfx {
         })
       );
       mesh.position.set(x, 1.15, z);
+      // Where `update` will take over from. Left at 1 the sector was drawn at
+      // full reach for one frame, dipped, and opened again — a visible stutter
+      // on the frame the eye is most likely to be looking at it.
+      mesh.scale.setScalar(0.92);
       // Crescents are authored around +X; the actor faces +Z.
       mesh.rotation.y = -facing + Math.PI / 2;
       // Tipped out of the ground plane so the arc reads as a swing through the air.
       mesh.rotation.x = -0.24;
       mesh.renderOrder = 10;
       this.parent.add(mesh);
-      this.slashes.push({ mesh, life, maxLife: life, facing, arc, peak: op });
+      this.slashes.push({ mesh, life, maxLife: life, peak: op });
     }
   }
 
+  // `facing` and `arc` are no longer carried: the sector is placed once, on the
+  // wedge, and never rotated again. Keeping them would only be an invitation to
+  // reintroduce the drift.
   private slashes: {
     mesh: THREE.Mesh;
     life: number;
     maxLife: number;
-    facing: number;
-    arc: number;
     peak: number;
+  }[] = [];
+
+  /**
+   * The bowshot. Three reads stacked on one frame: a lance of light punched out
+   * along the flight line, a shock disc standing across it at the bow, and a
+   * spray of sparks off the string. Without this the arrow simply *appears*
+   * halfway across the arena — the release is the part the hands feel.
+   */
+  shot(x: number, z: number, facing: number, color = 0xdcffc0, spark = '#d8ffb0', power = 1) {
+    // Lance: a tinted body under a tighter white core, both stretching forward
+    // as they die so the eye is pulled along the shot rather than at it.
+    const layers: [number, number, number, number][] = [
+      [4.4 * power, 0.62 * power, color, 0.85],
+      [3.4 * power, 0.24 * power, 0xffffff, 1],
+    ];
+    for (const [len, w, c, op] of layers) {
+      const mesh = new THREE.Mesh(streak(len, w), flare(c, op));
+      mesh.position.set(x + Math.sin(facing) * 0.9, 1.05, z + Math.cos(facing) * 0.9);
+      // Streaks are authored along +X; facing 0 is +Z.
+      mesh.rotation.y = facing - Math.PI / 2;
+      mesh.renderOrder = 10;
+      this.parent.add(mesh);
+      this.flares.push({
+        mesh,
+        life: 0.13,
+        maxLife: 0.13,
+        peak: op,
+        from: new THREE.Vector3(0.55, 1, 1),
+        to: new THREE.Vector3(1.35, 1, 0.35),
+      });
+    }
+
+    // Shock disc across the flight line — the string letting go.
+    const disc = new THREE.Mesh(
+      new THREE.RingGeometry(0.18, 0.42, 24).rotateY(Math.PI / 2),
+      flare(color, 0.8, false)
+    );
+    disc.position.set(x + Math.sin(facing) * 0.8, 1.05, z + Math.cos(facing) * 0.8);
+    disc.rotation.y = facing;
+    disc.renderOrder = 10;
+    this.parent.add(disc);
+    this.flares.push({
+      mesh: disc,
+      life: 0.17,
+      maxLife: 0.17,
+      peak: 0.8,
+      from: new THREE.Vector3(0.5, 0.5, 0.5),
+      to: new THREE.Vector3(2.6, 2.6, 2.6),
+    });
+
+    // Sparks off the string: a tight cone forward, and a few kicked back.
+    for (let i = 0; i < Math.round(8 * power); i++) {
+      this.emit(x + Math.sin(facing) * 0.8, 1.05, z + Math.cos(facing) * 0.8, spark, {
+        dirX: Math.sin(facing),
+        dirZ: Math.cos(facing),
+        spread: 0.9,
+        speed: 13 * power,
+        maxLife: rand(0.1, 0.24),
+        scale: rand(0.2, 0.45),
+        gravity: -6,
+        vy: rand(-0.5, 1.5),
+      });
+    }
+    for (let i = 0; i < 3; i++) {
+      this.emit(x + Math.sin(facing) * 0.7, 1.05, z + Math.cos(facing) * 0.7, '#ffffff', {
+        dirX: -Math.sin(facing),
+        dirZ: -Math.cos(facing),
+        spread: 2.2,
+        speed: 3,
+        maxLife: 0.14,
+        scale: rand(0.3, 0.6),
+        gravity: 0,
+      });
+    }
+  }
+
+  /**
+   * A length of the arrow's flight, left behind and fading. Sprite trails read
+   * as smoke; a solid ribbon reads as an arrow that was *there* a moment ago,
+   * which is what makes a 46 m/s shot legible at all at this camera angle.
+   */
+  tracer(x: number, z: number, facing: number, length = 2.2, color = 0xdcffc0, life = 0.15) {
+    const mesh = new THREE.Mesh(streak(length, 0.3), flare(color, 0.75));
+    // Authored forward from the origin, so lay it down *behind* the current tip.
+    mesh.position.set(x - Math.sin(facing) * length, 1.05, z - Math.cos(facing) * length);
+    mesh.rotation.y = facing - Math.PI / 2;
+    mesh.renderOrder = 9;
+    this.parent.add(mesh);
+    this.flares.push({
+      mesh,
+      life,
+      maxLife: life,
+      peak: 0.75,
+      from: new THREE.Vector3(1, 1, 1),
+      to: new THREE.Vector3(1, 1, 0.2),
+    });
+  }
+
+  private flares: {
+    mesh: THREE.Mesh;
+    life: number;
+    maxLife: number;
+    peak: number;
+    from: THREE.Vector3;
+    to: THREE.Vector3;
   }[] = [];
 
   /** Expanding ground ring — telegraphs and explosions read instantly at this camera angle. */
@@ -275,10 +447,27 @@ export class Vfx {
         continue;
       }
       const t = s.life / s.maxLife;
-      // Sweeps forward through the arc as it fades, so the eye follows the blade.
-      s.mesh.rotation.y = -s.facing + Math.PI / 2 - (1 - t) * s.arc * 0.45;
-      s.mesh.scale.setScalar(0.78 + (1 - t) * 0.38);
+      // Opens out to the reach over the first third and then holds there. The
+      // blade still travels — the eye reads the growth as the swing landing —
+      // but it stops on the wedge instead of carrying on past it, so the arc is
+      // never larger than the range that can actually connect.
+      s.mesh.scale.setScalar(Math.min(1, 0.92 + (1 - t) * 0.24));
       (s.mesh.material as THREE.MeshBasicMaterial).opacity = t * t * s.peak;
+    }
+
+    for (let i = this.flares.length - 1; i >= 0; i--) {
+      const f = this.flares[i];
+      f.life -= dt;
+      if (f.life <= 0) {
+        f.mesh.geometry.dispose();
+        (f.mesh.material as THREE.Material).dispose();
+        this.parent.remove(f.mesh);
+        this.flares.splice(i, 1);
+        continue;
+      }
+      const t = f.life / f.maxLife;
+      f.mesh.scale.lerpVectors(f.to, f.from, t);
+      (f.mesh.material as THREE.MeshBasicMaterial).opacity = t * t * f.peak;
     }
 
     for (let i = this.decals.length - 1; i >= 0; i--) {

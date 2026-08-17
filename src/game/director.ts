@@ -1,7 +1,7 @@
 import type { World } from './world';
 import type { EnemyKind } from './enemy';
 import { randInt } from '../core/math';
-import { biomeForDepth } from '../render/biome';
+import { biomeForRung } from '../render/biome';
 import { ROOMS, type RoomKind } from './rewards';
 
 interface Wave {
@@ -14,7 +14,7 @@ interface Wave {
  * so there is never a dead pause but never a wall either.
  */
 export class Director {
-  depth = 1;
+  rung = 1;
   waveIndex = 0;
   waves: Wave[][] = [];
   private spawnTimer = 0;
@@ -27,14 +27,14 @@ export class Director {
 
   /** Every fifth chamber is a boss. Nothing else spawns; she is the encounter. */
   get isBossChamber() {
-    return this.depth % 5 === 0;
+    return this.rung % 5 === 0;
   }
 
   /** Set by the door the party chose; shapes the fight they walk into. */
   room: RoomKind = 'combat';
 
   buildChamber() {
-    const d = this.depth;
+    const d = this.rung;
     const style = ROOMS[this.isBossChamber ? 'boss' : this.room];
     const scale = (1 + (this.playerCount() - 1) * 0.7) * style.density;
     const waves: Wave[][] = [];
@@ -42,7 +42,7 @@ export class Director {
     if (this.isBossChamber) {
       // Each region has its own guardian. The champions arrive as a pair —
       // that is the whole point of the fight.
-      const boss = biomeForDepth(d).boss;
+      const boss = biomeForRung(d).boss;
       this.waves = [[{ kind: boss, count: boss === 'champion' ? 2 : 1 }]];
       this.waveIndex = 0;
       this.chamberDone = false;
@@ -91,7 +91,7 @@ export class Director {
   }
 
   get biome() {
-    return biomeForDepth(this.depth);
+    return biomeForRung(this.rung);
   }
 
   /**
@@ -143,7 +143,7 @@ export class Director {
   }
 
   nextChamber() {
-    this.depth++;
+    this.rung++;
     this.buildChamber();
   }
 }

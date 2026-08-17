@@ -46,6 +46,16 @@ export class FxBus {
     if (this.record) this.log.push(['slash', r(x), r(z), r(facing), r(arc), r(reach), color, r(life)]);
   }
 
+  shot(x: number, z: number, facing: number, color = 0xdcffc0, spark = '#d8ffb0', power = 1) {
+    this.vfx.shot(x, z, facing, color, spark, power);
+    if (this.record) this.log.push(['shot', r(x), r(z), r(facing), color, spark, r(power)]);
+  }
+
+  tracer(x: number, z: number, facing: number, length = 2.2, color = 0xdcffc0, life = 0.15) {
+    this.vfx.tracer(x, z, facing, length, color, life);
+    if (this.record) this.log.push(['tracer', r(x), r(z), r(facing), r(length), color, r(life)]);
+  }
+
   hitSpark(x: number, z: number, dirX: number, dirZ: number, color = '#ffd98a', power = 1) {
     this.vfx.hitSpark(x, z, dirX, dirZ, color, power);
     if (this.record) this.log.push(['spark', r(x), r(z), r(dirX), r(dirZ), color, r(power)]);
@@ -134,6 +144,12 @@ export class FxBus {
       switch (e[0]) {
         case 'slash':
           this.vfx.slash(e[1], e[2], e[3], e[4], e[5], e[6], e[7]);
+          break;
+        case 'shot':
+          this.vfx.shot(e[1], e[2], e[3], e[4], e[5], e[6]);
+          break;
+        case 'tracer':
+          this.vfx.tracer(e[1], e[2], e[3], e[4], e[5], e[6]);
           break;
         case 'spark':
           this.vfx.hitSpark(e[1], e[2], e[3], e[4], e[5], e[6]);

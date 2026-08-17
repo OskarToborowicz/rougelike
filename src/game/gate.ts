@@ -6,6 +6,8 @@ import type { Player } from './player';
 import type { Door, Reward, RoomKind } from './rewards';
 import { ROOMS } from './rewards';
 import { makeGlowTexture } from '../render/arena';
+import { makeEmblem, type Emblem } from '../render/emblem';
+import { PANTHEONS } from './pantheons';
 
 /**
  * The exit.
@@ -18,6 +20,39 @@ import { makeGlowTexture } from '../render/arena';
 /** Centre of the doorway, and how wide the light in it reaches across. */
 const PORTAL_Y = 2.15;
 const PORTAL_SPAN = 3.4;
+
+/**
+ * Where the reward emblem hangs, and it is *in front of the arch*.
+ *
+ * gate.glb is 4.6 wide and 5.2 tall and a solid 1.34 deep — measured, its stone
+ * runs `z -0.67..0.67` at every height that matters. Anything sitting on the
+ * doorway's own plane is therefore inside a block of masonry, which is where
+ * both the emblem and the sprite before it were: the sprite is additive with
+ * `depthWrite` off, but it still depth-*tests*, so it was buried too and the
+ * reward had never in fact been readable as anything but a hue.
+ *
+ * So: clear of the front face by a comfortable margin, and low enough to be
+ * silhouetted against the lit portal rather than against the dark room. That
+ * backdrop is the whole reason the emblem carries a dark stone — a bright sigil
+ * on a bright doorway needs something behind it, and the arch cannot be it once
+ * the emblem has stepped out in front.
+ */
+const EMBLEM_Y = 3.05;
+/**
+ * 1.45, not the 0.67 that would merely clear the stone. The emblem sways, and a
+ * sway is a rotation about its own centre: at a half-width of 1.1 and an angle
+ * of 0.16 the trailing corner travels 0.18 *backwards*, straight into the arch
+ * it was just lifted out of. The gap has to pay for the animation as well as
+ * for the geometry, and for the deepest emblem of the five — the pomegranate's
+ * crown splays in z and eats the margin the flat ones never touch.
+ *
+ * It lands over the floor ring, which is where the party stands to leave, and
+ * a shade is 2.1 tall against this hanging at 3.05 — so it is above their heads
+ * at the exact spot they walk to.
+ */
+const EMBLEM_Z = 1.45;
+/** How far the sway goes. Bounded by the clearance above — see EMBLEM_Z. */
+const EMBLEM_SWAY = 0.16;
 
 export class Gate {
   readonly group = new THREE.Group();
@@ -87,8 +122,10 @@ export class Gate {
     this.marker = ring;
     this.group.add(ring);
 
-    // The reward's sigil, floating in the arch. Colour alone carries most of the
-    // meaning at a glance; the HUD spells it out when you get close.
+    // The halo the emblem is read against — what used to be the entire sigil,
+    // now demoted to the light behind one. On its own it was a round blob that
+    // said only "a door", in a hue that has to separate seven thrones *and*
+    // three other rewards from each other. See render/emblem.ts.
     this.symbol = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: makeGlowTexture('#ffffff', 0.28),
@@ -97,12 +134,39 @@ export class Gate {
         transparent: true,
       })
     );
-    this.symbol.position.set(0, 4.4, 0);
+    // Just behind the emblem, so what used to be the whole sigil is now the
+    // rim of light bleeding around one.
+    this.symbol.position.set(0, EMBLEM_Y, EMBLEM_Z - 0.2);
     this.symbol.scale.setScalar(1.9);
     this.group.add(this.symbol);
   }
 
   private marker!: THREE.Mesh;
+  /** The shape over the door, and the reward it was built for. */
+  private emblem: Emblem | null = null;
+  private emblemKey = '';
+
+  /**
+   * Rebuild the emblem, but only when the door is actually offering something
+   * else. `show` runs on every chamber and the geometry is merged on the way
+   * out, so re-cutting an identical numeral each time would be pure churn on a
+   * frame that is already loading a room.
+   */
+  private setEmblem(reward: Reward) {
+    const numeral = reward.pantheon ? PANTHEONS[reward.pantheon].numeral : '';
+    const key = `${reward.kind}:${numeral}`;
+    if (key !== this.emblemKey) {
+      if (this.emblem) {
+        this.group.remove(this.emblem.group);
+        this.emblem.dispose();
+      }
+      this.emblem = makeEmblem(reward.kind, numeral || 'I');
+      this.emblem.group.position.set(0, EMBLEM_Y, EMBLEM_Z);
+      this.group.add(this.emblem.group);
+      this.emblemKey = key;
+    }
+    this.emblem!.tint(new THREE.Color(reward.light));
+  }
 
   /**
    * Swap the flat sheet of light for the sculpted portal disc.
@@ -192,6 +256,7 @@ export class Gate {
     (this.marker.material as THREE.MeshBasicMaterial).color.copy(c);
     (this.symbol.material as THREE.SpriteMaterial).color.copy(c);
     this.light.color.copy(c);
+    this.setEmblem(reward);
   }
 
   hide() {
@@ -223,8 +288,23 @@ export class Gate {
     this.marker.scale.set(s, 1, s);
     this.light.intensity = this.glow * 14;
     this.frameRoot.position.y = (1 - this.glow) * -5.2;
-    this.symbol.scale.setScalar(this.glow * (1.8 + Math.sin(this.t * 2.6) * 0.18));
-    this.symbol.position.y = 4.4 + Math.sin(this.t * 1.5) * 0.12;
+    const bob = EMBLEM_Y + Math.sin(this.t * 1.5) * 0.12;
+    this.symbol.scale.setScalar(this.glow * (2.1 + Math.sin(this.t * 2.6) * 0.18));
+    this.symbol.position.y = bob;
+
+    if (this.emblem) {
+      const e = this.emblem.group;
+      e.position.y = bob;
+      // A shade is 2.1 tall and this hangs at three, so it has to carry from
+      // seventeen units out on its own — the arch is not framing it any more.
+      e.scale.setScalar(this.glow * 1.3);
+      // A sway, not a spin. Turning it through a full circle would put a roman
+      // numeral edge-on for half of every rotation, and the numeral is the
+      // entire message on five doors out of seven — so it rocks far enough to
+      // read as an object hanging in the air and never far enough to hide.
+      e.rotation.y = Math.sin(this.t * 0.9) * EMBLEM_SWAY;
+      e.rotation.z = Math.sin(this.t * 1.3) * 0.05;
+    }
 
     if (!this.ready || this.glow < 0.6) return;
 

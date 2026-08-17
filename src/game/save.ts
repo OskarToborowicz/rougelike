@@ -6,7 +6,7 @@ import { PANTHEON_ORDER, type PantheonId } from './pantheons';
 import { ROOMS, type RoomKind } from './rewards';
 
 /**
- * What survives closing the tab mid-descent.
+ * What survives closing the tab mid-climb.
  *
  * meta.ts keeps what survives *dying*; this keeps what survives walking away.
  * The two are deliberately separate files and separate keys: losing a run must
@@ -36,7 +36,7 @@ export interface ShadeSave {
   seat: number;
   cls: ClassId;
   picks: Pick[];
-  /** Thrones that will not offer again this descent. */
+  /** Thrones that will not offer again this climb. */
   spurned: PantheonId[];
   /**
    * Health as a fraction of maximum, not as a number. A class or an upgrade
@@ -48,9 +48,9 @@ export interface ShadeSave {
 
 export interface RunSave {
   v: number;
-  depth: number;
+  rung: number;
   room: RoomKind;
-  /** What this descent has earned so far, for the shore screen. */
+  /** What this climb has earned so far, for the shore screen. */
   obols: number;
   kills: number;
   shades: ShadeSave[];
@@ -61,8 +61,13 @@ export interface RunSave {
  * different `picks` encoding, say. A save from another version is dropped whole
  * rather than half-read, because a run resumed with half a build is worse than
  * one that was never offered.
+ *
+ * 2: `depth` became `rung` when the run stopped being a descent. No reader for
+ * the old shape, deliberately — the policy above already covers it, and a
+ * half-finished run is the one thing here that is *meant* to be disposable.
+ * `meta.ts` is the opposite case and does carry a migration; see its `load`.
  */
-const VERSION = 1;
+const VERSION = 2;
 const KEY = 'styx.run';
 
 /** Does a pick still name something this build knows how to apply? */
@@ -81,7 +86,7 @@ function knownPick(p: unknown): p is Pick {
  *
  * Everything is checked rather than trusted. The file is on the player's own
  * disk and survives across versions of the game, so an id that has since been
- * renamed or removed must drop out quietly instead of taking the whole descent
+ * renamed or removed must drop out quietly instead of taking the whole climb
  * with it — the same rule meta.ts applies to its upgrade map.
  */
 function sanitise(raw: unknown): RunSave | null {
@@ -89,8 +94,8 @@ function sanitise(raw: unknown): RunSave | null {
   const s = raw as Partial<RunSave>;
   if (s.v !== VERSION) return null;
 
-  const depth = Math.floor(Number(s.depth));
-  if (!Number.isFinite(depth) || depth < 1) return null;
+  const rung = Math.floor(Number(s.rung));
+  if (!Number.isFinite(rung) || rung < 1) return null;
 
   const shades = (Array.isArray(s.shades) ? s.shades : [])
     .map((sh): ShadeSave | null => {
@@ -119,10 +124,10 @@ function sanitise(raw: unknown): RunSave | null {
   const room = (sh => (sh && sh in ROOMS ? sh : 'combat'))(s.room) as RoomKind;
   const n = (x: unknown) => Math.max(0, Math.floor(Number(x)) || 0);
 
-  return { v: VERSION, depth, room, obols: n(s.obols), kills: n(s.kills), shades };
+  return { v: VERSION, rung, room, obols: n(s.obols), kills: n(s.kills), shades };
 }
 
-/** The descent waiting to be resumed, or null when there is none. */
+/** The climb waiting to be resumed, or null when there is none. */
 export function loadRun(): RunSave | null {
   try {
     const raw = localStorage.getItem(KEY);

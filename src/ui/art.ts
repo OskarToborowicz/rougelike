@@ -72,7 +72,7 @@ export function artSlot(src: string, opts: ArtOptions = {}): HTMLElement {
 }
 
 /** The painting behind the title. */
-export const titleArt = () => artSlot(`${ART}/descent.jpg`);
+export const titleArt = () => artSlot(`${ART}/climb.jpg`);
 
 /** A shade's portrait plate. One per class; the seat only picks the sigil. */
 export const shadeArt = (cls: ClassId, sigil: string, tint?: string) =>

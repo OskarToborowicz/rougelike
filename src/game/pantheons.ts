@@ -160,6 +160,23 @@ export const PANTHEONS: Record<PantheonId, Pantheon> = {
   },
 };
 
+/**
+ * The fire a marked slot burns, or the shade's own colour while no throne has
+ * claimed it. See `BoonSet.marks`.
+ *
+ * `light` and not `color`, for the reason the field's own note gives: the stones
+ * are a desaturated marble ramp with four of the seven inside 18 degrees of hue,
+ * and they work because every mark also wears its numeral. A slash has no
+ * numeral. Turned into light those four arrive as the same off-white, and an
+ * attack that cannot say whose gift it is carries no information at all.
+ */
+export const markLight = (p: PantheonId | null | undefined, fallback: number) =>
+  p ? PANTHEONS[p].light : fallback;
+
+/** The same colour for the particle systems, which take CSS strings. */
+export const markCss = (p: PantheonId | null | undefined, fallback: string) =>
+  p ? `#${PANTHEONS[p].light.toString(16).padStart(6, '0')}` : fallback;
+
 /** Which throne a god belongs to. Built once from the rosters above. */
 export const PANTHEON_OF: Record<string, PantheonId> = Object.fromEntries(
   PANTHEON_ORDER.flatMap((p) => PANTHEONS[p].gods.map((g) => [g, p]))

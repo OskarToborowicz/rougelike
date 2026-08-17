@@ -24,23 +24,26 @@ type Vars = Record<string, string | number>;
 
 const EN = {
   // -------------------------------------------------------------------- menu
-  brand: 'ECUMENE',
-  'menu.sub.title': 'the last council of the dead',
+  // The game is ASCEND; the world it is set in is still the ECUMENE, and the
+  // council of seven thrones is still what fills it. Only the direction changed:
+  // you are not visiting the dead, you are climbing out past them.
+  brand: 'ASCEND',
+  'menu.sub.title': 'ECUMENE · the last council of the dead',
   'menu.kicker': 'the seven thrones stand empty',
-  'menu.tagline': 'four shades · one descent',
+  'menu.tagline': 'four shades · one way out',
   'menu.pantheons': 'seven pantheons · one table',
-  'menu.play': 'DESCEND',
-  'menu.continue': 'GO ON DOWN',
+  'menu.play': 'ESCAPE',
+  'menu.continue': 'KEEP CLIMBING',
   'menu.continue.at': 'chamber {n}',
   'menu.shore': 'THE RELIQUARY',
-  'menu.options': 'RITES',
-  'menu.controls': 'THE CANON',
+  'menu.options': 'SETTINGS',
+  'menu.controls': 'KEY MAP',
   'menu.sub.setup': 'choose your shade',
   'menu.field.name': 'name',
   'menu.field.relay': 'relay',
   'menu.field.code': 'code',
   'menu.code.placeholder': 'CODE',
-  'menu.playSolo': 'DESCEND ALONE',
+  'menu.playSolo': 'ESCAPE ALONE',
   'menu.host': 'OPEN A WAY',
   'menu.join': 'JOIN WITH CODE',
   'menu.back': 'BACK',
@@ -48,21 +51,21 @@ const EN = {
   'menu.online': 'Co-op',
   'menu.needCode': 'Enter the four-letter code from your host.',
   'menu.defaultName': 'Shade',
-  'menu.descend': 'DESCEND',
+  'menu.escape': 'ESCAPE',
 
   // ---------------------------------------------------------------- reliquary
   'shrine.sub': 'the reliquary',
-  'shrine.won': 'THE DESCENT ENDS',
+  'shrine.won': 'YOU ARE OUT',
   'shrine.died': 'YOU HAVE DIED',
-  'shrine.depth': 'Chamber reached',
+  'shrine.rung': 'Chamber reached',
   'shrine.kills': 'Foes felled',
   'shrine.earned': 'Obols earned',
-  'shrine.purse': '{obols} ◆  ·  deepest {deepest}  ·  {runs} runs',
+  'shrine.purse': '{obols} ◆  ·  highest {highest}  ·  {runs} runs',
   'shrine.max': 'MAX',
-  'shrine.again': 'DESCEND AGAIN',
+  'shrine.again': 'CLIMB AGAIN',
 
-  // -------------------------------------------------------------------- rites
-  'options.sub': 'rites',
+  // ----------------------------------------------------------------- settings
+  'options.sub': 'settings',
   'options.sound': 'Sound',
   'options.music': 'Music',
   'options.damageNumbers': 'Damage numbers',
@@ -78,8 +81,8 @@ const EN = {
   'options.on': 'ON',
   'options.off': 'OFF',
 
-  // ---------------------------------------------------------------- the canon
-  'controls.sub': 'the canon',
+  // ------------------------------------------------------------------ key map
+  'controls.sub': 'key map',
   'controls.move': 'Move',
   'controls.move.how': 'W A S D  ·  left stick',
   'controls.aim': 'Aim',
@@ -162,10 +165,10 @@ const EN = {
   'round.sub.boon': 'a boon for {seat}',
   'round.sub.hammer': 'a weapon upgrade for {seat}',
   'round.sub.pom': 'strengthen a boon of {seat}',
-  'round.sub.ascend': 'what {seat} becomes, for the rest of the descent',
+  'round.sub.ascend': 'what {seat} becomes, for the rest of the climb',
   'round.sub.capstone': 'the last word of the path {seat} took',
   'round.answersOver': '{god} answers over him',
-  'round.spurned': '{pantheon} will not offer again this descent.',
+  'round.spurned': '{pantheon} will not offer again this climb.',
   'round.choosing': '{name} is choosing',
   'round.chosen': '{name} has chosen',
 
@@ -280,7 +283,7 @@ const EN = {
   'boon.net-life.desc': 'Heal 5% of the damage you deal.',
   'boon.net-ammo.name': 'Canopic Reserve',
   'boon.net-ammo.desc': '+2 Cast ammo.',
-  'boon.anu-attack.name': 'Brand of the Descent',
+  'boon.anu-attack.name': 'Brand of the Ascent',
   'boon.anu-attack.desc':
     'Your Attack deals +35% damage and sets what it strikes alight.',
   'boon.anu-special.name': 'Scorched Field',
@@ -337,7 +340,7 @@ const EN = {
   'class.archer.title': 'bow-sworn',
   'class.archer.blurb':
     'Arrows that punch through a line. Fragile and fastest on foot, but every shot costs a full draw.',
-  'class.mage.name': 'MAGE',
+  'class.mage.name': 'SORCERESS',
   'class.mage.title': 'storm-sworn',
   'class.mage.blurb':
     'Slow, heavy orbs that burst on impact. Weakest body, largest hits.',
@@ -406,7 +409,7 @@ const EN = {
   'asc.sharp-headhunter.desc':
     'Crits hit for far more, +8% critical chance, and your arrow pierces 3 further bodies.',
 
-  'asc.decay.name': 'MAGE OF ROT',
+  'asc.decay.name': 'SORCERESS OF ROT',
   'asc.decay.title': 'the slow fuse',
   'asc.decay.desc':
     'Attack and Cast both doom what they touch. +30% Cast damage, 7% lifesteal, 86 health. The orb itself hits softer.',
@@ -414,7 +417,7 @@ const EN = {
   'asc.decay-plague.desc':
     "A dying foe's affliction jumps to whatever stands nearest. A further 5% lifesteal.",
 
-  'asc.elemental.name': 'MAGE OF STORMS',
+  'asc.elemental.name': 'SORCERESS OF STORMS',
   'asc.elemental.title': 'the gathered weather',
   'asc.elemental.desc':
     'The nova reaches further for 40 damage and sets the ground alight. +50% Special damage, bursting Cast, +5% crit.',
@@ -469,50 +472,52 @@ const EN = {
   'touch.call': 'CALL',
 
   // ------------------------------------------------------------------- title
-  'page.title': 'ECUMENE — the last council of the dead',
+  'page.title': 'ASCEND — ECUMENE, the last council of the dead',
 };
 
 export type Key = keyof typeof EN;
 
 const PL: Partial<Record<Key, string>> = {
   // -------------------------------------------------------------------- menu
-  'menu.sub.title': 'ostatnia rada umarłych',
+  // EKUMENA rather than ECUMENE: it is a Polish word already, and the subtitle
+  // is prose rather than a logo. The brand itself stays untranslated.
+  'menu.sub.title': 'EKUMENA · ostatnia rada umarłych',
   'menu.kicker': 'siedem tronów stoi pustych',
-  'menu.tagline': 'cztery cienie · jedno zejście',
+  'menu.tagline': 'cztery cienie · jedno wyjście',
   'menu.pantheons': 'siedem panteonów · jeden stół',
-  'menu.play': 'ZEJDŹ',
-  'menu.continue': 'SCHODŹ DALEJ',
+  'menu.play': 'WYJDŹ',
+  'menu.continue': 'WSPINAJ SIĘ',
   'menu.continue.at': 'komnata {n}',
   'menu.shore': 'RELIKWIARZ',
-  'menu.options': 'RYTY',
-  'menu.controls': 'KANON',
+  'menu.options': 'USTAWIENIA',
+  'menu.controls': 'MAPA KLAWISZY',
   'menu.sub.setup': 'wybierz swój cień',
   'menu.field.name': 'imię',
   'menu.field.relay': 'serwer',
   'menu.field.code': 'kod',
   'menu.code.placeholder': 'KOD',
-  'menu.playSolo': 'ZEJDŹ SAMOTNIE',
+  'menu.playSolo': 'WYJDŹ SAMOTNIE',
   'menu.host': 'OTWÓRZ PRZEJŚCIE',
   'menu.join': 'DOŁĄCZ KODEM',
   'menu.back': 'WSTECZ',
   'menu.online': 'Co-op',
   'menu.needCode': 'Wpisz czteroliterowy kod od gospodarza.',
   'menu.defaultName': 'Cień',
-  'menu.descend': 'ZEJDŹ',
+  'menu.escape': 'WYJDŹ',
 
   // ---------------------------------------------------------------- reliquary
   'shrine.sub': 'relikwiarz',
-  'shrine.won': 'ZEJŚCIE DOBIEGA KOŃCA',
+  'shrine.won': 'JESTEŚ NA ZEWNĄTRZ',
   'shrine.died': 'ŚMIERĆ',
-  'shrine.depth': 'Osiągnięta komnata',
+  'shrine.rung': 'Osiągnięta komnata',
   'shrine.kills': 'Pokonani wrogowie',
   'shrine.earned': 'Zdobyte obole',
-  'shrine.purse': '{obols} ◆  ·  najgłębiej {deepest}  ·  prób: {runs}',
+  'shrine.purse': '{obols} ◆  ·  najwyżej {highest}  ·  prób: {runs}',
   'shrine.max': 'MAKS',
-  'shrine.again': 'ZEJDŹ ZNÓW',
+  'shrine.again': 'WYJDŹ ZNÓW',
 
-  // -------------------------------------------------------------------- ryty
-  'options.sub': 'ryty',
+  // -------------------------------------------------------------- ustawienia
+  'options.sub': 'ustawienia',
   'options.sound': 'Dźwięk',
   'options.music': 'Muzyka',
   'options.damageNumbers': 'Liczby obrażeń',
@@ -528,8 +533,8 @@ const PL: Partial<Record<Key, string>> = {
   'options.on': 'WŁ',
   'options.off': 'WYŁ',
 
-  // ------------------------------------------------------------------- kanon
-  'controls.sub': 'kanon',
+  // ---------------------------------------------------------- mapa klawiszy
+  'controls.sub': 'mapa klawiszy',
   'controls.move': 'Ruch',
   'controls.move.how': 'W A S D  ·  lewa gałka',
   'controls.aim': 'Celowanie',
@@ -609,10 +614,10 @@ const PL: Partial<Record<Key, string>> = {
   'round.sub.boon': 'dar dla {seat}',
   'round.sub.hammer': 'ulepszenie broni dla {seat}',
   'round.sub.pom': 'wzmocnij dar gracza {seat}',
-  'round.sub.ascend': 'czym {seat} stanie się do końca zejścia',
+  'round.sub.ascend': 'czym {seat} stanie się do końca wspinaczki',
   'round.sub.capstone': 'ostatnie słowo ścieżki, którą obrał {seat}',
   'round.answersOver': '{god} odpowiada ponad nim',
-  'round.spurned': '{pantheon} nie złoży już oferty w tym zejściu.',
+  'round.spurned': '{pantheon} nie złoży już oferty w tej wspinaczce.',
   'round.choosing': '{name} wybiera',
   'round.chosen': '{name} wybrał',
 
@@ -725,7 +730,7 @@ const PL: Partial<Record<Key, string>> = {
   'boon.net-life.desc': 'Leczysz 5% zadanych obrażeń.',
   'boon.net-ammo.name': 'Zapas Kanopski',
   'boon.net-ammo.desc': '+2 ładunki Czaru.',
-  'boon.anu-attack.name': 'Piętno Zejścia',
+  'boon.anu-attack.name': 'Piętno Wzlotu',
   'boon.anu-attack.desc': 'Twój Atak zadaje +35% obrażeń i podpala trafionego.',
   'boon.anu-special.name': 'Spalone Pole',
   'boon.anu-special.desc':
@@ -781,8 +786,8 @@ const PL: Partial<Record<Key, string>> = {
   'class.archer.title': 'zaprzysiężony cięciwie',
   'class.archer.blurb':
     'Strzały przebijające całą linię wrogów. Kruchy i najszybszy, ale każdy strzał kosztuje pełny naciąg.',
-  'class.mage.name': 'MAG',
-  'class.mage.title': 'zaprzysiężony burzy',
+  'class.mage.name': 'CZARODZIEJKA',
+  'class.mage.title': 'zaprzysiężona burzy',
   'class.mage.blurb':
     'Powolne, ciężkie kule wybuchające przy trafieniu. Najsłabsze ciało, największe ciosy.',
 
@@ -849,7 +854,7 @@ const PL: Partial<Record<Key, string>> = {
   'asc.sharp-headhunter.desc':
     'Kryty biją o wiele mocniej, +8% szansy na krytyka, a strzała przebija 3 ciała więcej.',
 
-  'asc.decay.name': 'MAG ROZKŁADU',
+  'asc.decay.name': 'CZARODZIEJKA ROZKŁADU',
   'asc.decay.title': 'powolny lont',
   'asc.decay.desc':
     'Atak i Czar naznaczają zgubą wszystko, czego dotkną. +30% obrażeń Czaru, 7% kradzieży życia, 86 zdrowia. Sama kula uderza słabiej.',
@@ -857,7 +862,7 @@ const PL: Partial<Record<Key, string>> = {
   'asc.decay-plague.desc':
     'Przypadłość konającego wroga przeskakuje na tego, kto stoi najbliżej. Kolejne 5% kradzieży życia.',
 
-  'asc.elemental.name': 'MAG ŻYWIOŁÓW',
+  'asc.elemental.name': 'CZARODZIEJKA ŻYWIOŁÓW',
   'asc.elemental.title': 'zebrana pogoda',
   'asc.elemental.desc':
     'Nowa sięga dalej, zadaje 40 obrażeń i podpala ziemię. +50% obrażeń Specjału, wybuchowy Czar, +5% krytyka.',
@@ -914,7 +919,7 @@ const PL: Partial<Record<Key, string>> = {
   'touch.call': 'ZEW',
 
   // ------------------------------------------------------------------- tytuł
-  'page.title': 'ECUMENE — ostatnia rada umarłych',
+  'page.title': 'ASCEND — EKUMENA, ostatnia rada umarłych',
 };
 
 const DICTS: Record<Lang, Partial<Record<Key, string>>> = { en: EN, pl: PL };

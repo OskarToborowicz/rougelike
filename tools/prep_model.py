@@ -23,6 +23,7 @@ import sys
 import bmesh
 import bpy
 import mathutils
+from mathutils import Euler
 
 # --------------------------------------------------------------------- budgets
 #
@@ -40,11 +41,14 @@ BUDGETS = {
     "elite": 4_000,
     "boss": 20_000,
     "prop": 8_000,
-    # A built chamber already draws 118k triangles, 85k of it scenery. Four
-    # heroes at this budget, outline shells included, cost 64k — less than the
-    # room. warrior.glb is 1.4k and stays there because it was modelled that
-    # way, not because a sculpted hero has to be.
-    "player": 8_000,
+    # Raised from 8k once the cost was actually measured rather than assumed.
+    # Four heroes here, outline shells included, draw 160k against a chamber's
+    # 85k of scenery — and no GPU of the last decade cares about a quarter of a
+    # million triangles. What does cost is draw calls, which scale with
+    # materials times joints and not with this number at all; glb-info.mjs
+    # keeps that ceiling separately. warrior.glb is 1.4k and stays there
+    # because it was modelled that way, not because a hero has to be.
+    "player": 16_000,
 }
 
 # Above this share of non-manifold edges the mesh cannot be decimated — collapse
@@ -116,12 +120,120 @@ def _weld(obj, threshold=0.0001):
     return before, after
 
 
-def _remesh(obj):
+def _remesh(obj, steps=REMESH_STEPS):
     """Rebuild the surface as one closed manifold shell. Destructive by nature."""
     bpy.context.view_layer.objects.active = obj
-    obj.data.remesh_voxel_size = max(obj.dimensions) / REMESH_STEPS
+    obj.data.remesh_voxel_size = max(obj.dimensions) / steps
     obj.data.remesh_voxel_adaptivity = 0.0
     bpy.ops.object.voxel_remesh()
+
+
+def _clear_scene():
+    """Empty the scene. Not via select_all — that operator's poll fails when
+    there is nothing to select, so the second run in a session throws."""
+    for o in list(bpy.data.objects):
+        bpy.data.objects.remove(o, do_unlink=True)
+    for m in list(bpy.data.meshes):
+        bpy.data.meshes.remove(m)
+
+
+def audit(src):
+    """
+    Measure what a generator actually handed you, before any of it is your fault.
+
+    Every number below is a knob on the generator, not on this pipeline:
+
+      nm_after_weld  Non-manifold edges once split vertices are merged. A real
+                     surface is 0.00. Anything above ~0.05 is a soup of
+                     interpenetrating sheets, and no decimator will save it.
+      shells         Connected pieces after welding. Hundreds mean the isosurface
+                     broke into scraps; the triangle floor is four times this.
+      genus          Tunnels through the surface. Collapse decimation preserves
+                     topology and cannot close a single one, so this is a hard
+                     floor on how far the mesh can be reduced — the number that
+                     decides whether an asset can ship at all.
+
+    Run it on a raw export, change one setting in the graph, run it again. That
+    is the whole loop.
+    """
+    _clear_scene()
+    bpy.ops.import_scene.gltf(filepath=src)
+
+    rows = []
+    for obj in [o for o in bpy.context.scene.objects if o.type == "MESH"]:
+        raw = _stats(obj.data)
+        _weld(obj)
+        s = _stats(obj.data)
+        genus = (2 - (s["verts"] - s["edges"] + s["tris"])) // 2
+        rows.append(
+            {
+                "name": obj.name,
+                "tris": raw["tris"],
+                "verts_before_weld": raw["verts"],
+                "verts": s["verts"],
+                "nm_after_weld": s["non_manifold_ratio"],
+                "shells": s["loose_parts"],
+                "genus": genus,
+            }
+        )
+        print(
+            f"{obj.name:14s} {raw['tris']:8d} tris  weld {raw['verts']:8d}->{s['verts']:7d} verts  "
+            f"nm={s['non_manifold_ratio']:.3f}  shells={s['loose_parts']:6d}  genus~{genus}"
+        )
+    print("AUDIT " + json.dumps(rows))
+    return rows
+
+
+def _prune_shells(obj, keep=0.02):
+    """
+    Throw away every connected shell far smaller than the biggest one.
+
+    Collapse decimation cannot delete a shell — the best it can do is reduce one
+    to a tetrahedron — so the triangle floor of a mesh is four times its number
+    of components. A voxel remesh of tattered cloth produces thousands of them:
+    every loose thread and every islanded scrap of lace becomes its own closed
+    surface. That is why the sorceress' torso would not go below 16 876
+    triangles no matter what ratio it was handed, at a budget of 1 600.
+
+    Judged against the largest shell rather than an absolute size, so it is
+    resolution-independent: what survives is what a viewer could actually see.
+    """
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+    bm.faces.index_update()
+
+    seen, groups = set(), []
+    for f in bm.faces:
+        if f.index in seen:
+            continue
+        stack, comp = [f], []
+        seen.add(f.index)
+        while stack:
+            g = stack.pop()
+            comp.append(g)
+            for e in g.edges:
+                for h in e.link_faces:
+                    if h.index not in seen:
+                        seen.add(h.index)
+                        stack.append(h)
+        groups.append(comp)
+
+    before = len(groups)
+    if before > 1:
+        floor = max(len(g) for g in groups) * keep
+        doomed = [f for g in groups if len(g) < floor for f in g]
+        if doomed:
+            bmesh.ops.delete(bm, geom=doomed, context="FACES")
+    # Deleting faces leaves the survivors' winding untouched but drops the
+    # guarantee anything downstream had about it. QuadriFlow refuses a mesh
+    # whose normals disagree, and refuses it silently enough to look like it ran.
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+    after = _stats(obj.data)["loose_parts"]
+    return before, after
 
 
 def _decimate(obj, target):
@@ -190,6 +302,13 @@ JOINT_PARENT = {
     "ArmR": "Torso",
     "LegL": "Pelvis",
     "LegR": "Pelvis",
+    # Articulated rigs add a second segment per limb, plus the one piece of
+    # cloth that swings on its own. See RIG_JOINTS in player.ts.
+    "ForearmL": "ArmL",
+    "ForearmR": "ArmR",
+    "ShinL": "LegL",
+    "ShinR": "LegR",
+    "Cape": "Torso",
 }
 
 
@@ -322,7 +441,7 @@ def _unwrap_cylindrical(obj):
             uv.data[li].uv = (u, 1.0 - (co.z - lo) / span)
 
 
-def _place(objs, face=0.0):
+def _place(objs, face=0.0, anchor=None):
     """
     Put the model on its own pivot: centred on X/Y, feet on Z=0, facing -Y.
 
@@ -347,16 +466,23 @@ def _place(objs, face=0.0):
         for o in objs:
             o.data.transform(rot)
 
-    lo = mathutils.Vector((math.inf,) * 3)
-    hi = mathutils.Vector((-math.inf,) * 3)
-    for o in objs:
-        for corner in o.bound_box:
-            v = mathutils.Vector(corner)
-            lo = mathutils.Vector(map(min, lo, v))
-            hi = mathutils.Vector(map(max, hi, v))
+    def bounds(of):
+        lo = mathutils.Vector((math.inf,) * 3)
+        hi = mathutils.Vector((-math.inf,) * 3)
+        for o in of:
+            for corner in o.bound_box:
+                v = mathutils.Vector(corner)
+                lo = mathutils.Vector(map(min, lo, v))
+                hi = mathutils.Vector(map(max, hi, v))
+        return lo, hi
 
+    # X and Y come from the anchor set — the body — while the floor is measured
+    # against everything, because a staff planted on the ground is still resting
+    # on it and a model that hovers reads worse than one standing off-centre.
+    lo, hi = bounds(anchor or objs)
+    floor = bounds(objs)[0].z
     shift = mathutils.Matrix.Translation(
-        (-(lo.x + hi.x) / 2, -(lo.y + hi.y) / 2, -lo.z)
+        (-(lo.x + hi.x) / 2, -(lo.y + hi.y) / 2, -floor)
     )
     for o in objs:
         o.data.transform(shift)
@@ -374,6 +500,373 @@ def _shade(obj):
         if hasattr(obj.data, "use_auto_smooth"):
             obj.data.use_auto_smooth = True
             obj.data.auto_smooth_angle = SHARP_ANGLE
+
+
+# Where a joint sits inside its own part, as fractions of that part's bounding
+# box. Used only when `rig` is not given an explicit origin.
+#
+# Every one of these is measured against the part's *first* source object, never
+# the joined result: an arm holding a staff has a bounding box two metres tall,
+# and a shoulder placed at 90% of that lands somewhere above the head.
+RIG_ORIGIN = {
+    "Pelvis": ("centre", "centre", 0.94),  # hips, near the top of the skirt
+    "Torso": ("centre", "centre", 0.28),  # waist
+    "Head": ("centre", "centre", 0.06),  # neck
+    "ArmL": ("inboard", "centre", 0.90),  # shoulder
+    "ArmR": ("inboard", "centre", 0.90),
+    "LegL": ("centre", "centre", 0.96),
+    "LegR": ("centre", "centre", 0.96),
+    # Second segments. On a T-posed source the forearm runs along X, so the
+    # elbow is its inboard end and the height fraction hardly matters.
+    "ForearmL": ("inboard", "centre", 0.50),
+    "ForearmR": ("inboard", "centre", 0.50),
+    "ShinL": ("centre", "centre", 0.96),  # knee
+    "ShinR": ("centre", "centre", 0.96),
+    "Cape": ("centre", "centre", 0.96),  # hangs off the shoulders
+}
+
+
+# A T-posed source stands with its arms out, and the game writes joint rotations
+# absolutely — `animateBody` sets `rotation.x/y/z` outright every frame, so a
+# rest angle left on a node is overwritten on the first tick and the shade
+# fights the arena with its arms spread. The rest pose has to be baked into the
+# geometry instead, which is what `rest=` does. These are sane defaults for a
+# T-pose: arms down and slightly forward, nothing else moved.
+#
+# About **Y**, not Z. A T-posed arm lies along X and the axis that swings it
+# down is the one running front-to-back; rotating about the vertical Z sweeps it
+# horizontally instead, which looks almost right in a viewport and shows up as a
+# body sitting 20% of its own depth off its pivot.
+T_POSE_REST = {
+    "ArmR": (0, 72, 0),
+    "ArmL": (0, -72, 0),
+    "ForearmR": (0, 8, 0),
+    "ForearmL": (0, -8, 0),
+}
+
+
+def _bounds(obj):
+    lo = mathutils.Vector((math.inf,) * 3)
+    hi = mathutils.Vector((-math.inf,) * 3)
+    for corner in obj.bound_box:
+        v = obj.matrix_world @ mathutils.Vector(corner)
+        lo = mathutils.Vector(map(min, lo, v))
+        hi = mathutils.Vector(map(max, hi, v))
+    return lo, hi
+
+
+def _joint_origin(joint, box, centre_x):
+    """Turn a part's bounds into the point it should rotate around."""
+    lo, hi = box
+    fx, fy, fz = RIG_ORIGIN[joint]
+    if fx == "inboard":
+        # The shoulder is the end of the arm nearest the body, pulled a little
+        # into the mass so the joint is inside the meat and not on its skin.
+        x = hi.x - (hi.x - lo.x) * 0.25 if hi.x < centre_x else lo.x + (hi.x - lo.x) * 0.25
+    else:
+        x = (lo.x + hi.x) / 2
+    y = (lo.y + hi.y) / 2 if fy == "centre" else lo.y + (hi.y - lo.y) * fy
+    return mathutils.Vector((x, y, lo.z + (hi.z - lo.z) * fz))
+
+
+def rig(
+    src,
+    dst,
+    parts,
+    budgets=None,
+    materials=None,
+    origins=None,
+    face=0.0,
+    remesh=None,
+    remesh_steps=REMESH_STEPS,
+    prune=0.02,
+    centre_on=None,
+    rest=None,
+    name=None,
+):
+    """
+    Turn a sculpt that was **split by hand** into the rig the game animates.
+
+    `prep(..., split="humanoid")` guesses the cuts from where geometry sits.
+    This is the other route: somebody has already separated the mesh in Blender,
+    which is far better than any plane can do — it can follow a sleeve seam and
+    tell a staff from the hand holding it — and what is left is everything the
+    game needs and a manual split does not give you: names, joint origins, a
+    hierarchy, a triangle budget per part, and a body standing on the floor.
+
+        rig(r"raw/magus.glb", r"public/models/magus.glb",
+            parts={"Head": ["Mesh_0.003"], "ArmR": ["Mesh_0.006", "Mesh_0.004"]},
+            budgets={"Head": 2000, "ArmR": 1500},
+            materials={"Head": "Skin", "ArmR": ["Cloth", "Wood"]})
+
+    parts     — {joint: [source object names]}. Prefix a name with "+" to mark
+                it a prop — welded into the joint and moving with it, but not
+                measured when the joint origin is worked out. A staff is a prop;
+                both halves of a skirt are not. Source objects not listed
+                anywhere are deleted, and reported.
+    budgets   — {joint: triangles}, or a list to split a joint across its own
+                pieces by hand. Split it by what the eye spends time on, not
+                evenly: a head is worth three skirts.
+    materials — {joint: name} or {joint: [name per source object]}. Names are
+                looked up through `build_shades.py`'s palette when that file has
+                been exec'd into the same session, so a rigged sculpt wears the
+                same leather and gold as an authored one. A sculpt arrives with
+                no materials at all, and without this the whole body has to take
+                the seat colour flat.
+    origins   — {joint: (x, y, z)} in final placed space, overriding RIG_ORIGIN.
+    remesh    — None measures each piece and decides; False forbids it. Forbidding
+                it is usually a mistake on a generated sculpt: this one arrived
+                with 98% of its edges non-manifold and half a million loose
+                shells, and welding only took that to 40% — far past the point
+                where collapse refuses to cross an edge. Decimation plateaued at
+                645k triangles against a budget of 8k. The lace pays for it.
+    remesh_steps — voxels across the piece's longest axis, as a number or the
+                same per-joint / per-piece shape as `budgets`. This is the knob
+                that decides whether a part can reach its budget at all, and it
+                is not about detail — it is about **genus**. A voxel pass over
+                lace or hair leaves a surface pierced by a tunnel per gap, and
+                collapse preserves topology: it cannot close a single one. The
+                sorceress' bodice came out of a 160-step pass with 855 handles
+                and would not go under 16k triangles against a budget of 1600.
+                At 100 that is 371 handles, at 64 it is 147, at 40 it is 51.
+                Coarse where the surface is holed, fine where it is thin — a
+                staff shaft is 3 cm through and disappears below about 200.
+    prune     — drop shells smaller than this share of the piece's largest one.
+                See _prune_shells: the triangle floor of a mesh is four times
+                its shell count, and remeshed lace has thousands.
+    rest      — {joint: (rx, ry, rz)} in degrees, baked into the mesh around
+                that joint and carried down its subtree. Pass T_POSE_REST for a
+                T-posed source; without it the shade stands with its arms out,
+                because the game overwrites node rotations every frame and a
+                rest angle left on the node never survives the first tick.
+    centre_on — joints whose bounds decide where the middle is. Default is all
+                of them, which is wrong for anyone holding something long: pass
+                the trunk — Pelvis, Torso, Head — and the staff stops dragging
+                the body off its own pivot.
+    """
+    budgets = budgets or {}
+    materials = materials or {}
+    origins = origins or {}
+
+    _clear_scene()
+
+    bpy.ops.import_scene.gltf(filepath=src)
+    found = {o.name: o for o in bpy.context.scene.objects if o.type == "MESH"}
+    report = {"src": src, "dst": dst, "parts": [], "dropped": []}
+
+    # A leading "+" marks a prop: welded into the joint, but not part of the
+    # body it hangs off. Only anatomy is measured for the joint origin — a hip
+    # taken from one half of a skirt sits half a skirt off the centre line, and
+    # a shoulder taken from an arm holding a staff sits above the head.
+    props = {joint: {n[1:] for n in names if n.startswith("+")} for joint, names in parts.items()}
+    parts = {joint: [n.lstrip("+") for n in names] for joint, names in parts.items()}
+
+    wanted = {n for names in parts.values() for n in names}
+    missing = sorted(wanted - set(found))
+    if missing:
+        raise RuntimeError(f"{src}: no such object(s): {missing}. Have: {sorted(found)}")
+    for n in sorted(set(found) - wanted):
+        report["dropped"].append({"name": n, "tris": len(found[n].data.polygons)})
+        bpy.data.objects.remove(found.pop(n), do_unlink=True)
+
+    # Source names and joint names live in the same namespace, and a hand-split
+    # file routinely uses one for the other — a mesh called ArmL that has to
+    # become ArmR because the game's weapon hand is +X. Renaming into an
+    # occupied name silently gets you "ArmR.001", so everything moves out of the
+    # way first.
+    for i, n in enumerate(list(found)):
+        found[n].name = f"_src{i}"
+
+    # Measured before anything is joined or decimated, because these objects are
+    # about to stop being separate.
+    boxes = {}
+    for joint, names in parts.items():
+        anatomy = [n for n in names if n not in props[joint]] or names
+        lo = mathutils.Vector((math.inf,) * 3)
+        hi = mathutils.Vector((-math.inf,) * 3)
+        for n in anatomy:
+            a, b = _bounds(found[n])
+            lo = mathutils.Vector(map(min, lo, a))
+            hi = mathutils.Vector(map(max, hi, b))
+        boxes[joint] = (lo, hi)
+
+    # Joints go in their own map. Writing them back into `found` lets a joint
+    # named for one source shadow another source of the same name — swap a left
+    # and a right arm and the second one silently gets fed the first one's
+    # finished mesh.
+    built = {}
+    maker = globals().get("material")
+    for joint, names in parts.items():
+        want = materials.get(joint)
+        want = [want] * len(names) if isinstance(want, str) else (want or [])
+        budget = budgets.get(joint, BUDGETS["player"] // len(parts))
+        # Share the joint's budget across its pieces by how much mesh each one
+        # arrived with, unless the caller split it by hand. Proportional is a
+        # poor proxy for how much the eye spends on a thing — pass a list when
+        # it matters.
+        if isinstance(budget, (list, tuple)):
+            share = list(budget)
+        else:
+            weight = [len(found[n].data.polygons) for n in names]
+            share = [max(60, round(budget * w / sum(weight))) for w in weight]
+
+        steps = remesh_steps.get(joint, REMESH_STEPS) if isinstance(remesh_steps, dict) else remesh_steps
+        steps = list(steps) if isinstance(steps, (list, tuple)) else [steps] * len(names)
+
+        # Every piece is cleaned *separately* and only then joined.
+        #
+        # Cleaning after the join would be simpler and is wrong twice over: a
+        # voxel remesh outputs one shell with one material, so the staff loses
+        # its wood and fuses into the fist that holds it. Kept apart until the
+        # end, each piece keeps its own material slot and its own voxel size —
+        # and voxel size is derived from the object's longest axis, so a staff
+        # measured together with an arm is remeshed at the wrong resolution.
+        pieces = []
+        for i, n in enumerate(names):
+            obj = found[n]
+            obj.data.materials.clear()
+            if i < len(want) and want[i]:
+                obj.data.materials.append(
+                    maker(want[i])
+                    if maker
+                    else (bpy.data.materials.get(want[i]) or bpy.data.materials.new(want[i]))
+                )
+
+            bpy.ops.object.select_all(action="DESELECT")
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+
+            before = _stats(obj.data)
+            welded = _weld(obj)
+            health = _stats(obj.data)
+            # Per joint, because on a healthy source the remesh stops being the
+            # rescue and becomes the damage: it is worth running on the one part
+            # that arrives as soup and ruinous on the ten that do not.
+            # `"*"` sets the default for joints the dict does not name. Without
+            # it a dict of one entry silently leaves the other ten on the gate,
+            # which is the opposite of what naming one of them meant.
+            want_remesh = (
+                remesh.get(joint, remesh.get("*")) if isinstance(remesh, dict) else remesh
+            )
+            do_remesh = (
+                health["non_manifold_ratio"] > REMESH_ABOVE
+                if want_remesh is None
+                else bool(want_remesh)
+            )
+            if do_remesh:
+                _remesh(obj, steps[i])
+            shells = _prune_shells(obj, prune)
+            final = _decimate(obj, share[i])
+            _shade(obj)
+            pieces.append(
+                {
+                    "from": n,
+                    "budget": share[i],
+                    "before": before,
+                    "welded": {"verts": welded[0], "to": welded[1]},
+                    "remeshed": do_remesh,
+                    "shells": shells,
+                    "after": _stats(obj.data),
+                    "tris": final,
+                }
+            )
+
+        bpy.ops.object.select_all(action="DESELECT")
+        for n in names:
+            found[n].select_set(True)
+        head = found[names[0]]
+        bpy.context.view_layer.objects.active = head
+        if len(names) > 1:
+            bpy.ops.object.join()
+        head.name = joint
+
+        report["parts"].append(
+            {"name": joint, "tris": len(head.data.polygons), "pieces": pieces}
+        )
+        built[joint] = head
+
+    objs = [built[j] for j in parts]
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.context.view_layer.objects.active = objs[0]
+    # Centred on the body, not on everything it is holding. A staff held out at
+    # arm's length drags the bounding box a hand's width sideways, and centring
+    # on that puts the shade beside its own hitbox — the exact fault the pivot
+    # check exists to catch, arrived at by trying to satisfy it.
+    shift = _place(objs, face, anchor=[built[j] for j in (centre_on or parts)])
+    report["placed"] = shift
+
+    # Origins, then the hierarchy. `_place` moved the mesh data under every
+    # object, so the boxes measured earlier move with it.
+    delta = mathutils.Vector(shift)
+    centre_x = 0.0
+    for joint, obj in ((j, built[j]) for j in parts):
+        if joint in origins:
+            point = mathutils.Vector(origins[joint])
+        else:
+            lo, hi = boxes[joint]
+            point = _joint_origin(joint, (lo + delta, hi + delta), centre_x)
+        cursor = bpy.context.scene.cursor.location.copy()
+        bpy.context.scene.cursor.location = point
+        bpy.ops.object.select_all(action="DESELECT")
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
+        bpy.context.scene.cursor.location = cursor
+
+    # Rest pose, baked into the geometry rather than left on the nodes, and
+    # applied to each joint's whole subtree — rotating an upper arm has to carry
+    # its forearm and that forearm's own pivot, or the elbow comes apart the
+    # moment the arm goes down.
+    for joint, angles in (rest or {}).items():
+        if joint not in built:
+            continue
+        rot = Euler([math.radians(a) for a in angles], "XYZ").to_matrix()
+        pivot = built[joint].location.copy()
+        line = [joint]
+        grew = True
+        while grew:
+            grew = False
+            for j in parts:
+                if JOINT_PARENT.get(j) in line and j not in line:
+                    line.append(j)
+                    grew = True
+        for j in line:
+            obj = built[j]
+            obj.data.transform(rot.to_4x4())
+            obj.location = pivot + rot @ (obj.location - pivot)
+        report.setdefault("rest", {})[joint] = list(angles)
+
+    # origin_set moved every object; without this the parent matrices below are
+    # still the ones from before it ran, and the rig telescopes.
+    bpy.context.view_layer.update()
+    for joint, obj in ((j, built[j]) for j in parts):
+        parent = JOINT_PARENT.get(joint)
+        if parent and parent in parts:
+            obj.parent = built[parent]
+            obj.matrix_parent_inverse = built[parent].matrix_world.inverted()
+
+    bpy.ops.object.select_all(action="SELECT")
+    kwargs = dict(
+        filepath=dst,
+        export_format="GLB",
+        use_selection=True,
+        export_apply=True,
+        export_normals=True,
+        export_texcoords=False,
+        export_materials="EXPORT" if materials else "NONE",
+        export_skins=False,
+        export_animations=False,
+        export_yup=True,
+    )
+    try:
+        bpy.ops.export_scene.gltf(**kwargs)
+    except TypeError:
+        for k in ("export_cameras", "export_lights", "export_skins"):
+            kwargs.pop(k, None)
+        bpy.ops.export_scene.gltf(**kwargs)
+
+    print("RIG_REPORT " + json.dumps(report))
+    return report
 
 
 def prep(
@@ -417,10 +910,7 @@ def prep(
     keep_uvs = keep_uvs or unwrap is not None
     target = tris or BUDGETS[budget]
 
-    bpy.ops.object.select_all(action="SELECT")
-    bpy.ops.object.delete()
-    for m in list(bpy.data.meshes):
-        bpy.data.meshes.remove(m)
+    _clear_scene()
 
     bpy.ops.import_scene.gltf(filepath=src)
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]

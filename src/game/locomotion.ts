@@ -11,6 +11,8 @@ export interface Movable {
   pos: { x: number; y: number; z: number };
   vel: { x: number; y: number; z: number };
   facing: number;
+  /** Latched heading for a dash in progress. See `Player.dashDir`. */
+  dashDir: number;
   radius: number;
   speed: number;
   state: string;
@@ -31,8 +33,12 @@ export function stepMovement(p: Movable, f: Frame | null, dt: number, moveMul: n
     // Ease-out so the dash pops on frame one and glides to a stop.
     const t = p.stateT / DASH.time;
     const speed = (DASH.dist / DASH.time) * (1 - t * t) * 1.5;
-    p.vel.x = Math.sin(p.facing) * speed;
-    p.vel.z = Math.cos(p.facing) * speed;
+    // `dashDir`, never `facing`. Read off `facing` this line was sampling a
+    // value that chases the cursor every frame, which turned a straight dash
+    // into a curve toward the mouse — on the host and, identically, in the
+    // guest's own replay of it.
+    p.vel.x = Math.sin(p.dashDir) * speed;
+    p.vel.z = Math.cos(p.dashDir) * speed;
   } else if (f && p.stagger <= 0) {
     // Swinging or casting slows the shade to a crawl — it never roots it. A root
     // is nearly invisible on a mouse, where one click is one swing, but the aim

@@ -56,7 +56,7 @@ const BUTTONS: { action: Action; key: Key; cls: string }[] = [
  *     an iPhone
  *
  * A zoomed-in arena mid-fight is a lost run, and there is no in-game control to
- * zoom back out — the only way back is a page reload, which ends the descent.
+ * zoom back out — the only way back is a page reload, which ends the climb.
  *
  * Deliberately not touching keyboard zoom: ctrl+scroll and ctrl+plus are how a
  * player with poor eyesight reads a desktop screen, and nothing about a mouse

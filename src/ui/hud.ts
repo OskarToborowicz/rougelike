@@ -361,7 +361,7 @@ export class Hud {
     top.append(line, this.waves);
     this.root.appendChild(top);
 
-    // --- top right: obols banked this descent ---------------------------
+    // --- top right: obols banked this climb ---------------------------
     this.purse.id = 'e-purse';
     this.purse.append(el('span', 'e-obol'), this.purseCount);
     this.root.appendChild(this.purse);
@@ -530,12 +530,12 @@ export class Hud {
 
   update(
     players: Player[],
-    depth: number,
+    rung: number,
     waveToken: string,
     region: string,
     runObols = 0
   ) {
-    this.camera.textContent = t('hud.room', { region, n: roman(depth) });
+    this.camera.textContent = t('hud.room', { region, n: roman(rung) });
 
     const [done, of] = waveCount(waveToken);
     if (this.waves.children.length !== of) {

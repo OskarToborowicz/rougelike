@@ -37,6 +37,28 @@ export class BoonSet {
   statusOnCast: StatusKind | null = null;
   taken: Boon[] = [];
 
+  /**
+   * Which throne last put its mark on each slot — the colour that slot burns in
+   * the world. Empty until a god has given this shade something for it, and a
+   * slot with no mark keeps the class's own colour.
+   *
+   * It exists so a boon is visible the moment it is taken. The card promises a
+   * god's gift and then every swing looked exactly as it did before the offer,
+   * which made the whole screen read as a stat sheet.
+   *
+   * **Last, not first**, and that is the same rule `statusOnAttack` above
+   * already follows: a second Attack boon overwrites the status the first one
+   * granted, so a colour pinned to whichever throne got there first would still
+   * be advertising lightning long after the attack had started setting things
+   * alight. `resumeRun` replays picks in order for exactly this reason, so a
+   * mark rebuilt here survives a save without a field on the wire.
+   *
+   * Passives are excluded because they belong to no slot. A crit boon changes
+   * every hit this shade lands, and marking one slot with it would be a lie
+   * about the other three.
+   */
+  readonly marks: Partial<Record<Slot, PantheonId>> = {};
+
   // --- the choir's bargain ----------------------------------------------
   /**
    * The Scales. A blow costing more than this fraction of maximum health is
@@ -84,7 +106,7 @@ export class BoonSet {
   secondWind = 0;
 
   /**
-   * Thrones that will not offer again this descent, because a rival was taken
+   * Thrones that will not offer again this climb, because a rival was taken
    * over their heads. Cleared when the run restarts.
    */
   spurned = new Set<PantheonId>();
@@ -94,6 +116,10 @@ export class BoonSet {
 
   add(b: Boon) {
     b.apply(this);
+    // Here rather than in each boon's `apply`, so a boon cannot be written that
+    // changes a slot and forgets to show it — and so the twenty-eight that
+    // already exist did not need touching to gain the behaviour.
+    if (b.slot !== 'passive') this.marks[b.slot] = b.pantheon;
     if (!this.taken.some((x) => x.id === b.id)) this.taken.push(b);
     this.levels.set(b.id, (this.levels.get(b.id) ?? 0) + 1);
   }

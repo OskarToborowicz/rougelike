@@ -20,7 +20,7 @@ export interface MetaState {
   upgrades: Record<string, number>;
   /** Lifetime counters, for the run summary. */
   runs: number;
-  deepest: number;
+  highest: number;
   kills: number;
   totalObols: number;
 }
@@ -127,7 +127,7 @@ export const EMPTY_META: MetaState = {
   obols: 0,
   upgrades: {},
   runs: 0,
-  deepest: 0,
+  highest: 0,
   kills: 0,
   totalObols: 0,
 };
@@ -136,7 +136,7 @@ function load(): MetaState {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { ...EMPTY_META, upgrades: {} };
-    const parsed = JSON.parse(raw) as Partial<MetaState>;
+    const parsed = JSON.parse(raw) as Partial<MetaState> & { deepest?: number };
     return {
       ...EMPTY_META,
       ...parsed,
@@ -145,6 +145,18 @@ function load(): MetaState {
       upgrades: Object.fromEntries(
         Object.entries(parsed.upgrades ?? {}).filter(([id]) => !!upgradeById(id))
       ),
+      /*
+       * `highest` was `deepest` while the run was a descent, and this file has
+       * no version to drop a stale shape on — it is the record that survives
+       * dying, so unlike a run save it must never be thrown away. Spreading
+       * `parsed` over `EMPTY_META` would have quietly reset every player's best
+       * chamber to zero on the build that renamed the field.
+       *
+       * Reading both is enough and stays correct forever: a save written since
+       * the rename has no `deepest`, one written before has no `highest`, and
+       * `max` picks whichever is actually there.
+       */
+      highest: Math.max(parsed.highest ?? 0, parsed.deepest ?? 0),
     };
   } catch {
     return { ...EMPTY_META, upgrades: {} };
@@ -194,9 +206,9 @@ export function earn(amount: number) {
   return gain;
 }
 
-export function recordRun(depth: number) {
+export function recordRun(rung: number) {
   meta.runs++;
-  meta.deepest = Math.max(meta.deepest, depth);
+  meta.highest = Math.max(meta.highest, rung);
   saveMeta();
 }
 

@@ -49,6 +49,19 @@ const RIG_JOINTS = {
   armR: 'ArmR',
   legL: 'LegL',
   legR: 'LegR',
+  // Second segments, and the one piece of cloth that moves on its own. A model
+  // that does not carry these gets a detached stand-in per slot, so the older
+  // seven-node warrior still animates exactly as it did — see loadAuthoredRig.
+  //
+  // They are here because a limb of one piece can only swing like a pendulum.
+  // An elbow is what separates a wind-up from a wave, and a knee is most of
+  // what a run cycle is; at this camera neither is visible as a joint, but the
+  // *timing* they allow is what reads as weight.
+  foreL: 'ForearmL',
+  foreR: 'ForearmR',
+  shinL: 'ShinL',
+  shinR: 'ShinR',
+  cape: 'Cape',
 } as const;
 
 type RigJoint = keyof typeof RIG_JOINTS;
@@ -87,14 +100,55 @@ const AUTHORED_RIGS: Partial<
   },
 };
 
-/** The sword's resting guard angle, and the pose every swing returns to. */
-const REST_SWORD_Y = -0.5;
 /**
- * The bow's, which is not the same number: a bow rests turned across the body
- * so its curve reads from the front, where a crossbow sat levelled down the aim
- * line. Point it straight ahead and it is a vertical stick.
+ * Where each weapon's pivot sits when nothing is happening to it — the pose
+ * every swing returns to, per weapon, on both axes.
+ *
+ * `y` swings the arm across the body; `x` rolls the weapon about the arm, which
+ * is what lifts a blade and what tips a book's pages up or slams them shut.
+ *
+ * This is a table rather than three constants because `animateBody` measures a
+ * swing as the pivot's distance *from its rest pose*, and that measurement is
+ * what turns the torso, leads the shoulder and loads the elbow. Read against
+ * the wrong rest, a body is permanently mid-swing: with one hard-coded sword
+ * rest, the sorceress stood with her torso and right shoulder turned a fifth of
+ * a radian into an attack she was not making, and her elbow could never load,
+ * because the quantity it loads on never got below zero for her.
  */
-const REST_BOW_Y = -0.2;
+const REST: Record<ClassDef["weapon"], { y: number; x: number }> = {
+  /** Turned across the body, guard up. */
+  sword: { y: -0.5, x: 0.1 },
+  /**
+   * Not the same number: a bow rests turned across the body so its curve reads
+   * from the front, where a crossbow sat levelled down the aim line. Point it
+   * straight ahead and it is a vertical stick.
+   */
+  bow: { y: -0.2, x: 0.1 },
+  /**
+   * Nearly square to the front, and flat. A book is carried open and read from,
+   * so the roll that lifts a blade into guard would stand this one on its spine
+   * and turn the one readable face of it away from the camera.
+   */
+  book: { y: -0.05, x: 0 },
+};
+
+/**
+ * Where the bow's pivot goes while the shade is aiming, in body space.
+ *
+ * Not where the bow is: the weapon sits at (0.55, 0, 0) *under* the pivot, so
+ * this is that offset already subtracted off the bow hand. Negative x for the
+ * same reason — the hand is nearer the centre line than the swing arm's reach.
+ */
+const BOW_HOLD = { x: -0.308, y: 1.572, z: 0.504 };
+
+/**
+ * How long the string takes to leave the fingers.
+ *
+ * Three frames. Every one added past that makes the shot mushier — the release
+ * is the fastest thing on the model, and it is the only part of a bow cycle the
+ * eye reads as force.
+ */
+const LOOSE_TIME = 0.05;
 
 // Easing shared by the weapon rig. Attack animation is all about *where* the
 // time goes: a linear sweep reads as a machine, and the eye reads acceleration
@@ -115,6 +169,18 @@ export class Player implements Actor {
   pos = new THREE.Vector3();
   vel = new THREE.Vector3();
   facing = 0;
+  /**
+   * The heading a dash committed to, latched on the frame it started.
+   *
+   * A separate field from `facing`, and that separation is the whole fix: the
+   * direction was already being read off the movement keys at the moment of the
+   * press, but `facing` then eased toward the aim every frame at rate 18, which
+   * converges inside 55ms against a dash that lasts 160. `stepMovement` re-read
+   * `facing` on every one of those frames, so the dash set off where the stick
+   * was held and then curved into the cursor before the shade had covered a
+   * third of the distance. Latched here, it cannot bend.
+   */
+  dashDir = 0;
   radius = 0.55;
   maxHp = 100;
   hp = 100;
@@ -170,6 +236,27 @@ export class Player implements Actor {
   private gaitAmp = 0;
   private idleT = 0;
   private bob = 0;
+  /**
+   * The nocked arrow, where the weapon file carries one as its own node.
+   *
+   * Baked into the bow it is a decoration that slides around with the riser
+   * while the shade mimes a draw. On its own node it is the draw: the shaft
+   * travels back along the aim line, disappears at the loose, and is back on
+   * the string by the time the recovery ends — which is the animation reading
+   * as *nocking the next one* rather than as an arm going up and down.
+   */
+  private bowArrow: THREE.Object3D | null = null;
+  /** How far the string is back, 0..1. Written by animateWeapon, read by the body. */
+  private bowDraw = 0;
+  /**
+   * Weight of the archery stance, 0..1, eased.
+   *
+   * Damped rather than read straight off the attack timer so a burst of shots
+   * does not drop the shade back to a walk pose between them: the arms stay in
+   * the aim and only the draw cycles, which is what a marksman firing twice a
+   * second actually looks like.
+   */
+  private aimHold = 0;
 
   /** True while the special is running, so the swing resolver knows which shape to use. */
   usingSpecial = false;
@@ -267,7 +354,7 @@ export class Player implements Actor {
     }
   }
 
-  /** Back to the bare class. The descent restarted; the oath did not survive it. */
+  /** Back to the bare class. The climb restarted; the oath did not survive it. */
   renounce() {
     this.asc = null;
     this.hasCapstone = false;
@@ -522,6 +609,10 @@ export class Player implements Actor {
       const m = o as THREE.Mesh;
       if (m.isMesh) this.weapon = m;
     });
+    // The bow's arrow, if this weapon has one. Looked up rather than assumed:
+    // every other weapon is a single node and gets `null`, which is the same
+    // path a bow takes before its file lands.
+    this.bowArrow = held.getObjectByName("ArcherArrow") ?? null;
     addOutline(held, 0.03);
     for (const child of [...this.weaponPivot.children]) {
       // The mage's focus light is not part of the placeholder — it is what
@@ -732,13 +823,23 @@ export class Player implements Actor {
         r.legR.rotation.x = damp(r.legR.rotation.x, -0.25, 6, dt);
         r.armL.rotation.x = damp(r.armL.rotation.x, -0.6, 6, dt);
         r.armR.rotation.x = damp(r.armR.rotation.x, -0.4, 6, dt);
+        // Limbs fold as the body goes down. A corpse with straight arms and
+        // knees is a felled tree, not a body — and the knees fold backwards,
+        // the forearms forwards. See the walk cycle for why the signs differ.
+        r.shinL.rotation.x = damp(r.shinL.rotation.x, 1.2, 6, dt);
+        r.shinR.rotation.x = damp(r.shinR.rotation.x, 0.9, 6, dt);
+        r.foreL.rotation.x = damp(r.foreL.rotation.x, -0.8, 6, dt);
+        r.foreR.rotation.x = damp(r.foreR.rotation.x, -0.7, 6, dt);
+        r.cape.rotation.x = damp(r.cape.rotation.x, 0.4, 4, dt);
       }
       return;
     }
     this.mesh.rotation.z = damp(this.mesh.rotation.z, 0, 10, dt);
 
-    // Facing eases toward aim, but locks hard during an attack's active frames.
-    if (f) {
+    // Facing eases toward aim, but locks hard during an attack's active frames
+    // — and is left alone entirely through a dash, which owns the heading it
+    // latched. Easing here is what used to drag the dash onto the cursor.
+    if (f && this.state !== "dash") {
       const wantFacing = Math.atan2(f.aimX, f.aimY);
       const rate = this.state === "attack" ? 3 : 18;
       this.facing +=
@@ -765,6 +866,10 @@ export class Player implements Actor {
     }
 
     this.animateWeapon(dt);
+    // The bow's own cycle, after the generic weapon pass and before the body:
+    // it owns the pivot outright for this class, and the archery stance below
+    // reads the aim weight and the draw it leaves behind.
+    if (this.def.weapon === "bow") this.holdBow(dt);
     // Body after the weapon: the sword arm reads its pose off weaponPivot, so
     // the hand has to be told where the hilt already went, not the frame after.
     this.animateBody(dt, speed);
@@ -809,15 +914,29 @@ export class Player implements Actor {
     // Breathing only surfaces as the walk dies out, or it fights the stride.
     const breath = Math.sin(this.idleT * 2.1) * (1 - g);
 
-    // How far the blade has travelled from its guard position. The torso turns
+    // How far the weapon has travelled from its own rest pose. The torso turns
     // into the swing and the shoulder chases the hilt — that rotation *is* the
     // wind-up, which is what makes an attack readable before it lands.
-    const swung = this.weaponPivot.rotation.y - REST_SWORD_Y;
+    //
+    // Both axes, because the three weapons do not wind up on the same one. A
+    // sword's attack is nearly all `swung`: it is drawn back across the body
+    // and comes round. A book's is nearly all `rolled`: it is tipped open
+    // overhead and slammed shut forward, and it barely moves sideways at all.
+    // Reading only the sideways travel is why the sorceress used to throw her
+    // whole attack from a body that never moved.
+    const rest = REST[this.def.weapon];
+    const swung = this.weaponPivot.rotation.y - rest.y;
+    const rolled = this.weaponPivot.rotation.x - rest.x;
     const attacking = this.state === "attack";
     const dashing = this.state === "dash";
+    const casting = this.state === "cast";
 
     const lean = 0.13 * g + (dashing ? 0.3 : 0);
-    r.torso.rotation.x = lean + breath * 0.025 - this.flash * 0.22;
+    // Rock back as the weapon comes up, forward as it drives out. For a sword
+    // that is a couple of degrees either side of nothing; for a book, whose
+    // whole attack lives on this axis, it is most of what sells the slam.
+    r.torso.rotation.x =
+      lean + breath * 0.025 - this.flash * 0.22 + (attacking ? rolled * 0.1 : 0);
     r.torso.rotation.y = stride * 0.12 * g + swung * 0.3;
     r.torso.rotation.z = -stride * 0.04 * g;
 
@@ -830,13 +949,29 @@ export class Player implements Actor {
     r.head.rotation.x = -lean * 0.55 + breath * 0.03;
 
     if (dashing) {
-      // Tuck: lead knee up, trailing leg trailing.
+      // Tuck: lead knee up, trailing leg trailing, both heels folded under.
       r.legL.rotation.x = damp(r.legL.rotation.x, -0.6, 16, dt);
       r.legR.rotation.x = damp(r.legR.rotation.x, 0.35, 16, dt);
+      r.shinL.rotation.x = damp(r.shinL.rotation.x, 1.1, 16, dt);
+      r.shinR.rotation.x = damp(r.shinR.rotation.x, 0.35, 16, dt);
     } else {
       const swing = stride * 0.62 * g;
       r.legL.rotation.x = swing;
       r.legR.rotation.x = -swing;
+      // Knees bend one way only, and that way is *backwards*: the heel comes up
+      // behind the thigh. Positive, where the elbows below are negative, and the
+      // asymmetry is the anatomy — on this rig a negative `rotation.x` throws a
+      // segment forward, which is where a forearm goes and the exact opposite of
+      // where a shin does. Both were negative until the sorceress arrived and
+      // became the first body to actually carry `ShinL`/`ShinR`; on the warrior
+      // and the marksman these writes land on detached stand-ins and render
+      // nothing, so a backwards knee had nowhere to show itself.
+      //
+      // The bend peaks a beat *after* the thigh reaches the front of its swing,
+      // which is the whole difference between a walk and a pair of scissors
+      // opening and closing.
+      r.shinL.rotation.x = Math.max(0, Math.sin(this.bob + 1.1)) * 1.05 * g;
+      r.shinR.rotation.x = Math.max(0, Math.sin(this.bob + 1.1 + Math.PI)) * 1.05 * g;
     }
 
     // Shield arm counter-swings with the legs, and comes across the body during
@@ -850,17 +985,255 @@ export class Player implements Actor {
       this.weaponPivot.rotation.x * 0.8 +
       stride * 0.3 * g * (attacking ? 0 : 1);
     r.armR.rotation.y = swung * 0.6;
+
+    // Elbows. Held at a constant bend they would just be a shorter arm; what
+    // makes them worth having is that the weapon arm *straightens into* the
+    // strike — the bend is deepest at the top of the wind-up and gone by the
+    // time the blade arrives, which is where the sense of effort comes from.
+    //
+    // Whichever axis the weapon was drawn back on, so the bend follows the
+    // wind-up rather than one hard-coded direction of it: back across the body
+    // for a blade, up and open for a book. Only during an attack — a cast
+    // rolls the book face-out without drawing it back at all, and a bent elbow
+    // on a push is the opposite of the pose.
+    const load = attacking ? clamp(Math.max(-swung, -rolled), 0, 1.6) : 0;
+    r.foreR.rotation.x = damp(
+      r.foreR.rotation.x,
+      (casting ? -0.08 : -0.22) -
+        load * 0.55 +
+        (attacking ? 0 : Math.abs(stride) * 0.12 * g),
+      14,
+      dt,
+    );
+    r.foreL.rotation.x = damp(
+      r.foreL.rotation.x,
+      -0.3 - Math.max(0, -stride) * 0.5 * g + (dashing ? -0.5 : 0),
+      12,
+      dt,
+    );
+
+    // The cape lags. It is one node and a damped angle, and it does more for
+    // the sense of movement than the whole gait above: cloth that arrives late
+    // is the cheapest simulation there is.
+    //
+    // Every contribution to it has to arrive as part of this *target*, never as
+    // an adjustment applied to the angle afterwards. A damped value is state: it
+    // keeps whatever was written to it, and a per-frame `-=` against it does not
+    // nudge the pose, it integrates. The archer's draw pushed the cloak back by
+    // 0.12 a frame against a filter that only pulls back 8% of the gap, which
+    // settles a radian and a half out — the cloak stood up over the shade's head
+    // as a black slab the size of a door. Read `-=` on a damped angle as a bug
+    // on sight.
+    const drawLift = this.def.weapon === "bow" ? 0.34 * this.bowDraw * this.aimHold : 0;
+    r.cape.rotation.x = damp(
+      r.cape.rotation.x,
+      -0.34 * g - (dashing ? 0.5 : 0) - drawLift,
+      5,
+      dt,
+    );
+    r.cape.rotation.z = damp(r.cape.rotation.z, -stride * 0.16 * g, 6, dt);
+
+    if (this.def.weapon === "bow") this.poseArchery(r, g, attacking, dashing);
+  }
+
+  /**
+   * The archery stance, laid over the walk.
+   *
+   * Everything above poses a body around a weapon that swings. A bow does not
+   * swing, and posing one off `swung` gives exactly what the marksman had: two
+   * arms rising and falling together, which is a man lifting a box.
+   *
+   * A draw is a shape held between two hands doing opposite jobs. The bow arm
+   * locks out along the aim and stops moving — it is the sight, and anything it
+   * does that the target did not ask for is a miss. The string hand travels:
+   * back past the jaw over the wind-up, gone in three frames at the loose, and
+   * forward again to the quiver through the recovery. The chest opens between
+   * them, which is where the sense of load comes from, and the head stays put
+   * because the eye is already on the target.
+   *
+   * Written after the walk rather than instead of it, and blended by weight, so
+   * a shade firing on the move still strides — only the arms and the turn of
+   * the chest are taken over, and they come back when the shooting stops.
+   */
+  private poseArchery(
+    r: Record<RigJoint, THREE.Object3D>,
+    g: number,
+    attacking: boolean,
+    dashing: boolean,
+  ) {
+    // How much of the body the stance owns. It rises fast — a shot starts with
+    // the bow already coming up — and falls slowly, so a burst of arrows is one
+    // continuous stance with a draw cycling inside it rather than the arms
+    // dropping to a walk between every shot. A dash cancels it outright: the
+    // roll has its own tuck and an aim held through it reads as a glide.
+    // Weight comes from `holdBow`, which ran with the weapon a moment ago — the
+    // bow and the body have to be posed off the same number or the hand arrives
+    // somewhere the grip is not.
+    const w = dashing ? 0 : this.aimHold;
+    if (w < 0.002) return;
+
+    // The kick. One exponential off the moment the string goes, and it is the
+    // only thing on the model that says the shot had force: the bow hand jumps,
+    // the chest squares up, and it is gone inside a fifth of a second.
+    const a = this.currentAttack;
+    const since = attacking ? this.stateT - a.wind : 1;
+    const kick = since >= 0 ? Math.exp(-since * 16) : 0;
+    const draw = this.bowDraw;
+
+    // Every angle below was solved against the rig rather than eyed in, because
+    // a draw is the one pose in the game where two hands have to meet a third
+    // object: the bow hand on the grip, the string hand on the nock, and the
+    // nock wherever the drawn arrow put it. Guessed shoulder angles miss by a
+    // hand's width, which at this camera is the difference between drawing a
+    // bow and miming one. See tools/build_shades.py for the search that
+    // produced them — the shot line first, then both arms onto their end of it.
+    const mix = (node: THREE.Object3D, x: number, y: number, z: number) => {
+      node.rotation.x = lerp(node.rotation.x, x, w);
+      node.rotation.y = lerp(node.rotation.y, y, w);
+      node.rotation.z = lerp(node.rotation.z, z, w);
+    };
+
+    // Bow arm: out, level, and locked, and it does not move again until the
+    // kick. It is the sight — anything it does that the target did not ask for
+    // is a miss, and an arm that drifts through the draw is what makes a shot
+    // look unaimed. The elbow is left a hair off zero because a limb at exactly
+    // no bend reads as a plank.
+    mix(r.armR, -1.41 + kick * 0.10, 0.04, -0.43);
+    r.foreR.rotation.x = lerp(r.foreR.rotation.x, -0.02 - kick * 0.10, w);
+
+    // String arm: from the bow, where the arrow is nocked, back to the jaw.
+    // Both ends are solved poses and the draw runs between them, so the hand
+    // travels the string's own path instead of an arc invented for it — and
+    // the release is that path run backwards in three frames, which is the
+    // whole snap.
+    mix(
+      r.armL,
+      lerp(-1.80, -1.25, draw),
+      lerp(1.31, 0.60, draw),
+      lerp(0.52, 1.40, draw) - kick * 0.14,
+    );
+    r.foreL.rotation.x = lerp(r.foreL.rotation.x, lerp(-0.90, -1.60, draw) + kick * 0.20, w);
+
+    // The chest opens into the draw and squares up at the loose. This is the
+    // wind-up: the arms are in place before the string moves, so the only thing
+    // left to grow is the turn between the shoulders.
+    r.torso.rotation.y += w * (0.30 * draw - 0.10 * kick);
+    r.torso.rotation.x += w * (-0.05 - 0.06 * draw + 0.10 * kick);
+    // The eyes stay on the target while the shoulders turn under them. Written
+    // against the torso's *final* angle rather than subtracting the turn the
+    // draw just added — the walk set this line before the draw existed, and two
+    // corrections chasing one number is how a head ends up looking away.
+    r.head.rotation.y = lerp(
+      r.head.rotation.y,
+      -(r.torso.rotation.y + r.pelvis.rotation.y) * 0.8,
+      w,
+    );
+
+    // The knee softens, and that is all the lower body gets.
+    //
+    // A braced archer stands with the feet apart, and there is no honest way to
+    // write that here: the hips are a rotation and nothing translates, so
+    // "apart" can only be bought by fanning both legs outward about the hip —
+    // which swings the feet sideways *and upward*, off the floor the shadow is
+    // still drawn on. It reads as the splits, performed in mid-air. A stance
+    // that needs the feet moved needs the feet moved; rotating toward it is not
+    // a cheaper version of the same thing, it is a different, worse pose.
+    r.shinL.rotation.x += w * (1 - g) * 0.18;
+    // The cloak's share of the draw is folded into its damp target in
+    // animateBody, where the rest of that angle is decided. See the note there.
+  }
+
+  /**
+   * Put the nocked arrow where the draw says it is.
+   *
+   * `sinceLoose` is seconds since the string went, or negative if it has not.
+   * For the first breath after a shot the arrow is simply not there — the one
+   * that was on the string is downrange, and hiding it is what stops the same
+   * shaft appearing to bounce back onto the bow. What reappears is the next
+   * one, which is exactly the beat the recovery is for.
+   */
+  /**
+   * Carry the bow to the bow hand, and the aim weight everything else reads.
+   *
+   * The weapon hangs off a pivot at hip height, half a metre out to the side —
+   * a swing arm, which is the right thing for a sword and a lie for a bow. Left
+   * there through an attack the shade raises both arms to shoulder height while
+   * the bow stays down by the belt, and the hands never touch it. That is the
+   * single most obvious thing wrong with an animation that only rotates arms,
+   * and no amount of work on the arms fixes it.
+   *
+   * So through the draw the pivot travels to where the bow hand actually ends
+   * up — up, forward, and *in* toward the centre line, because the 0.55 offset
+   * it carries already pushes the grip back out again. The numbers are the hand
+   * position `poseArchery` puts the arm at, measured off the rig rather than
+   * solved: an IK pass for one pose that never changes is machinery for nothing.
+   */
+  private holdBow(dt: number) {
+    const rest = REST.bow;
+    const attacking = this.state === "attack";
+    const want = attacking ? 1 : 0;
+    // Rises fast, falls slow. Fast because the whole attack is 0.42s and a
+    // stance that arrives late is a stance nobody sees; slow because a burst
+    // has to stay one continuous aim with the draw cycling inside it, rather
+    // than the arms dropping to a walk between every arrow.
+    this.aimHold = damp(this.aimHold, want, want > 0 ? 30 : 6, dt);
+    const w = this.aimHold;
+
+    this.weaponPivot.position.set(
+      lerp(0, BOW_HOLD.x, w),
+      lerp(1.0, BOW_HOLD.y, w),
+      lerp(0, BOW_HOLD.z, w),
+    );
+
+    // The draw, and it does not live where an attack animation usually puts it.
+    //
+    // This class fires with a 40ms wind-up and a 340ms recovery — the shot
+    // leaves almost immediately and the long tail *is* the next arrow being
+    // drawn, which is what classes.ts says and what the damage is priced on. An
+    // animation that draws during the wind-up therefore has two and a half
+    // frames to do it in, and what that looks like is an arm going up. So the
+    // draw runs backwards against the attack: it is already back when the
+    // string goes, empty for a breath, and pulled again across the recovery.
+    const since = attacking ? this.stateT - this.currentAttack.wind : -1;
+    if (!attacking) this.bowDraw = damp(this.bowDraw, 0, 8, dt);
+    // Hard enough that the *first* shot of a burst is drawn too. Every later
+    // one arrives already back off the previous recovery, but a shade opening
+    // fire from a walk has forty milliseconds to nock, and firing a slack bow
+    // once is enough to read as one.
+    else if (since < 0) this.bowDraw = damp(this.bowDraw, 1, 70, dt);
+    else if (since < LOOSE_TIME) this.bowDraw = 1 - since / LOOSE_TIME;
+    else {
+      // Nocked again over the first three quarters of the recovery, so the
+      // string is home before the next shot can start and the shade is never
+      // caught firing an undrawn bow.
+      const nock = Math.max(0.05, this.currentAttack.recover * 0.75);
+      this.bowDraw = smoothstep((since - LOOSE_TIME) / nock);
+    }
+    this.poseArrow(since);
+
+    // Square to the target, and the kick. The rest pose turns the bow across
+    // the body so its curve reads while it is being carried; held through a
+    // shot that points the arrow thirty degrees off the thing being shot at,
+    // which the eye catches at once because the projectile does not go that
+    // way. Aimed, the bow is a vertical line with an arrow on it pointing where
+    // the damage lands.
+    const flick = since >= 0 ? Math.exp(-since * 14) : 0;
+    this.weaponPivot.rotation.y = lerp(this.weaponPivot.rotation.y, -0.06, w);
+    this.weaponPivot.rotation.x =
+      lerp(this.weaponPivot.rotation.x, 0.08, w) - 0.16 * flick * w;
+  }
+
+  private poseArrow(sinceLoose = -1) {
+    const arrow = this.bowArrow;
+    if (!arrow) return;
+    arrow.position.z = -0.30 * this.bowDraw;
+    arrow.visible = !(sinceLoose >= 0 && sinceLoose < 0.12);
   }
 
   private animateWeapon(dt: number) {
-    const rest =
-      this.def.weapon === "sword"
-        ? REST_SWORD_Y
-        : this.def.weapon === "bow"
-          ? REST_BOW_Y
-          : -0.05;
-    let targetY = rest;
-    let targetX = this.def.weapon === "book" ? 0 : 0.1;
+    const rest = REST[this.def.weapon];
+    let targetY = rest.y;
+    let targetX = rest.x;
 
     if (this.state === "attack") {
       const a = this.currentAttack;
@@ -884,8 +1257,8 @@ export class Player implements Actor {
           // Wind-up: pull back and lift. Eased out, so the load is readable at
           // the start and the blade hangs at the top for a beat.
           const k = easeOut(this.stateT / a.wind);
-          this.weaponPivot.rotation.y = lerp(REST_SWORD_Y, from, k);
-          this.weaponPivot.rotation.x = lerp(0.1, raised, k);
+          this.weaponPivot.rotation.y = lerp(rest.y, from, k);
+          this.weaponPivot.rotation.x = lerp(rest.x, raised, k);
           return;
         }
 
@@ -905,42 +1278,30 @@ export class Player implements Actor {
         const k = smoothstep(
           clamp((this.stateT - activeEnd) / Math.max(0.0001, a.recover), 0, 1),
         );
-        this.weaponPivot.rotation.y = lerp(to, REST_SWORD_Y, k);
-        this.weaponPivot.rotation.x = lerp(chopped, 0.1, k);
+        this.weaponPivot.rotation.y = lerp(to, rest.y, k);
+        this.weaponPivot.rotation.x = lerp(chopped, rest.x, k);
         return;
       }
 
-      if (this.def.weapon === "bow") {
-        // Turn into the draw through the wind-up, loose, then let it settle
-        // back to rest across the whole recover — which is the next arrow being
-        // nocked. Parking the bow at full extension until the next shot is what
-        // made the old two-pose version read as a prop rather than a weapon.
-        if (this.stateT < a.wind) {
-          const draw = easeOut(this.stateT / a.wind);
-          this.weaponPivot.rotation.y = lerp(REST_BOW_Y, -0.58, draw);
-          this.weaponPivot.rotation.x = lerp(0.1, 0.2, draw);
-          return;
-        }
-        const after = clamp(
-          (this.stateT - a.wind) / Math.max(0.0001, a.active + a.recover),
-          0,
-          1,
-        );
-        // The snap forward is fast and short; the settle owns the rest of it.
-        const loose = Math.exp(-after * 11);
-        const settle = smoothstep(after);
-        this.weaponPivot.rotation.y = lerp(0.16, REST_BOW_Y, settle);
-        this.weaponPivot.rotation.x = lerp(0.1, -0.14, loose) + settle * 0.04;
-        return;
-      }
+      // The bow has no branch here. Everything a bow does — the aim, the draw,
+      // the loose, the kick — is one continuous cycle that outlives any single
+      // attack, so it lives in `holdBow`, which runs in every state. A pose
+      // written here as well would be a second hand on the same wheel.
+      if (this.def.weapon === "bow") return;
 
-      // Book: raise it open through the wind-up, then drive it down. The
-      // release used to snap between two fixed poses in a single frame, which
-      // is why the thrust had no weight — now it drives through and settles.
+      // Book: tip it open and overhead through the wind-up, then slam it out
+      // and shut. The release used to snap between two fixed poses in a single
+      // frame, which is why the thrust had no weight — now it drives through
+      // and settles.
+      //
+      // Almost all of it is on `x`, the roll. That is the axis a book has: it
+      // is a broad flat face on the end of an arm, and turning that face from
+      // sky to target is the only motion on it a player can read from above.
+      // Swinging it sideways like a blade only ever showed its spine.
       if (this.stateT < a.wind) {
         const k = easeOut(this.stateT / a.wind);
-        this.weaponPivot.rotation.x = lerp(0, -0.9, k);
-        this.weaponPivot.rotation.y = lerp(-0.05, -0.25, k);
+        this.weaponPivot.rotation.x = lerp(rest.x, -0.9, k);
+        this.weaponPivot.rotation.y = lerp(rest.y, -0.25, k);
         return;
       }
       const bookEnd = a.wind + a.active;
@@ -953,8 +1314,8 @@ export class Player implements Actor {
       const settle = smoothstep(
         clamp((this.stateT - bookEnd) / Math.max(0.0001, a.recover), 0, 1),
       );
-      this.weaponPivot.rotation.x = lerp(0.62, 0, settle);
-      this.weaponPivot.rotation.y = lerp(0.24, -0.05, settle);
+      this.weaponPivot.rotation.x = lerp(0.62, rest.x, settle);
+      this.weaponPivot.rotation.y = lerp(0.24, rest.y, settle);
       return;
     }
 
@@ -966,14 +1327,14 @@ export class Player implements Actor {
       const push = Math.sin(k * Math.PI);
       const reach = this.def.weapon === "book" ? 0.75 : 0.5;
       this.weaponPivot.rotation.x = lerp(targetX, -reach, easeOutCubic(push));
-      this.weaponPivot.rotation.y = lerp(rest, rest * 0.2, push);
+      this.weaponPivot.rotation.y = lerp(rest.y, rest.y * 0.2, push);
       return;
     }
 
     // Dash: tuck the weapon in behind the shoulder so the silhouette leads with
     // the body. A blade left swinging out front reads as an attack.
     if (this.state === "dash") {
-      targetY = rest - 0.55;
+      targetY = rest.y - 0.55;
       targetX = 0.42;
     }
 
