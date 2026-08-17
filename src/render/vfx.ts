@@ -273,7 +273,7 @@ export class Vfx {
       // on the frame the eye is most likely to be looking at it.
       mesh.scale.setScalar(0.92);
       // Crescents are authored around +X; the actor faces +Z.
-      mesh.rotation.y = -facing + Math.PI / 2;
+      mesh.rotation.y = facing - Math.PI / 2;
       // Tipped out of the ground plane so the arc reads as a swing through the air.
       mesh.rotation.x = -0.24;
       mesh.renderOrder = 10;

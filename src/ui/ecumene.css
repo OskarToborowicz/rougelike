@@ -1335,9 +1335,9 @@
   border: 0;
   color: inherit;
   font: inherit;
-  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-slab-dim);
+  background: var(--e-quarry-veil), var(--e-quarry-black), var(--e-slab-dark);
   background-size: auto, var(--e-quarry-tile), auto;
-  background-blend-mode: normal, multiply, normal;
+  background-blend-mode: normal, screen, normal;
   box-shadow:
     0 1px 0 rgba(255, 253, 246, 0.45) inset,
     0 -3px 0 rgba(90, 84, 74, 0.3) inset,
@@ -1373,15 +1373,15 @@
   font-size: clamp(19px, 1.7vw, 26px);
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--e-cut);
-  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.85);
+  color: var(--e-ink-bright);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7);
 }
 
 .e-card-desc {
   margin-top: 9px;
   font-size: clamp(15px, 1.25vw, 18px);
   line-height: 1.5;
-  color: #57504a;
+  color: rgba(230, 223, 208, 0.72);
   text-wrap: pretty;
 }
 
@@ -1390,7 +1390,7 @@
   font-size: 11px;
   letter-spacing: 0.3em;
   text-transform: uppercase;
-  color: rgba(76, 68, 59, 0.75);
+  color: rgba(230, 223, 208, 0.58);
   margin-bottom: 8px;
 }
 
@@ -1398,7 +1398,7 @@
   font-family: var(--e-display);
   font-size: 20px;
   letter-spacing: 0.1em;
-  color: rgba(76, 68, 59, 0.5);
+  color: rgba(230, 223, 208, 0.48);
 }
 
 /* Levels already held, shown as pips under a boon you are stacking. */
@@ -1411,20 +1411,20 @@
 .e-card-pips i {
   width: 10px;
   height: 10px;
-  box-shadow: 0 0 0 1px rgba(65, 58, 50, 0.45) inset;
+  box-shadow: 0 0 0 1px rgba(230, 223, 208, 0.35) inset;
 }
 
 .e-card-pips i.on {
   box-shadow: none;
-  background: var(--e-cut-deep);
+  background: var(--e-ink-bright);
 }
 
 /* Lifted, lit and veined — the tablet you are about to take. */
 .e-card:hover,
 .e-card:focus-visible {
-  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-vein), var(--e-slab-lit);
+  background: var(--e-quarry-veil), var(--e-quarry-black), var(--e-vein), var(--e-slab);
   background-size: auto, var(--e-quarry-tile), auto, auto, auto;
-  background-blend-mode: normal, multiply, normal, normal, normal;
+  background-blend-mode: normal, screen, normal, normal, normal;
   box-shadow:
     0 1px 0 rgba(255, 255, 250, 0.8) inset,
     0 -3px 0 rgba(90, 84, 74, 0.28) inset,
@@ -1435,18 +1435,18 @@
 
 .e-card:hover .e-card-name,
 .e-card:focus-visible .e-card-name {
-  color: var(--e-cut-deep);
-  text-shadow: 0 1px 0 rgba(255, 255, 250, 0.95), 0 -1px 1px rgba(0, 0, 0, 0.2);
+  color: #fff8e9;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.75);
 }
 
 .e-card:hover .e-card-desc,
 .e-card:focus-visible .e-card-desc {
-  color: #4f4841;
+  color: rgba(255, 248, 233, 0.82);
 }
 
 .e-card:hover .e-card-index,
 .e-card:focus-visible .e-card-index {
-  color: rgba(65, 58, 50, 0.6);
+  color: rgba(255, 248, 233, 0.62);
 }
 
 /*
@@ -1674,11 +1674,11 @@
   letter-spacing: 0.24em;
   border-radius: 0;
   border: 0;
-  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-slab-dim);
+  background: var(--e-quarry-veil), var(--e-quarry-black), var(--e-slab-dark);
   background-size: auto, 220px, auto;
-  background-blend-mode: normal, multiply, normal;
-  color: var(--e-cut);
-  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.7);
+  background-blend-mode: normal, screen, normal;
+  color: var(--e-ink);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7);
   box-shadow:
     0 1px 0 rgba(255, 253, 246, 0.45) inset,
     0 -3px 0 rgba(90, 84, 74, 0.3) inset,
@@ -1686,24 +1686,24 @@
 }
 
 .lbtn:hover {
-  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-vein), var(--e-slab-lit);
+  background: var(--e-quarry-veil), var(--e-quarry-black), var(--e-vein), var(--e-slab);
   background-size: auto, 220px, auto, auto, auto;
-  background-blend-mode: normal, multiply, normal, normal, normal;
-  color: var(--e-cut-deep);
+  background-blend-mode: normal, screen, normal, normal, normal;
+  color: #fff8e9;
 }
 
 /*
  * The base sheet paints a primary button's label gold, which was right over its
- * near-black panel and is illegible on white marble — `.lbtn.primary` outweighs
- * `.lbtn`, so the stone colour has to be restated here or the gold wins.
+ * near-black panel; on black marble it needs the same pale engraving as the
+ * other controls. `.lbtn.primary` outweighs `.lbtn`, so it is restated here.
  */
 .lbtn.primary {
-  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-vein), var(--e-slab);
+  background: var(--e-quarry-veil), var(--e-quarry-black), var(--e-vein), var(--e-slab);
   background-size: auto, 220px, auto, auto, auto;
-  background-blend-mode: normal, multiply, normal, normal, normal;
-  color: var(--e-cut-deep);
+  background-blend-mode: normal, screen, normal, normal, normal;
+  color: var(--e-ink-bright);
   border-color: transparent;
-  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.9), 0 -1px 1px rgba(0, 0, 0, 0.18);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.75);
 }
 
 /*
@@ -1713,7 +1713,7 @@
  */
 .lbtn.ghost {
   opacity: 1;
-  color: var(--e-stone-deep);
+  color: rgba(230, 223, 208, 0.72);
 }
 
 /* The one destructive control, and the only place sanguine appears in a menu. */
@@ -1846,11 +1846,11 @@
 
 .ltoggle.on,
 .lsegbtn.on {
-  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-slab-dim);
+  background: var(--e-quarry-veil), var(--e-quarry-black), var(--e-slab-dark);
   background-size: auto, 180px, auto;
-  background-blend-mode: normal, multiply, normal;
-  color: var(--e-cut);
-  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.6);
+  background-blend-mode: normal, screen, normal;
+  color: var(--e-ink-bright);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7);
 }
 
 /* ============================================================= 04 · THE GATE */
@@ -2176,10 +2176,9 @@
 /* ------------------------------------------------------------- the four doors */
 
 /*
- * White marble buttons on the black tablet — the inverse of the title screen,
- * and the reason this reads as a way out rather than another panel. Each takes
- * the slab at a different scale and offset so four buttons in a column are not
- * four copies of one photograph.
+ * Black marble buttons on the black tablet. Each takes the slab at a different
+ * scale and offset so four buttons in a column are not four copies of one
+ * photograph; pale engraving keeps every state readable.
  */
 .e-gate .lbtn {
   width: 100%;
@@ -2193,10 +2192,10 @@
   font-size: 22px;
   letter-spacing: 0.2em;
   text-indent: 0.2em;
-  color: #241e18;
-  text-shadow: none;
-  background: url('/textures/marble_white.jpg') 30% 60% / 580px repeat, #e5dfd2;
-  background-blend-mode: normal;
+  color: #f0e8d8;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.75);
+  background: linear-gradient(rgba(18, 16, 14, 0.3), rgba(5, 4, 4, 0.62)), url('/textures/marble_black.jpg') 30% 60% / 580px repeat, #100e0d;
+  background-blend-mode: normal, screen, normal;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.5) inset,
     0 -3px 10px rgba(0, 0, 0, 0.25) inset;
@@ -2204,9 +2203,9 @@
 }
 
 .e-gate .lbtn:hover {
-  filter: brightness(1.07);
-  background: url('/textures/marble_white.jpg') 30% 60% / 580px repeat, #e5dfd2;
-  color: #241e18;
+  filter: brightness(1.14);
+  background: linear-gradient(rgba(28, 24, 20, 0.28), rgba(8, 6, 5, 0.56)), url('/textures/marble_black.jpg') 30% 60% / 580px repeat, #15110f;
+  color: #fff8e9;
 }
 
 .e-gate .lbtn:active {
@@ -2218,8 +2217,9 @@
   margin-top: 26px;
   padding: 18px 20px;
   font-size: 25px;
-  color: #201b16;
-  background: url('/textures/marble_white.jpg') center / 620px repeat, #e8e2d5;
+  color: #fff8e9;
+  background: linear-gradient(rgba(28, 23, 17, 0.25), rgba(7, 5, 4, 0.58)), url('/textures/marble_black.jpg') center / 620px repeat, #130f0c;
+  background-blend-mode: normal, screen, normal;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.55) inset,
     0 -3px 10px rgba(0, 0, 0, 0.28) inset,
@@ -2227,8 +2227,8 @@
 }
 
 .e-gate .lbtn.primary:hover {
-  background: url('/textures/marble_white.jpg') center / 620px repeat, #e8e2d5;
-  color: #201b16;
+  background: linear-gradient(rgba(38, 30, 21, 0.24), rgba(9, 6, 4, 0.52)), url('/textures/marble_black.jpg') center / 620px repeat, #18120e;
+  color: #fff8e9;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
     0 -3px 10px rgba(0, 0, 0, 0.22) inset,
@@ -2238,15 +2238,17 @@
 /* Join is cut from a different part of the slab than host. */
 .e-gate .lrow:has(.lfield.code) + .lbtn,
 .e-gate .lrow:has(.lfield.code) + .lbtn:hover {
-  background: url('/textures/marble_white.jpg') 70% 20% / 560px repeat, #e5dfd2;
+  background: linear-gradient(rgba(18, 16, 14, 0.3), rgba(5, 4, 4, 0.62)), url('/textures/marble_black.jpg') 70% 20% / 560px repeat, #100e0d;
+  background-blend-mode: normal, screen, normal;
 }
 
 /* Back is the same stone left unpolished. */
 .e-gate .lbtn.ghost,
 .e-gate .lbtn.ghost:hover {
   opacity: 1;
-  color: #3a332b;
-  background: url('/textures/marble_white.jpg') 15% 85% / 540px repeat, #ded8ca;
+  color: rgba(230, 223, 208, 0.72);
+  background: linear-gradient(rgba(16, 14, 13, 0.36), rgba(4, 3, 3, 0.68)), url('/textures/marble_black.jpg') 15% 85% / 540px repeat, #0d0b0a;
+  background-blend-mode: normal, screen, normal;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.45) inset,
     0 -3px 10px rgba(0, 0, 0, 0.22) inset;
