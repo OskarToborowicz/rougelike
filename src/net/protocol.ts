@@ -155,6 +155,8 @@ export interface WireCard {
   /** Levels held, and levels on the track, for a boon being stacked. */
   pips?: number;
   pipsOf?: number;
+  /** What taking this would unseat. Resolved by the host, which holds the build. */
+  warn?: string;
 }
 
 /**

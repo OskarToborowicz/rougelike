@@ -806,11 +806,17 @@
  */
 .e-plate {
   --hp: 1;
+  /*
+   * Thickness of the marble surround. One number, because every inset on the
+   * plate — the recess, the waterline, the readouts — has to land on the same
+   * edge; drifting them apart is how a frame stops looking cut from one block.
+   */
+  --frame: 4px;
   position: relative;
   flex: 0 0 auto;
   width: 196px;
   height: 248px;
-  padding: 7px;
+  padding: var(--frame);
   background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-slab);
   background-size: auto, var(--e-quarry-tile), auto;
   background-blend-mode: normal, multiply, normal;
@@ -822,7 +828,7 @@
 /* The recess the relief sits in. */
 .e-plate > .e-art {
   position: absolute;
-  inset: 7px;
+  inset: var(--frame);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6) inset;
 }
 
@@ -832,10 +838,10 @@
  */
 .e-plate .e-shadow {
   position: absolute;
-  left: 7px;
-  right: 7px;
-  bottom: 7px;
-  height: calc((1 - var(--hp)) * (100% - 14px));
+  left: var(--frame);
+  right: var(--frame);
+  bottom: var(--frame);
+  height: calc((1 - var(--hp)) * (100% - 2 * var(--frame)));
   pointer-events: none;
   background: linear-gradient(180deg, rgba(6, 6, 5, 0.4), rgba(6, 6, 5, 0.95) 26%);
   border-top: 1px solid rgba(230, 223, 208, 0.55);
@@ -850,9 +856,9 @@
 
 .e-plate .e-hp {
   position: absolute;
-  left: 7px;
-  right: 7px;
-  bottom: 7px;
+  left: var(--frame);
+  right: var(--frame);
+  bottom: var(--frame);
   padding: 8px 10px;
   pointer-events: none;
   font-family: var(--e-display);
@@ -876,7 +882,7 @@
  */
 .e-plate .e-call {
   position: absolute;
-  right: -7px;
+  right: calc(-1 * var(--frame));
   bottom: 0;
   width: 3px;
   height: calc(var(--call, 0) * 100%);
@@ -887,7 +893,7 @@
 
 .e-plate .e-call-track {
   position: absolute;
-  right: -7px;
+  right: calc(-1 * var(--frame));
   top: 0;
   bottom: 0;
   width: 3px;
@@ -913,7 +919,7 @@
 
 .e-plate .e-out {
   position: absolute;
-  inset: 7px;
+  inset: var(--frame);
   pointer-events: none;
   background: rgba(5, 5, 4, 0.92);
   opacity: 0;
@@ -933,9 +939,9 @@
 
 .e-plate .e-revive {
   position: absolute;
-  left: 7px;
-  right: 7px;
-  bottom: 7px;
+  left: var(--frame);
+  right: var(--frame);
+  bottom: var(--frame);
   padding: 6px 8px;
   pointer-events: none;
   font-family: var(--e-display);
@@ -1047,9 +1053,10 @@
 }
 
 .e-ally .e-plate {
+  --frame: 3px;
   width: 124px;
   height: 158px;
-  padding: 5px;
+  padding: var(--frame);
   background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-slab-dim);
   background-size: auto, 190px, auto;
   background-blend-mode: normal, multiply, normal;
@@ -1059,24 +1066,24 @@
 }
 
 .e-ally .e-plate > .e-art {
-  inset: 5px;
+  inset: var(--frame);
 }
 
 .e-ally .e-plate .e-shadow,
 .e-ally .e-plate .e-hp,
 .e-ally .e-plate .e-out,
 .e-ally .e-plate .e-revive {
-  left: 5px;
-  right: 5px;
-  bottom: 5px;
+  left: var(--frame);
+  right: var(--frame);
+  bottom: var(--frame);
 }
 
 .e-ally .e-plate .e-out {
-  inset: 5px;
+  inset: var(--frame);
 }
 
 .e-ally .e-plate .e-shadow {
-  height: calc((1 - var(--hp)) * (100% - 10px));
+  height: calc((1 - var(--hp)) * (100% - 2 * var(--frame)));
   border-top-color: rgba(230, 223, 208, 0.5);
 }
 
@@ -1383,6 +1390,30 @@
   line-height: 1.5;
   color: #57504a;
   text-wrap: pretty;
+}
+
+/*
+ * The cost the card does not name. Sanguine and boxed rather than merely a line
+ * of small text: it has to be seen before the click, not after.
+ */
+.e-card-warn {
+  margin-top: 10px;
+  padding: 6px 9px;
+  border-left: 2px solid var(--e-sanguine-lit);
+  background: rgba(140, 32, 32, 0.08);
+  font-family: var(--e-display);
+  font-size: 11px;
+  line-height: 1.45;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--e-sanguine-lit);
+}
+
+.e-card.rival .e-card-warn,
+.e-card.asc .e-card-warn {
+  background: rgba(255, 120, 110, 0.1);
+  border-left-color: #ff8b7d;
+  color: #ff9c8f;
 }
 
 .e-card-kicker {
@@ -2836,6 +2867,7 @@
   }
 
   .e-shades .e-plate {
+    --frame: 2px;
     width: 56px;
     height: 72px;
     box-shadow:
@@ -2857,7 +2889,6 @@
 
   .e-plate .e-call,
   .e-plate .e-call-track {
-    right: -5px;
     width: 3px;
   }
 
@@ -2926,6 +2957,7 @@
   }
 
   .e-ally .e-plate {
+    --frame: 2px;
     width: 44px;
     height: 56px;
     box-shadow:

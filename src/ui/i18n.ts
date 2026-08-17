@@ -148,6 +148,8 @@ const EN = {
   'hud.boss': 'BOSS',
   'hud.chooseDoor': 'Choose a door',
   'hud.seat': 'P{n} · {cls}',
+  /** Your own plate. The seat number is for telling other people apart. */
+  'hud.seat.mine': '{cls}',
   'hud.sworn': '{cls} · sworn to {pantheon}',
   'hud.unsworn': '{cls} · unsworn',
   'hud.cast': 'cast',
@@ -352,9 +354,13 @@ const EN = {
   'status.shock': 'SHOCK',
   'status.burn': 'FIRE',
 
+  /** Said on the offer, while refusing is still possible. */
+  'card.overwrites': 'TAKING THIS ENDS: {lost}',
+  'card.instead': '{status} on {slot} ({card})',
+
   'sheet.kicker': 'what you are carrying',
   'sheet.carried': 'YOUR BLOWS CARRY',
-  'sheet.held': 'TAKEN, IN ORDER',
+  'sheet.held': 'HELD, IN ORDER TAKEN',
   'sheet.totals': 'IT COMES TO',
   'sheet.slot.attack': 'Attack',
   'sheet.slot.special': 'Special',
@@ -543,7 +549,7 @@ const PL: Partial<Record<Key, string>> = {
   'controls.aim.how': 'Mysz  ·  prawa gałka',
   'controls.attack': 'Atak',
   'controls.attack.how': 'Lewy przycisk myszy  ·  A',
-  'controls.special': 'Specjał',
+  'controls.special': 'Umiejętność',
   'controls.special.how': 'Prawy przycisk myszy  ·  X',
   'controls.cast': 'Czar',
   'controls.cast.how': 'Q  ·  Y',
@@ -593,7 +599,7 @@ const PL: Partial<Record<Key, string>> = {
 
   // ---------------------------------------------------------------------- hud
   'hud.hint':
-    'WASD ruch · LPM atak · PPM specjał · Q czar · F zew · SPACJA unik · pad 2 dołącza jako drugi gracz',
+    'WASD ruch · LPM atak · PPM umiejętność · Q czar · F zew · SPACJA unik · pad 2 dołącza jako drugi gracz',
   'hud.room': '{region} · {n}',
   'hud.downed': 'pieczęć pęka',
   'hud.press': 'wciśnij {n}',
@@ -718,7 +724,7 @@ const PL: Partial<Record<Key, string>> = {
     'Twój Atak zadaje +35% obrażeń i Osłabia wrogów: biją o 40% słabiej.',
   'boon.aes-special.name': 'Spadający Młot',
   'boon.aes-special.desc':
-    'Twój Specjał zadaje +60% obrażeń, a to, co przetrwa, zostaje Osłabione.',
+    'Twoja Umiejętność zadaje +60% obrażeń, a to, co przetrwa, zostaje Osłabione.',
   'boon.aes-dash.name': 'Na Wichrze',
   'boon.aes-dash.desc': 'Twój Unik rani i odrzuca wszystko, czego dotknie.',
   'boon.aes-move.name': 'Wiatrem Obuty',
@@ -736,7 +742,7 @@ const PL: Partial<Record<Key, string>> = {
   'boon.anu-attack.desc': 'Twój Atak zadaje +35% obrażeń i podpala trafionego.',
   'boon.anu-special.name': 'Spalone Pole',
   'boon.anu-special.desc':
-    'Twój Specjał zadaje +55% obrażeń i podpala wszystko, co obejmie.',
+    'Twoja Umiejętność zadaje +55% obrażeń i podpala wszystko, co obejmie.',
   'boon.anu-fever.name': 'Gorączka',
   'boon.anu-fever.desc': '+10% obrażeń ze wszystkiego, co masz.',
   'boon.anu-cast.name': 'Bełt z Pieca',
@@ -753,7 +759,7 @@ const PL: Partial<Record<Key, string>> = {
   'boon.cho-cast.desc': 'Twój Czar przebija 3 wrogów więcej.',
   'boon.leg-special.name': 'Tnący Strzał',
   'boon.leg-special.desc':
-    'Twój Specjał zadaje +55% obrażeń i nakłada Zgubę: detonuje się chwilę później.',
+    'Twoja Umiejętność zadaje +55% obrażeń i nakłada Zgubę: detonuje się chwilę później.',
   'boon.leg-fallen.name': 'Wart Więcej Poległy',
   'boon.leg-fallen.desc': 'Każdy powalony sojusznik czyni cię o 25% silniejszym.',
   'boon.leg-life.name': 'Krwawy Szał',
@@ -765,7 +771,7 @@ const PL: Partial<Record<Key, string>> = {
   'boon.rod-ammo.name': 'Zabójcza Salwa',
   'boon.rod-ammo.desc': '+2 ładunki Czaru.',
   'boon.rod-special.name': 'Bliźniaczy Cios',
-  'boon.rod-special.desc': 'Twój Specjał uderza po raz drugi, chwilę później.',
+  'boon.rod-special.desc': 'Twoja Umiejętność uderza po raz drugi, chwilę później.',
   'boon.rod-attack.name': 'Dębowe Serce',
   'boon.rod-attack.desc': 'Twój Atak zadaje +25% obrażeń i sięga o 20% dalej.',
 
@@ -799,12 +805,15 @@ const PL: Partial<Record<Key, string>> = {
   'status.shock': 'PORAŻENIE',
   'status.burn': 'OGIEŃ',
 
+  'card.overwrites': 'BIORĄC TO, TRACISZ: {lost}',
+  'card.instead': '{status} na {slot} ({card})',
+
   'sheet.kicker': 'co ze sobą niesiesz',
   'sheet.carried': 'TWOJE CIOSY NIOSĄ',
-  'sheet.held': 'WZIĘTE, PO KOLEI',
+  'sheet.held': 'W MOCY, PO KOLEI',
   'sheet.totals': 'RAZEM DAJE TO',
   'sheet.slot.attack': 'Atak',
-  'sheet.slot.special': 'Specjał',
+  'sheet.slot.special': 'Umiejętność',
   'sheet.slot.cast': 'Czar',
   'sheet.plain': 'nic — czyste obrażenia',
   'sheet.overruled': 'nieaktywne — późniejsza karta przejęła: {slots}',
@@ -812,7 +821,7 @@ const PL: Partial<Record<Key, string>> = {
 
   'sheet.hp': 'Zdrowie',
   'sheet.attack': 'Obrażenia Ataku',
-  'sheet.special': 'Obrażenia Specjału',
+  'sheet.special': 'Obrażenia Umiejętności',
   'sheet.cast': 'Obrażenia Czaru',
   'sheet.attackSpeed': 'Szybkość Ataku',
   'sheet.reach': 'Zasięg Ataku',
@@ -831,7 +840,7 @@ const PL: Partial<Record<Key, string>> = {
     'Tniesz o 28% szybciej, +12% szansy na cios krytyczny i cięższe kryty. Finiszer zwęża się i wydłuża. Za to ciało jest cieńsze: 96 zdrowia.',
   'asc.samurai-iai.name': 'Iaijutsu',
   'asc.samurai-iai.desc':
-    'Kryty biją znacznie mocniej, Atak naznacza wroga zgubą, a Specjał niemal traci zamach i zadaje 42 obrażenia.',
+    'Kryty biją znacznie mocniej, Atak naznacza wroga zgubą, a Umiejętność niemal traci zamach i zadaje 42 obrażenia.',
 
   'asc.barbarian.name': 'BARBARZYŃCA',
   'asc.barbarian.title': 'czerwone pragnienie',
@@ -867,14 +876,14 @@ const PL: Partial<Record<Key, string>> = {
   'asc.elemental.name': 'CZARODZIEJKA ŻYWIOŁÓW',
   'asc.elemental.title': 'zebrana pogoda',
   'asc.elemental.desc':
-    'Nowa sięga dalej, zadaje 40 obrażeń i podpala ziemię. +50% obrażeń Specjału, wybuchowy Czar, +5% krytyka.',
+    'Nowa sięga dalej, zadaje 40 obrażeń i podpala ziemię. +50% obrażeń Umiejętności, wybuchowy Czar, +5% krytyka.',
   'asc.elemental-cataclysm.name': 'Kataklizm',
   'asc.elemental-cataclysm.desc':
     'Nowa wybucha dwa razy, za każdym razem szerzej, a Twój Atak razi teraz prądem.',
 
   // ------------------------------------------------------------------- młoty
   'hammer.slot.ATTACK': 'ATAK',
-  'hammer.slot.SPECIAL': 'SPECJAŁ',
+  'hammer.slot.SPECIAL': 'UMIEJĘTNOŚĆ',
   'hammer.slot.CAST': 'CZAR',
   'hammer.heavy-strike.name': 'Ciężki Cios',
   'hammer.heavy-strike.desc': 'Twój Atak zadaje +30% obrażeń i sięga o 20% dalej.',
@@ -883,9 +892,9 @@ const PL: Partial<Record<Key, string>> = {
   'hammer.relentless.name': 'Nieustępliwe Ostrze',
   'hammer.relentless.desc': 'Twój Atak zadaje +15% obrażeń i leczy 3% z nich.',
   'hammer.twin-special.name': 'Bliźniaczy Cios',
-  'hammer.twin-special.desc': 'Twój Specjał uderza po raz drugi, chwilę później.',
-  'hammer.brutal-special.name': 'Brutalny Specjał',
-  'hammer.brutal-special.desc': 'Twój Specjał zadaje +70% obrażeń.',
+  'hammer.twin-special.desc': 'Twoja Umiejętność uderza po raz drugi, chwilę później.',
+  'hammer.brutal-special.name': 'Brutalna Umiejętność',
+  'hammer.brutal-special.desc': 'Twoja Umiejętność zadaje +70% obrażeń.',
   'hammer.piercing-cast.name': 'Przebijający Czar',
   'hammer.piercing-cast.desc': 'Twój Czar przebija 3 wrogów więcej.',
   'hammer.shattering-cast.name': 'Druzgocący Czar',
@@ -916,7 +925,7 @@ const PL: Partial<Record<Key, string>> = {
 
   // --------------------------------------------------------- przyciski dotyku
   'touch.dash': 'UNIK',
-  'touch.special': 'SPEC',
+  'touch.special': 'UMIEJ.',
   'touch.cast': 'CZAR',
   'touch.call': 'ZEW',
 

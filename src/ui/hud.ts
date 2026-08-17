@@ -60,6 +60,8 @@ export interface Card {
   /** Levels held, and levels on the track, for a boon being stacked. */
   pips?: number;
   pipsOf?: number;
+  /** What taking this would unseat, spelled out before the pick. */
+  warn?: string;
 }
 
 /** Everything the offer screen shows besides the cards themselves. */
@@ -141,6 +143,8 @@ interface Held {
   sets: Partial<Record<Slot, StatusKind>>;
   /** Slots whose status this card set but no longer owns. */
   overruled: Slot[];
+  /** Every slot this card ever set, owned or since lost. */
+  claimed: Slot[];
 }
 
 /**
@@ -202,6 +206,7 @@ function readBuild(p: Player) {
           level: 1,
           sets: {},
           overruled: [],
+          claimed: [],
         },
         statusesOf(b.apply)
       );
@@ -219,6 +224,7 @@ function readBuild(p: Player) {
           level: 1,
           sets: {},
           overruled: [],
+          claimed: [],
         },
         statusesOf(h.apply)
       );
@@ -236,6 +242,7 @@ function readBuild(p: Player) {
           level: 1,
           sets: {},
           overruled: [],
+          claimed: [],
         },
         statusesOf(a.apply)
       );
@@ -252,6 +259,7 @@ function readBuild(p: Player) {
           level: 1,
           sets: {},
           overruled: [],
+          claimed: [],
         },
         statusesOf(c.apply)
       );
@@ -260,9 +268,47 @@ function readBuild(p: Player) {
 
   for (const h of held) {
     h.overruled = [...(claimed.get(h.key) ?? [])].filter((s) => owner[s] !== h.key);
+    h.claimed = [...(claimed.get(h.key) ?? [])];
   }
 
   return { held, owner };
+}
+
+/**
+ * What a card about to be taken would unseat.
+ *
+ * A status is last-write-wins, and the sheet no longer keeps a record of the
+ * cards that lost their slot — so the warning has to arrive before the pick
+ * instead of after it. Returns nothing when the card carries no status, or when
+ * the slot it writes is free or already its own (a pom levelling a boon is not
+ * overwriting anybody).
+ */
+export function overwriteWarning(
+  p: Player,
+  key: string,
+  apply: (b: BoonSet) => void
+): string | undefined {
+  const sets = statusesOf(apply);
+  const wants = SLOTS.filter((s) => sets[s]);
+  if (!wants.length) return undefined;
+
+  const { held, owner } = readBuild(p);
+  const lost: string[] = [];
+  for (const s of wants) {
+    const k = owner[s];
+    if (!k || k === key) continue;
+    const from = held.find((h) => h.key === k);
+    const was = from?.sets[s];
+    if (!from || !was) continue;
+    lost.push(
+      t('card.instead', {
+        slot: t(`sheet.slot.${s}` as Key),
+        status: t(`status.${was}` as Key),
+        card: from.name,
+      })
+    );
+  }
+  return lost.length ? t('card.overwrites', { lost: lost.join(' · ') }) : undefined;
 }
 
 /**
@@ -414,6 +460,11 @@ export class Hud {
         if (s.pips) s.pips.innerHTML = '';
       }
     });
+  }
+
+  /** Which seat is this machine's. The one plate that needs no seat number. */
+  get mySeat() {
+    return this.localSeat;
   }
 
   /** Told by the run once it knows which body belongs to this machine. */
@@ -699,11 +750,19 @@ export class Hud {
     }
     wrap.appendChild(carried);
 
-    // --- the cards, in the order they were taken -------------------------
-    if (held.length) {
+    /*
+     * The cards still in force, in the order they were taken.
+     *
+     * A card whose only promise was a status it has since lost is left out
+     * entirely. The sheet is read to answer "what am I now", and a spent card
+     * kept on it as a tombstone only crowds that answer — the moment that
+     * warning matters is the offer, which now carries it.
+     */
+    const live = held.filter((h) => !h.claimed.length || h.overruled.length < h.claimed.length);
+    if (live.length) {
       wrap.appendChild(el('div', 'e-sheet-head', t('sheet.held')));
       const list = el('div', 'e-sheet-list');
-      for (const h of held) {
+      for (const h of live) {
         const card = el('div', 'e-sheet-card' + (h.overruled.length ? ' overruled' : ''));
         card.style.setProperty('--tint', h.accent);
 
@@ -875,6 +934,11 @@ export class Hud {
         const cname = el('div', 'e-card-name', card.name);
         if (card.rival) cname.style.color = card.accent;
         text.append(cname, el('div', 'e-card-desc', card.desc));
+
+        // The cost the card itself never mentions: a status is last-write-wins,
+        // so taking this can quietly end something already carried. Said here,
+        // while it is still a choice.
+        if (card.warn) text.appendChild(el('div', 'e-card-warn', card.warn));
 
         // Levels already held, so stacking reads as progress rather than as the
         // same card turning up twice.

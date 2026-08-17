@@ -29,7 +29,7 @@ import {
 } from "./game/pantheons";
 import { onLanguageChange, t } from "./ui/i18n";
 import { shuffle } from "./core/math";
-import { Hud, type OfferView } from "./ui/hud";
+import { Hud, overwriteWarning, type OfferView } from "./ui/hud";
 import { Menu, type RunSummary } from "./ui/menu";
 import { pixelRatioFor, settings } from "./ui/settings";
 import { Net } from "./net/net";
@@ -87,8 +87,15 @@ const hideGates = () => gates.forEach((g) => g.hide());
  * Once a branch is sworn to, that is what the plate reads instead: the whole
  * point of ascending is that the shade is no longer just its class.
  */
-const seatLabel = (seat: number, cls: ClassId, asc: Ascendancy | null = null) =>
-  t("hud.seat", { n: seat + 1, cls: asc ? asc.name : CLASSES[cls].name });
+const seatLabel = (seat: number, cls: ClassId, asc: Ascendancy | null = null) => {
+  const name = asc ? asc.name : CLASSES[cls].name;
+  // Your own plate is the one you never have to be told the number of — it is
+  // the big one, on the left, under your hands. "P1" on it is the screen telling
+  // you who you are, which is the one thing you already knew.
+  return seat === hud.mySeat
+    ? t("hud.seat.mine", { cls: name })
+    : t("hud.seat", { n: seat + 1, cls: name });
+};
 
 // Seat titles are written once when the seat is created, so switching language
 // mid-run has to go back and re-title them.
@@ -514,6 +521,7 @@ const runBoonRound = (pantheon: PantheonId, god: string) => {
       ...(p.boons.levelOf(b.id) > 0
         ? { pips: p.boons.levelOf(b.id), pipsOf: p.boons.levelOf(b.id) + 1 }
         : {}),
+      warn: overwriteWarning(p, "b:" + b.id, (set) => b.apply(set)),
     }),
     apply: (p, b) => {
       p.boons.add(b);
@@ -534,12 +542,13 @@ const runHammerRound = () =>
       subtitle: t("round.sub.hammer", { seat: seatLabel(p.seat, p.cls, p.asc) }),
     }),
     choices: (p) => offerHammers(p.boons, p.cls, 3),
-    card: (_p, h) => ({
+    card: (p, h) => ({
       id: h.id,
       name: h.name,
       desc: h.desc,
       kicker: hammerSlotLabel(h),
       accent: hammerColor(h),
+      warn: overwriteWarning(p, "h:" + h.id, (set) => h.apply(set)),
     }),
     apply: (p, h) => {
       h.apply(p.boons);
@@ -566,6 +575,9 @@ const runPomRound = () =>
       accent: PANTHEONS[b.pantheon].css,
       pips: p.boons.levelOf(b.id),
       pipsOf: p.boons.levelOf(b.id) + 1,
+      // A pom re-applies the card, so one whose slot was taken from it claims
+      // that slot back — at the expense of whoever holds it now.
+      warn: overwriteWarning(p, "b:" + b.id, (set) => b.apply(set)),
     }),
     // A pom is another level of a boon already held, so it writes another entry
     // rather than a different kind of one. Replaying two adds it twice, which is
@@ -595,13 +607,14 @@ const runAscendRound = () =>
     // An empty list skips the seat entirely, which is what makes a second call
     // — or a guest who joined after the fork — harmless.
     choices: (p) => (p.asc ? [] : ascendanciesOf(p.cls)),
-    card: (_p, a) => ({
+    card: (p, a) => ({
       id: a.id,
       name: a.name,
       desc: a.desc,
       kicker: a.title,
       accent: a.css,
       branch: true,
+      warn: overwriteWarning(p, "a:" + a.id, (set) => a.apply(set)),
     }),
     apply: (p, a) => {
       p.ascend(a);
@@ -628,6 +641,7 @@ const runCapstoneRound = () =>
       kicker: p.asc?.title ?? "",
       accent: p.asc?.css ?? "#e8d6a8",
       branch: true,
+      warn: overwriteWarning(p, "c:" + c.id, (set) => c.apply(set)),
     }),
     apply: (p) => p.takeCapstone(),
     ring: 0xe8d6a8,
