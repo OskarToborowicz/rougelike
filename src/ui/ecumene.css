@@ -197,21 +197,20 @@
 /* ============================================================ 01 · THE TITLE */
 
 /*
- * The title is the one screen cut the other way round: the room is white marble
- * and the menu is black. Everywhere else in the game a lit slab is furniture
- * standing on a dark ground; here the ground *is* the quarry face, and the only
- * dark things on it are the seven rows you can press.
+ * The title room is cut from the same black marble as the gate. The texture is
+ * screened over a charcoal slab so its gold veins survive without lifting the
+ * ground behind the light furniture.
  *
  * The veil is what keeps it a wall rather than a countertop — the photograph at
  * full strength is craquelure, and type cannot be cut into craquelure.
  */
 #lobby.show {
   background:
-    var(--e-quarry-veil),
-    var(--e-quarry-white),
-    var(--e-slab-lit);
+    linear-gradient(rgba(9, 8, 7, 0.34), rgba(4, 4, 3, 0.7)),
+    var(--e-quarry-black),
+    var(--e-slab-dark);
   background-size: auto, var(--e-quarry-field), auto;
-  background-blend-mode: normal, multiply, normal;
+  background-blend-mode: normal, screen, normal;
 }
 
 /*
@@ -270,29 +269,27 @@
 /* Two scrims: one pulls the painting left into the type, one seats it in the
    frame top and bottom. Separate layers so each can be tuned alone.
 
-   Both are marble now, not charcoal. The painting has to dissolve into the wall
-   it hangs on, and the wall is white — fading a fresco out to black on a white
-   ground draws a rectangle around it, which is exactly what a scrim is for
-   avoiding. */
+   The painting dissolves into the black quarry face at the left and along the
+   frame edges, so the art never exposes its rectangular bounds. */
 .e-title-scrim {
   position: absolute;
   inset: 0;
   background:
     linear-gradient(
       90deg,
-      #e4ddcc 0%,
-      #e4ddcc 30%,
-      rgba(228, 221, 204, 0.94) 44%,
-      rgba(228, 221, 204, 0.6) 58%,
-      rgba(228, 221, 204, 0.16) 74%,
+      #090807 0%,
+      #090807 30%,
+      rgba(9, 8, 7, 0.94) 44%,
+      rgba(9, 8, 7, 0.6) 58%,
+      rgba(9, 8, 7, 0.16) 74%,
       transparent 100%
     ),
     linear-gradient(
       180deg,
-      rgba(228, 221, 204, 0.78),
+      rgba(9, 8, 7, 0.78),
       transparent 30%,
       transparent 58%,
-      rgba(228, 221, 204, 0.9)
+      rgba(9, 8, 7, 0.9)
     );
 }
 
@@ -319,18 +316,17 @@
   opacity: 1;
 }
 
-/* The missing-art vignette is a light bloom for a dark room; on stone it has to
-   darken instead, or the empty slot is a bright patch on a bright wall. */
+/* A restrained pale bloom keeps an empty art slot legible on the dark stone. */
 .e-title-art > .e-art.missing::after {
   background: radial-gradient(
     ellipse at 50% 38%,
-    rgba(76, 68, 59, 0.1),
+    rgba(230, 223, 208, 0.1),
     transparent 68%
   );
 }
 
 .e-title-art .e-sigil {
-  color: rgba(76, 68, 59, 0.16);
+  color: rgba(230, 223, 208, 0.16);
 }
 
 /* Torchlight pooling out of the bottom-left corner, under the menu. On stone
@@ -364,31 +360,29 @@
 .e-tablet {
   position: relative;
   padding: 54px 56px 48px;
-  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-vein), var(--e-slab);
-  background-size: auto, 420px, auto, auto, auto;
-  background-blend-mode: normal, multiply, normal, normal, normal;
+  background: linear-gradient(rgba(28, 23, 20, 0.36), rgba(7, 6, 5, 0.68)), var(--e-quarry-black), var(--e-vein), var(--e-slab-dark);
+  background-size: auto, 420px, auto, auto;
+  background-blend-mode: normal, screen, normal, normal;
   box-shadow: var(--e-relief);
 }
 
 /* The rule under the subtitle: a scored line, lit along its lower edge. */
 /*
- * On the white screen the tablet is the same stone as the wall behind it, so
- * the only thing telling them apart is the light: a slab one step down from the
- * lit ground, and a shadow it actually casts. The base rule's 0.75-black drop
- * was tuned against charcoal and reads as soot on marble.
+ * The title tablet is a slightly lifted cut of the black quarry face, separated
+ * from the wall by a warm top edge and a deep cast shadow.
  */
 .e-title .e-tablet {
   box-shadow:
-    0 1px 0 rgba(255, 253, 246, 0.85) inset,
-    0 -3px 0 rgba(90, 84, 74, 0.3) inset,
-    0 22px 44px rgba(74, 66, 56, 0.3);
+    0 1px 0 rgba(255, 240, 205, 0.2) inset,
+    0 -3px 0 rgba(0, 0, 0, 0.65) inset,
+    0 22px 44px rgba(0, 0, 0, 0.72);
 }
 
 .e-rule {
   margin-top: 22px;
   height: 1px;
-  background: linear-gradient(90deg, rgba(80, 74, 64, 0.5), rgba(80, 74, 64, 0.05));
-  box-shadow: 0 1px 0 rgba(255, 253, 246, 0.7);
+  background: linear-gradient(90deg, rgba(230, 207, 152, 0.58), rgba(230, 207, 152, 0.06));
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.72);
 }
 
 .e-kicker {
@@ -396,8 +390,8 @@
   font-size: clamp(10px, 0.9vw, 14px);
   letter-spacing: 0.46em;
   text-transform: uppercase;
-  color: var(--e-stone-mid);
-  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.8);
+  color: rgba(230, 223, 208, 0.62);
+  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.86);
 }
 
 .e-wordmark {
@@ -407,13 +401,16 @@
   font-size: clamp(44px, 6vw, 92px);
   line-height: 0.92;
   letter-spacing: 0.14em;
+  color: var(--e-ink-bright);
+  text-shadow: 0 3px 4px rgba(0, 0, 0, 0.9);
 }
 
 .e-subtitle {
   margin-top: 20px;
   font-size: clamp(17px, 1.6vw, 24px);
   font-style: italic;
-  color: #5f5751;
+  color: rgba(230, 223, 208, 0.82);
+  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.82);
 }
 
 .e-menu {
@@ -444,13 +441,13 @@
   color: inherit;
   font: inherit;
   pointer-events: auto;
-  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-slab-dim);
+  background: linear-gradient(rgba(18, 16, 14, 0.46), rgba(7, 6, 5, 0.7)), var(--e-quarry-black), var(--e-slab-dark);
   background-size: auto, 240px, auto;
-  background-blend-mode: normal, multiply, normal;
+  background-blend-mode: normal, screen, normal;
   box-shadow:
-    0 1px 0 rgba(255, 253, 246, 0.7) inset,
-    0 -3px 0 rgba(90, 84, 74, 0.3) inset,
-    0 10px 24px rgba(74, 66, 56, 0.3);
+    0 1px 0 rgba(255, 240, 205, 0.16) inset,
+    0 -3px 0 rgba(0, 0, 0, 0.55) inset,
+    0 10px 24px rgba(0, 0, 0, 0.58);
   transition:
     box-shadow 0.16s ease,
     transform 0.16s ease,
@@ -462,8 +459,8 @@
   font-size: clamp(17px, 1.5vw, 22px);
   letter-spacing: 0.28em;
   /* Cut into the face: highlight below the glyph, soft dark above it. */
-  color: var(--e-cut);
-  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.8);
+  color: var(--e-ink);
+  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.82);
   transition: color 0.16s ease;
 }
 
@@ -492,9 +489,9 @@
  */
 .e-menu-row.primary {
   padding: 19px 22px;
-  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-vein), var(--e-slab);
-  background-size: auto, 240px, auto, auto, auto;
-  background-blend-mode: normal, multiply, normal, normal, normal;
+  background: linear-gradient(rgba(34, 27, 23, 0.38), rgba(10, 8, 7, 0.64)), var(--e-quarry-black), var(--e-vein), var(--e-slab-dark);
+  background-size: auto, 240px, auto, auto;
+  background-blend-mode: normal, screen, normal, normal;
   box-shadow:
     0 0 0 1px rgba(176, 74, 48, 0.4),
     0 1px 0 rgba(255, 253, 246, 0.8) inset,
@@ -505,16 +502,16 @@
 .e-menu-row.primary .e-menu-label {
   font-weight: 600;
   font-size: clamp(20px, 1.9vw, 27px);
-  color: var(--e-cut-deep);
-  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.92), 0 -1px 1px rgba(0, 0, 0, 0.18);
+  color: var(--e-ink-bright);
+  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.88);
 }
 
 /* Lifted and lit, not recoloured — the stone stays the stone. */
 .e-menu-row:hover,
 .e-menu-row:focus-visible {
-  background: var(--e-quarry-veil), var(--e-quarry-white), var(--e-vein), var(--e-slab-lit);
-  background-size: auto, 240px, auto, auto, auto;
-  background-blend-mode: normal, multiply, normal, normal, normal;
+  background: linear-gradient(rgba(48, 38, 31, 0.32), rgba(15, 12, 10, 0.58)), var(--e-quarry-black), var(--e-vein), linear-gradient(168deg, #352c27, #171312 55%, #2a211d);
+  background-size: auto, 240px, auto, auto;
+  background-blend-mode: normal, screen, normal, normal;
   transform: translateY(-1px);
   box-shadow:
     0 1px 0 rgba(255, 255, 250, 0.9) inset,
@@ -534,7 +531,7 @@
 
 .e-menu-row:hover .e-menu-label,
 .e-menu-row:focus-visible .e-menu-label {
-  color: var(--e-cut-deep);
+  color: #fff8e9;
 }
 
 /* An obol, struck. Used on the reliquary row and in the HUD's corner. */
@@ -555,8 +552,8 @@
   font-size: 15px;
   letter-spacing: 0.16em;
   /* Cut into the row's own slab, like the label beside it. */
-  color: var(--e-stone-mid);
-  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.7);
+  color: rgba(230, 223, 208, 0.64);
+  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.82);
 }
 
 /* An obol on white stone needs an edge, or it is a pale square on a pale slab. */
@@ -661,20 +658,16 @@
   align-self: center;
 }
 
-/*
- * The small print, flipped. All three of these are pale ink for a dark room,
- * and `thronesRow()` is shared with the mid-run screens that still are one — so
- * the inversion is scoped to the title rather than done at the source.
- */
+/* Pale ink remains readable directly on the title room's black marble. */
 .e-title .e-throne-name,
 .e-title .e-thrones-note,
 .e-title .e-tagline {
-  color: rgba(76, 68, 59, 0.62);
-  text-shadow: 0 1px 0 rgba(255, 253, 246, 0.6);
+  color: rgba(230, 223, 208, 0.62);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.72);
 }
 
 .e-title .e-throne.spurned .e-throne-name {
-  color: rgba(76, 68, 59, 0.34);
+  color: rgba(230, 223, 208, 0.34);
 }
 
 /* The mason's marks stand on stone now, so they cast onto it. */
