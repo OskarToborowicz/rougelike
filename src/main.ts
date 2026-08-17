@@ -117,6 +117,11 @@ let mode: "solo" | "host" | "guest" = "solo";
 let paused = true;
 let running = false;
 const focus = new THREE.Vector3();
+
+/** The frozen door-phase framing used by the steady camera. See `openGates()`. */
+const steadyShot = new THREE.Vector3();
+let steadyShotSpread = 0;
+let steadyShotHeld = false;
 const frames = new Map<number, Frame | null>();
 
 const net = new Net({
@@ -1004,6 +1009,7 @@ function applySettings() {
   }
   stage.shakeScale = settings.shake;
   stage.zoomScale = settings.zoom;
+  stage.steady = settings.steadyCam;
 }
 
 /** Leave the run and go back to the title screen. */
@@ -1269,6 +1275,31 @@ function loop(now: number) {
         Math.hypot(g.position.x - focus.x, g.position.z - focus.z),
       );
     }
+
+    /*
+     * Steady camera: freeze that shot instead of blending it every frame.
+     *
+     * The blend above is a moving average of the player and the doors, so while
+     * the player walks the frame slides on its own axis — the world drifts under
+     * a camera the player is not driving. That is the worst case for motion
+     * sickness, and it is why the door phase turned stomachs when the fights did
+     * not. Capturing the framing once and holding it makes the choice a still
+     * shot; the arena is small enough that the player stays in it.
+     */
+    if (settings.steadyCam) {
+      if (!steadyShotHeld) {
+        steadyShot.copy(focus);
+        steadyShotSpread = spread;
+        steadyShotHeld = true;
+      }
+      focus.copy(steadyShot);
+      spread = steadyShotSpread;
+    }
+  } else {
+    steadyShotHeld = false;
+    // No doors, no reason to widen: in steady mode the camera stays on its own
+    // player rather than backing off for a boss or a co-op partner.
+    if (settings.steadyCam) spread = 0;
   }
 
   stage.follow(focus, dt, spread);

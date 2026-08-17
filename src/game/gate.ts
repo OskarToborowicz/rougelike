@@ -70,6 +70,14 @@ export class Gate {
   private ready = false;
   /** True once every live player has stepped through. */
   entered = new Set<number>();
+  /**
+   * Where on the far wall this door sits, kept as an angle rather than a point.
+   * The arena is rebuilt whenever the party size changes — and in co-op that can
+   * happen with the doors already open, when someone joins or drops — so a
+   * position baked at `show` time ends up outside the new wall. The angle
+   * survives the rebuild; the radius is read fresh every frame.
+   */
+  private angle = Math.PI;
 
   constructor(parent: THREE.Object3D) {
     this.group.visible = false;
@@ -234,7 +242,6 @@ export class Gate {
    */
   show(door: Door, slot: number, slots: number) {
     const reward = door.reward;
-    const r = arenaRadius() - 1.2;
     // Doors are spread evenly across the far wall so they are seen side by side
     // and read as alternatives, not as one exit that happens to have moved.
     const span = slots === 1 ? 0 : Math.PI * 0.5;
@@ -242,7 +249,8 @@ export class Gate {
 
     this.reward = reward;
     this.room = door.room;
-    this.group.position.set(Math.sin(a) * r, 0, Math.cos(a) * r);
+    this.angle = a;
+    this.seat();
     // Face the middle of the room.
     this.group.rotation.y = a + Math.PI;
     this.group.visible = true;
@@ -259,6 +267,12 @@ export class Gate {
     this.setEmblem(reward);
   }
 
+  /** Put the door back on the wall at whatever the arena measures right now. */
+  private seat() {
+    const r = arenaRadius() - 1.2;
+    this.group.position.set(Math.sin(this.angle) * r, 0, Math.cos(this.angle) * r);
+  }
+
   hide() {
     this.open = false;
     this.group.visible = false;
@@ -273,6 +287,8 @@ export class Gate {
   update(dt: number, players: Player[]) {
     if (!this.group.visible) return;
     this.t += dt;
+    // The room may have been rebuilt under us since `show` — cheap to re-seat.
+    this.seat();
 
     this.glow = damp(this.glow, this.open ? 1 : 0, 4, dt);
     // Additive light blows out to white as it brightens, which erases the very

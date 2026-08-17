@@ -9,6 +9,15 @@ export interface Settings {
   quality: 'low' | 'medium' | 'high';
   /** Extra camera distance, for players who want more of the room in frame. */
   zoom: number;
+  /**
+   * Steady camera, for players who get motion sick.
+   *
+   * Kills shake outright, freezes the dynamic zoom so the frame stops breathing
+   * in and out, and tightens the follow so the camera tracks the player instead
+   * of swimming after them. The three together are what turns a stomach; a
+   * shake slider alone is not enough.
+   */
+  steadyCam: boolean;
   /** Combat and interface sounds. 0 is silence. */
   sfxVolume: number;
   /** The drone bed under the run, scaled separately — many players want only this off. */
@@ -25,6 +34,7 @@ export const DEFAULTS: Settings = {
   shadows: true,
   quality: 'high',
   zoom: 1,
+  steadyCam: false,
   sfxVolume: 0.8,
   musicVolume: 0.5,
   playerName: 'Shade',
@@ -47,10 +57,14 @@ export const settings: Settings = load();
  * explicit choice is never second-guessed.
  */
 function deviceDefaults(): Settings {
+  // A player who has asked their OS to reduce motion has already told us they
+  // want the steady camera; make them find the option only to turn it back off.
+  const calm = matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  const base: Settings = { ...DEFAULTS, steadyCam: calm };
   const coarse = matchMedia?.('(pointer: coarse)').matches ?? false;
   const small = Math.min(innerWidth, innerHeight) < 820;
-  if (!coarse || !small) return { ...DEFAULTS };
-  return { ...DEFAULTS, quality: 'medium', shadows: false };
+  if (!coarse || !small) return base;
+  return { ...base, quality: 'medium', shadows: false };
 }
 
 function load(): Settings {

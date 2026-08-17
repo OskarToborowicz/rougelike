@@ -159,8 +159,11 @@ export class Stage {
   /** Player-facing multipliers, driven by the options screen. */
   shakeScale = 1;
   zoomScale = 1;
+  /** Steady mode: no shake, no zoom drift, a tighter follow. See Settings.steadyCam. */
+  steady = false;
 
   shake(amp: number) {
+    if (this.steady) return;
     this.shakeAmp = Math.min(1.4, this.shakeAmp + amp * this.shakeScale);
   }
 
@@ -192,12 +195,26 @@ export class Stage {
     const aspectPad = 1.4 + Math.max(0, 1.5 - this.camera.aspect) * 0.4;
     const spreadPad = 1 + Math.max(0, spread - 3.0) * 0.1;
     const wantZoom = Math.min(1.85, aspectPad * spreadPad) * this.zoomScale;
-    this.zoom = damp(this.zoom, wantZoom, 3.5, dt);
+    /*
+     * Steady mode parks the camera at the distance the worst case would have
+     * pulled it to, and leaves it there. The dynamic version is the nicer shot,
+     * but a frame that creeps in and out while the player stands still is the
+     * classic sim-sickness trigger — the eyes report motion the inner ear does
+     * not. It still honours `spread`, because callers in steady mode pass a
+     * value that is either zero or frozen for the whole phase — so the distance
+     * settles once and then holds, instead of tracking a moving boss.
+     */
+    const steadyZoom =
+      Math.min(1.85, aspectPad * Math.max(1.3, spreadPad)) * this.zoomScale;
+    this.zoom = damp(this.zoom, this.steady ? steadyZoom : wantZoom, 3.5, dt);
 
+    // A tighter spring in steady mode: the camera sits on the player rather
+    // than swimming after them, so the world stops sliding under a still frame.
+    const k = this.steady ? 14 : 6;
     const want = this.camTarget.clone().addScaledVector(this.offset, this.zoom);
-    this.camPos.x = damp(this.camPos.x, want.x, 6, dt);
-    this.camPos.y = damp(this.camPos.y, want.y, 6, dt);
-    this.camPos.z = damp(this.camPos.z, want.z, 6, dt);
+    this.camPos.x = damp(this.camPos.x, want.x, k, dt);
+    this.camPos.y = damp(this.camPos.y, want.y, k, dt);
+    this.camPos.z = damp(this.camPos.z, want.z, k, dt);
 
     this.shakeT += dt * 34;
     this.shakeAmp = damp(this.shakeAmp, 0, 9, dt);

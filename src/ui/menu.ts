@@ -492,6 +492,12 @@ export class Menu {
       })
     );
     rows.push(
+      toggleRow(t('options.steadyCam'), settings.steadyCam, (v) => {
+        settings.steadyCam = v;
+        saveSettings();
+      })
+    );
+    rows.push(
       sliderRow(t('options.zoom'), settings.zoom, 0.7, 1.6, 0.05, (v) => {
         settings.zoom = v;
         saveSettings();
