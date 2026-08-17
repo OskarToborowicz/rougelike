@@ -49,6 +49,7 @@ const EN = {
   'menu.back': 'BACK',
   // Not translated in any language: the word players already use for this.
   'menu.online': 'Co-op',
+  'menu.solo': 'Solo',
   'menu.needCode': 'Enter the four-letter code from your host.',
   'menu.defaultName': 'Shade',
   'menu.escape': 'ESCAPE',
@@ -508,6 +509,7 @@ const PL: Partial<Record<Key, string>> = {
   'menu.join': 'DOŁĄCZ KODEM',
   'menu.back': 'WSTECZ',
   'menu.online': 'Co-op',
+  'menu.solo': 'Solo',
   'menu.needCode': 'Wpisz czteroliterowy kod od gospodarza.',
   'menu.defaultName': 'Cień',
   'menu.escape': 'START',

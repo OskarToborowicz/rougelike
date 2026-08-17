@@ -339,8 +339,11 @@ export class Menu {
           [
             el('div', 'e-gate-tick tl'),
             el('div', 'e-gate-tick tr'),
+            el('div', 'e-gate-tick bl'),
+            el('div', 'e-gate-tick br'),
             head,
             group('e-gate-col solo', [
+              el('div', 'ldiv', t('menu.solo')),
               row(t('menu.field.name'), name),
               picker,
               blurb,

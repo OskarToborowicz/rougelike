@@ -1906,8 +1906,7 @@
   border: 0;
   border-radius: 0;
   font-family: 'Cormorant Garamond', Garamond, var(--e-body);
-  background: url('/textures/marble_black.jpg') center / 760px repeat, #100e0d;
-  background-size: 760px, auto;
+  background: url('/textures/gray_white.jpg') center / 1024px repeat, #100e0d;
   box-shadow:
     0 0 0 1px rgba(214, 199, 170, 0.16),
     0 44px 100px -24px rgba(0, 0, 0, 0.9);
@@ -1954,6 +1953,24 @@
 }
 
 .e-gate .e-gate-tick.tr {
+  right: 16px;
+  border-right: 1px solid rgba(226, 205, 150, 0.4);
+}
+
+.e-gate .e-gate-tick.bl,
+.e-gate .e-gate-tick.br {
+  top: auto;
+  bottom: 18px;
+  border-top: 0;
+  border-bottom: 1px solid rgba(226, 205, 150, 0.4);
+}
+
+.e-gate .e-gate-tick.bl {
+  left: 16px;
+  border-left: 1px solid rgba(226, 205, 150, 0.4);
+}
+
+.e-gate .e-gate-tick.br {
   right: 16px;
   border-right: 1px solid rgba(226, 205, 150, 0.4);
 }
@@ -2091,7 +2108,7 @@
   font-size: 22px;
   letter-spacing: 0.05em;
   color: #efe9dd;
-  background: rgba(4, 4, 3, 0.72);
+  background: rgba(4, 4, 3, 0.5);
   border: 1px solid rgba(226, 205, 150, 0.22);
   border-radius: 0;
 }
@@ -2145,47 +2162,100 @@
   gap: 14px;
 }
 
+/*
+ * A card, not a chip: centred name and kicker over a marked-off tile, a
+ * diamond struck above the name only once the shade is sworn. Matches the
+ * card treatment in the Ascend Menu doc.
+ */
 .e-gate .lclass {
-  display: block;
-  padding: 16px 10px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 128px;
+  padding: 22px 12px 18px;
   text-align: center;
   border-radius: 0;
   opacity: 1;
+  overflow: hidden;
   color: #8b8271;
   background: rgba(4, 4, 3, 0.62);
   border: 1px solid rgba(226, 205, 150, 0.16);
   transition:
     color 0.2s ease,
     background 0.2s ease,
-    border-color 0.2s ease;
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+/* The glow, laid under the card and faded in on hover or when sworn. */
+.e-gate .lclass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: radial-gradient(130% 92% at 50% 120%, rgba(230, 207, 152, 0.22), transparent 72%);
+}
+
+/* The mark struck above the name, only once sworn. */
+.e-gate .lclass::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  transform: rotate(45deg);
+  background: rgba(230, 207, 152, 0.85);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .e-gate .lclass:hover {
-  transform: none;
-  border-color: rgba(230, 207, 152, 0.55);
+  transform: translateY(-2px);
+  border-color: rgba(230, 207, 152, 0.4);
 }
 
-/* Sworn: lit from inside, the only thing on the tablet that glows. */
+.e-gate .lclass:hover::before {
+  opacity: 0.6;
+}
+
+/* Sworn: lit from inside, ringed, and the only card wearing its mark. */
 .e-gate .lclass.on {
   color: #f4eee0;
   background: rgba(230, 207, 152, 0.1);
   border-color: rgba(230, 207, 152, 0.6);
   box-shadow:
-    0 0 30px -10px rgba(230, 207, 152, 0.5),
-    inset 0 0 40px rgba(230, 207, 152, 0.06);
+    inset 0 0 0 1px rgba(230, 207, 152, 0.55),
+    inset 0 0 40px rgba(230, 207, 152, 0.08),
+    0 0 30px -10px rgba(230, 207, 152, 0.5);
+}
+
+.e-gate .lclass.on::before,
+.e-gate .lclass.on::after {
+  opacity: 1;
 }
 
 .e-gate .lclass .cn {
+  position: relative;
+  width: 100%;
   font-family: 'Cormorant SC', serif;
-  font-size: 20px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0;
+  white-space: nowrap;
   color: inherit;
 }
 
 .e-gate .lclass .ct {
+  position: relative;
   display: block;
-  margin-top: 6px;
+  margin-top: 2px;
   font-style: italic;
   font-size: 15px;
   letter-spacing: 0.04em;
@@ -2225,8 +2295,7 @@
   text-indent: 0.2em;
   color: #f0e8d8;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.75);
-  background: linear-gradient(rgba(18, 16, 14, 0.3), rgba(5, 4, 4, 0.62)), url('/textures/marble_black.jpg') 30% 60% / 580px repeat, #100e0d;
-  background-blend-mode: normal, screen, normal;
+  background: url('/textures/gray_white.jpg') 30% 60% / 1024px repeat, #100e0d;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.5) inset,
     0 -3px 10px rgba(0, 0, 0, 0.25) inset;
@@ -2235,7 +2304,7 @@
 
 .e-gate .lbtn:hover {
   filter: brightness(1.14);
-  background: linear-gradient(rgba(28, 24, 20, 0.28), rgba(8, 6, 5, 0.56)), url('/textures/marble_black.jpg') 30% 60% / 580px repeat, #15110f;
+  background: url('/textures/gray_white.jpg') 30% 60% / 1024px repeat, #15110f;
   color: #fff8e9;
 }
 
@@ -2249,8 +2318,7 @@
   padding: 18px 20px;
   font-size: 25px;
   color: #fff8e9;
-  background: linear-gradient(rgba(28, 23, 17, 0.25), rgba(7, 5, 4, 0.58)), url('/textures/marble_black.jpg') center / 620px repeat, #130f0c;
-  background-blend-mode: normal, screen, normal;
+  background: url('/textures/gray_white.jpg') center / 1024px repeat, #130f0c;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.55) inset,
     0 -3px 10px rgba(0, 0, 0, 0.28) inset,
@@ -2258,7 +2326,7 @@
 }
 
 .e-gate .lbtn.primary:hover {
-  background: linear-gradient(rgba(38, 30, 21, 0.24), rgba(9, 6, 4, 0.52)), url('/textures/marble_black.jpg') center / 620px repeat, #18120e;
+  background: url('/textures/gray_white.jpg') center / 1024px repeat, #18120e;
   color: #fff8e9;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
@@ -2269,8 +2337,7 @@
 /* Join is cut from a different part of the slab than host. */
 .e-gate .lrow:has(.lfield.code) + .lbtn,
 .e-gate .lrow:has(.lfield.code) + .lbtn:hover {
-  background: linear-gradient(rgba(18, 16, 14, 0.3), rgba(5, 4, 4, 0.62)), url('/textures/marble_black.jpg') 70% 20% / 560px repeat, #100e0d;
-  background-blend-mode: normal, screen, normal;
+  background: url('/textures/gray_white.jpg') 70% 20% / 1024px repeat, #100e0d;
 }
 
 /* Back is the same stone left unpolished. */
@@ -2278,8 +2345,7 @@
 .e-gate .lbtn.ghost:hover {
   opacity: 1;
   color: rgba(230, 223, 208, 0.72);
-  background: linear-gradient(rgba(16, 14, 13, 0.36), rgba(4, 3, 3, 0.68)), url('/textures/marble_black.jpg') 15% 85% / 540px repeat, #0d0b0a;
-  background-blend-mode: normal, screen, normal;
+  background: url('/textures/gray_white.jpg') 15% 85% / 1024px repeat, #0d0b0a;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.45) inset,
     0 -3px 10px rgba(0, 0, 0, 0.22) inset;
