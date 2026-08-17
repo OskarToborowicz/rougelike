@@ -64,7 +64,20 @@ export function addOutline(root: THREE.Object3D, thickness = 0.035) {
       geo = inflate(m.geometry, thickness);
     }
 
-    const shell = new THREE.Mesh(geo, OUTLINE_MAT);
+    // A skinned mesh deforms every frame, so a plain Mesh shell would hang in the
+    // rest pose while the body moved out of it. Bind the shell to the same
+    // skeleton as a SkinnedMesh and it rides along — the inflated hull tracks
+    // every limb. JOINTS/WEIGHTS live on the shared (inflated clone of the)
+    // geometry, so the bind just needs the source's skeleton and bind matrix.
+    const skinned = m as THREE.SkinnedMesh;
+    let shell: THREE.Mesh;
+    if (skinned.isSkinnedMesh) {
+      const s = new THREE.SkinnedMesh(geo, OUTLINE_MAT);
+      s.bind(skinned.skeleton, skinned.bindMatrix);
+      shell = s;
+    } else {
+      shell = new THREE.Mesh(geo, OUTLINE_MAT);
+    }
     if (heavy) shell.userData.sharedGeometry = true;
     shell.position.copy(m.position);
     shell.rotation.copy(m.rotation);

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 const loader = new GLTFLoader();
 const cache = new Map<string, Promise<THREE.Object3D>>();
@@ -41,9 +42,21 @@ export function loadModel(url: string): Promise<THREE.Object3D> {
   return p;
 }
 
+/** True if any mesh under the object is skinned — it needs a rebound clone. */
+function isSkinned(source: THREE.Object3D): boolean {
+  let skinned = false;
+  source.traverse((o) => {
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh) skinned = true;
+  });
+  return skinned;
+}
+
 /** A fresh copy of a loaded model, with an optional material override. */
 export function instance(source: THREE.Object3D, material?: THREE.Material): THREE.Object3D {
-  const clone = source.clone(true);
+  // Object3D.clone shares bones by reference, so every clone of a skinned model
+  // would deform to the same pose. SkeletonUtils.clone rebuilds the skeleton and
+  // rebinds each SkinnedMesh to its own copy — the only correct clone for a rig.
+  const clone = isSkinned(source) ? cloneSkinned(source) : source.clone(true);
   clone.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;

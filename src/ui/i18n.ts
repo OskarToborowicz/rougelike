@@ -329,11 +329,13 @@ const EN = {
   'biome.tartarus': 'TARTARUS',
   'biome.asphodel': 'ASPHODEL',
   'biome.elysium': 'ELYSIUM',
+  'biome.legion': 'THE LEGION',
 
   // ------------------------------------------------------------------ bosses
   'boss.erinys': 'ERINYS · SCOURGE OF TARTARUS',
   'boss.hydra': 'BONE HYDRA · JAWS OF ASPHODEL',
   'boss.champion': 'CHAMPIONS OF ELYSIUM',
+  'boss.belial': 'BELIAL · LORD OF THE LEGION',
 
   // ----------------------------------------------------------------- classes
   'class.warrior.name': 'WARRIOR',
@@ -781,11 +783,13 @@ const PL: Partial<Record<Key, string>> = {
   'biome.tartarus': 'TARTAR',
   'biome.asphodel': 'ASFODEL',
   'biome.elysium': 'ELIZJUM',
+  'biome.legion': 'LEGION',
 
   // ------------------------------------------------------------------ bossowie
   'boss.erinys': 'ERYNIA · BICZ TARTARU',
   'boss.hydra': 'KOŚCIANA HYDRA · PASZCZE ASFODELU',
   'boss.champion': 'CZEMPIONI ELIZJUM',
+  'boss.belial': 'BELIAL · PAN LEGIONU',
 
   // ------------------------------------------------------------------- klasy
   'class.warrior.name': 'WOJOWNIK',

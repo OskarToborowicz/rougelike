@@ -20,7 +20,7 @@ export interface Biome {
   flameCool: number;
   pillar: number;
   /** Which boss rules this region. */
-  boss: 'erinys' | 'hydra' | 'champion';
+  boss: 'erinys' | 'hydra' | 'champion' | 'belial';
 }
 
 /**
@@ -88,6 +88,31 @@ export const BIOMES: Biome[] = [
     flameCool: 0x8ab4ff,
     pillar: 0x4e8a78,
     boss: 'champion',
+  },
+  {
+    // The Legion — above Elysium, the climb's last realm. Black ash lit from
+    // below by hellfire: near-black floor and walls so the molten torches and
+    // Belial's own charcoal-wine body read against dark rather than against the
+    // full crimson of Asphodel, and one unholy violet accent to keep the flames
+    // from collapsing into a single orange wash.
+    id: 'legion',
+    get name() {
+      return t('biome.legion');
+    },
+    floorBase: '#241014',
+    warmHue: [12, 30],
+    coolHue: [300, 320],
+    bands: ['#ff6a2a', '#3a1420', '#ffae4c', '#8a2a3a', '#c4501c'],
+    wallTop: '#0a0407',
+    wallMid: '#2a0c14',
+    wallBase: '#4a1820',
+    gild: '#ff8a3c',
+    fog: 0x180608,
+    background: 0x0a0305,
+    flameWarm: 0xff5a1e,
+    flameCool: 0xa64ad0,
+    pillar: 0x6a2a30,
+    boss: 'belial',
   },
 ];
 

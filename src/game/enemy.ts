@@ -6,7 +6,12 @@ import { fitToHeight, instance, loadModel } from '../render/models';
 import { hexString, makeBodySkin, makeBoneSkin } from '../render/skin';
 import { t } from '../ui/i18n';
 
-export type EnemyKind = 'wretch' | 'lobber' | 'brute' | 'erinys' | 'hydra' | 'champion';
+// Scratch objects for skeletal posing, reused every frame so a rigged boss does
+// not allocate a quaternion per bone per tick.
+const _boneQ = new THREE.Quaternion();
+const _boneE = new THREE.Euler();
+
+export type EnemyKind = 'wretch' | 'lobber' | 'brute' | 'erinys' | 'hydra' | 'champion' | 'belial';
 
 interface Archetype {
   hp: number;
@@ -146,6 +151,41 @@ export const ARCHETYPES: Record<EnemyKind, Archetype> = {
       return t('boss.champion');
     },
   },
+
+  belial: {
+    /*
+     * The Legion lord — the climb's last guardian, above Elysium. Not a pair and
+     * not rooted like the two realms below him: a lone, mobile demon that closes
+     * distance himself, so his health has to buy a longer fight than the hydra's
+     * stationary 1400 without the two-body split the champions get. 1500 lands
+     * him hardest of the four while staying a single health bar.
+     */
+    hp: 1500,
+    /*
+     * The sculpt is 0.87 wide, 0.46 deep and reads as a broad-shouldered
+     * humanoid. 1.3 sets the circle at 2.6 across — mass between the shoulders,
+     * the ragged lower body and reaching arms left outside as "reach".
+     */
+    radius: 1.3,
+    speed: 5.0,
+    /*
+     * Charcoal-wine body against a molten trim. His own realm is black-violet
+     * ash lit by hellfire, so the body leans dark and desaturated to sit apart
+     * from the flame telegraph (a hot orange emissive) that has to stay the
+     * loudest thing on screen through his wind-ups.
+     */
+    color: 0x5a2633,
+    trim: 0xff7a2a,
+    scale: 2.0,
+    contact: 30,
+    tell: 0.55,
+    attackRange: 3.8,
+    cooldown: 1.1,
+    boss: true,
+    get title() {
+      return t('boss.belial');
+    },
+  },
 };
 
 /**
@@ -155,7 +195,7 @@ export const ARCHETYPES: Record<EnemyKind, Archetype> = {
  * own — the file may be slow, may be missing, and the fight has to start on
  * frame zero regardless. Anything not listed here simply never swaps.
  */
-const AUTHORED: Partial<Record<EnemyKind, { url: string; height: number }>> = {
+const AUTHORED: Partial<Record<EnemyKind, { url: string; height: number; rigged?: boolean }>> = {
   // Erinys is the first boss, so she is the one worth looking at closest.
   erinys: { url: '/models/minotaur.glb', height: 2.2 },
   // The wretch is the foe the run is mostly made of — every chamber opens with
@@ -177,6 +217,10 @@ const AUTHORED: Partial<Record<EnemyKind, { url: string; height: number }>> = {
   // 2.1 and well under Erinys at 4.4. The heavy has to read as the thing you
   // deal with before it reaches you, without being mistaken for a boss.
   brute: { url: '/models/tartarus_hoplit.glb', height: 1.75 },
+  // Belial, the Legion lord. 2.3 against his archetype scale of 2.0 lands at 4.6
+  // — a shade over Erinys at 4.4, so the last guardian reads as the biggest body
+  // in the run without dwarfing the room he fights in.
+  belial: { url: '/models/belial.glb', height: 2.3, rigged: true },
 };
 
 /**
@@ -229,6 +273,12 @@ export const BOSS_PATTERNS: Partial<Record<EnemyKind, BossPattern[]>> = {
   erinys: ['lash', 'volley', 'charge'],
   hydra: ['spit', 'sweep', 'summon'],
   champion: ['lunge', 'throw', 'spin'],
+  // The Legion lord commands the whole board rather than one range band: he
+  // closes with Erinys's charge, walls the rim with the hydra's sweep, sends his
+  // own adds, then punishes the retreat with the champions' thrown line. A
+  // four-beat rotation no single realm boss runs — built from moves already in
+  // the pattern machine, so it needs no new combat code.
+  belial: ['charge', 'sweep', 'summon', 'throw'],
 };
 
 export class Enemy implements Actor {
@@ -306,6 +356,15 @@ export class Enemy implements Actor {
    */
   private flashMats: THREE.MeshStandardMaterial[] = [];
   private bob = rand(0, 6);
+
+  /**
+   * A skinned body drives its limbs through bones instead of the whole-body
+   * gait. Empty until an authored mesh that carries a skeleton swaps in; while
+   * it is empty the enemy animates exactly as before.
+   */
+  private rigged = false;
+  private bones: Record<string, THREE.Bone> = {};
+  private boneRest: Record<string, THREE.Quaternion> = {};
 
   constructor(public id: number, public kind: EnemyKind) {
     this.a = ARCHETYPES[kind];
@@ -467,6 +526,30 @@ export class Enemy implements Actor {
 
     addOutline(body, 0.032);
     this.body.add(body);
+
+    if (want.rigged) this.setupRig(body);
+  }
+
+  /**
+   * Catch the skeleton the authored mesh brought in. The bones are named in the
+   * player rig's scheme (`ArmL`, `LegR`, `Spine`…); animateSkeleton rotates them
+   * off their rest pose, so their rest orientation is captured here once. With
+   * no bones found the enemy quietly falls back to the whole-body gait.
+   */
+  private setupRig(body: THREE.Object3D) {
+    const names = [
+      'Pelvis', 'Spine', 'Head',
+      'ArmL', 'ForearmL', 'ArmR', 'ForearmR',
+      'LegL', 'ShinL', 'LegR', 'ShinR',
+    ];
+    for (const name of names) {
+      const bone = body.getObjectByName(name) as THREE.Bone | undefined;
+      if (bone?.isBone) {
+        this.bones[name] = bone;
+        this.boneRest[name] = bone.quaternion.clone();
+      }
+    }
+    this.rigged = Object.keys(this.bones).length > 0;
   }
 
   /**
@@ -785,7 +868,62 @@ export class Enemy implements Actor {
     if (this.heads.length) this.bob += dt * 1.6;
 
     if (this.state !== 'dead') this.mesh.scale.setScalar(this.a.scale);
-    this.animateBody(dt);
+    // A rigged body moves its own limbs; the whole-body gait would fight the
+    // skeleton, so it is one or the other.
+    if (this.rigged) this.animateSkeleton(dt);
+    else this.animateBody(dt);
+  }
+
+  /**
+   * Procedural skeletal gait for a rigged foe.
+   *
+   * Same idea as the player rig: no clips, just named bones rotated off their
+   * rest pose each frame. Arms and legs swing in antiphase at the stride rate,
+   * a wind-up lifts the arms as the tell ramps, and the strike throws them
+   * forward — driven by the same `state` and `stateT` the emissive telegraph
+   * already reads, so limb and glow land on the same frame.
+   */
+  private animateSkeleton(dt: number) {
+    const speed = Math.hypot(this.vel.x, this.vel.z);
+    const g = this.gait();
+    this.bob += dt * (5 + speed) * g.rate;
+    const stride = clamp(speed / this.moveSpeed, 0, 1);
+
+    const phase = Math.sin(this.bob * 0.5);
+    const armAmp = 0.1 + stride * 0.5;
+    const legAmp = 0.06 + stride * 0.55;
+
+    // Wind-up lifts the arms; committed strike throws them forward. Both read the
+    // same clock as the tell so nothing has to be kept in sync by hand.
+    const winding = this.state === 'tell' || (this.state === 'pattern' && !this.strikeDone);
+    const raise = winding ? clamp(this.stateT / this.a.tell, 0, 1) ** 2 : 0;
+    const striking = this.state === 'strike' || (this.state === 'pattern' && this.strikeDone);
+    const throwT = striking ? clamp(this.stateT * 3, 0, 1) : 0;
+
+    // Positive local-X swings a limb forward on this rig (matches the Blender
+    // pose test). Arms oppose legs; left opposes right.
+    const armX = -raise * 1.3 + throwT * 1.1;
+    this.setBone('ArmR', armX + phase * armAmp);
+    this.setBone('ArmL', armX - phase * armAmp);
+    this.setBone('ForearmR', -raise * 0.9 - throwT * 0.3);
+    this.setBone('ForearmL', -raise * 0.9 - throwT * 0.3);
+
+    this.setBone('LegR', -phase * legAmp);
+    this.setBone('LegL', phase * legAmp);
+    this.setBone('ShinR', Math.max(0, phase) * legAmp * 0.8);
+    this.setBone('ShinL', Math.max(0, -phase) * legAmp * 0.8);
+
+    // Spine breathes and leans into a strike; the head counter-rotates a touch so
+    // the body never turns as one board.
+    this.setBone('Spine', throwT * 0.25 + Math.sin(this.bob) * 0.02 * (0.4 + stride), phase * 0.06);
+    this.setBone('Head', 0, -phase * 0.05);
+  }
+
+  /** Rotate one bone off its captured rest pose by an XYZ-Euler delta. */
+  private setBone(name: string, x = 0, y = 0, z = 0) {
+    const bone = this.bones[name];
+    if (!bone) return;
+    bone.quaternion.copy(this.boneRest[name]).multiply(_boneQ.setFromEuler(_boneE.set(x, y, z)));
   }
 
   /**
