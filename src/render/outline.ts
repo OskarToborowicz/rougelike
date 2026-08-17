@@ -44,7 +44,7 @@ export function addOutline(root: THREE.Object3D, thickness = 0.035) {
   const shells: THREE.Mesh[] = [];
   root.traverse((o) => {
     const m = o as THREE.Mesh;
-    if (!m.isMesh || !m.geometry) return;
+    if (!m.isMesh || !m.geometry || m.userData.noOutline) return;
     // Skip flat ground decals — an outline on the blob shadow looks like a hole.
     if (m.material instanceof THREE.MeshBasicMaterial) return;
 

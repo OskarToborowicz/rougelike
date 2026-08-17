@@ -69,6 +69,8 @@ export function buildSnapshot(
     r(p.iframes),
     Math.max(0, CLASS_ORDER.indexOf(p.cls)),
     p.usingSpecial ? 1 : 0,
+    p.specialCharging ? 1 : 0,
+    r(p.specialCharge),
     r(p.speed * p.boons.moveMul),
   ]);
 
@@ -208,6 +210,8 @@ export class RemoteView {
         iframes,
         clsIdx,
         spec,
+        specialCharging,
+        specialCharge,
         moveSpeed,
       ] = w;
       seenP.add(id);
@@ -228,6 +232,8 @@ export class RemoteView {
         this.scene.add(p.mesh);
       }
       p.usingSpecial = !!spec;
+      p.specialCharging = !!specialCharging;
+      p.specialCharge = specialCharge ?? 0;
       poses.set(id, { x, z });
       // The local shade's facing is predicted, not replicated — it follows the
       // mouse with zero latency and the host agrees a moment later anyway.

@@ -275,8 +275,27 @@ export class World {
 
     if (p.comboWindow <= 0 && p.state !== 'attack') p.comboIndex = 0;
 
+    // The archer's special is a channel, not a press-triggered attack. Holding
+    // RMB draws the string; releasing latches the earned tier and starts the
+    // ordinary special recovery. Aim remains live throughout the channel.
+    if (f && p.specialCharging) {
+      if (f.held.has('special')) {
+        p.specialCharge = Math.min(1.5, p.specialCharge + dt);
+      } else {
+        const charge = p.specialCharge + 0.06;
+        p.specialVolleyCount = charge >= 1.5 ? 7 : charge >= 1 ? 5 : charge >= 0.5 ? 3 : 1;
+        p.specialCharging = false;
+        p.state = 'attack';
+        // Begin at the release frame: the resolver fires on the next simulation
+        // tick while the visual string immediately snaps straight.
+        p.stateT = p.currentAttack.wind;
+        p.attackHitDone = false;
+        p.usingSpecial = true;
+      }
+    }
+
     // --- intent --------------------------------------------------------
-    if (f && !p.isBusy) {
+    if (f && !p.isBusy && !p.specialCharging) {
       if (this.stepConcord(p, f, dt)) {
         // The Call — solo or shared — resolved this frame and owns the shade.
       } else if (f.pressed.has('dash') && p.dashCd <= 0) {
@@ -300,10 +319,17 @@ export class World {
         p.attackHitDone = false;
         p.usingSpecial = false;
       } else if (f.pressed.has('special')) {
-        p.state = 'attack';
-        p.stateT = 0;
-        p.attackHitDone = false;
-        p.usingSpecial = true;
+        if (p.def.special.kind === 'volley') {
+          p.specialCharging = true;
+          p.specialCharge = 0;
+          p.specialVolleyCount = 1;
+          p.usingSpecial = true;
+        } else {
+          p.state = 'attack';
+          p.stateT = 0;
+          p.attackHitDone = false;
+          p.usingSpecial = true;
+        }
       } else if (f.pressed.has('cast') && p.castAmmo > 0) {
         p.state = 'cast';
         p.stateT = 0;
@@ -432,9 +458,13 @@ export class World {
     this.fx.shake(0.06);
   }
 
-  /** Special: five bolts in a fan. Rewards a clustered pack, wastes shots on one target. */
+  /** Charged special: the latched number of bolts distributed over the same cone. */
   private fireVolley(p: Player, a: AttackShape) {
-    for (let i = -2; i <= 2; i++) this.fireBolt(p, a, i * (a.arc / 4));
+    const count = p.specialVolleyCount;
+    for (let i = 0; i < count; i++) {
+      const spread = count === 1 ? 0 : (i / (count - 1) - 0.5) * a.arc;
+      this.fireBolt(p, a, spread);
+    }
     this.fx.shake(0.16);
   }
 
