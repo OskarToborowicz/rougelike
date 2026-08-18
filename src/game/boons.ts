@@ -5,6 +5,14 @@ import { PANTHEON_ORDER, PANTHEONS, type PantheonId } from './pantheons';
 
 export type Slot = 'attack' | 'special' | 'cast' | 'dash' | 'passive';
 
+/**
+ * Twin Strike's echoes: each entry is one extra special hit, at this fraction of
+ * the base damage, fired a beat after the last. Reachable from a boon, a hammer
+ * and two capstones — they stack here instead of each re-setting the same flag,
+ * and the array length is the hard cap on how many echoes any build can reach.
+ */
+export const SPECIAL_ECHO_FALLOFF = [0.6, 0.4, 0.25];
+
 export interface Boon {
   id: string;
   /** The throne that owns it. The god who offers it is chosen per offer. */
@@ -13,6 +21,12 @@ export interface Boon {
   name: string;
   desc: string;
   apply: (b: BoonSet) => void;
+  /**
+   * Whether taking this now would do nothing — its effect is already maxed by
+   * some other source. Keeps a binary/capped effect from being offered as a dead
+   * pick once it is fully held, across boons, hammers and capstones alike.
+   */
+  redundant?: (b: BoonSet) => boolean;
 }
 
 /** Flat, additive modifiers. Deliberately simple so stacking never surprises the player. */
@@ -79,8 +93,11 @@ export class BoonSet {
   castPierce = 0;
   /** Splash radius added to the cast, if any. */
   castBurst = 0;
-  /** The special fires twice, a beat apart. */
-  doubleSpecial = false;
+  /**
+   * How many extra, fading echoes the special fires after the first hit. Each
+   * source of Twin Strike adds one; world reads it against SPECIAL_ECHO_FALLOFF.
+   */
+  specialEchoes = 0;
   /** Names of the hammers taken, for the HUD. */
   hammers: string[] = [];
 
@@ -393,7 +410,8 @@ export const ALL_BOONS: Boon[] = [
     id: 'rod-special',
     pantheon: 'rodnova',
     slot: 'special',
-    apply: (b) => (b.doubleSpecial = true),
+    apply: (b) => (b.specialEchoes += 1),
+    redundant: (b) => b.specialEchoes >= SPECIAL_ECHO_FALLOFF.length,
   }),
   boon({
     id: 'rod-attack',
@@ -417,7 +435,9 @@ const ofPantheon = (p: PantheonId) => ALL_BOONS.filter((b) => b.pantheon === p);
  */
 export function offerFrom(set: BoonSet, p: PantheonId, count = 3): Boon[] {
   const held = new Set(set.taken.map((b) => b.id));
-  return shuffle(ofPantheon(p).filter((b) => !held.has(b.id))).slice(0, count);
+  return shuffle(
+    ofPantheon(p).filter((b) => !held.has(b.id) && !b.redundant?.(set)),
+  ).slice(0, count);
 }
 
 /**

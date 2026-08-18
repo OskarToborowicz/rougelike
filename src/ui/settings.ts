@@ -14,8 +14,11 @@ export interface Settings {
    *
    * Kills shake outright, freezes the dynamic zoom so the frame stops breathing
    * in and out, and tightens the follow so the camera tracks the player instead
-   * of swimming after them. The three together are what turns a stomach; a
-   * shake slider alone is not enough.
+   * of swimming after them. On top of that it adds a follow deadzone (the frame
+   * holds still until the player leaves a box at screen centre), narrows the FOV
+   * to cut edge flow, and fades in a vignette while the frame pans. All of it is
+   * client-side render only — nothing here touches the simulation, so a co-op
+   * partner can leave it off with no effect on either player's run.
    */
   steadyCam: boolean;
   /** Combat and interface sounds. 0 is silence. */

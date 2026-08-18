@@ -16,6 +16,7 @@ import { arenaRadius, makeGlowTexture } from '../render/arena';
 import type { FxBus } from '../render/fxbus';
 import type { Frame } from '../core/input';
 import { angleDelta, clamp, damp, rand, TAU } from '../core/math';
+import { SPECIAL_ECHO_FALLOFF } from './boons';
 import { markCss, markLight } from './pantheons';
 
 /**
@@ -368,12 +369,18 @@ export class World {
   private resolveAttack(p: Player, a: AttackShape) {
     const heavy = p.usingSpecial;
 
-    // Twin Strike: the special lands a second time a beat later, so the follow-up
-    // catches anything that stepped in after the first hit.
-    if (heavy && p.boons.doubleSpecial) {
-      setTimeout(() => {
-        if (!p.dead) this.throwAttack(p, a, true);
-      }, 180);
+    // Twin Strike: the special echoes, each hit a beat after the last and weaker
+    // than it, catching anything that stepped in behind the first. One echo per
+    // source held, capped and faded by SPECIAL_ECHO_FALLOFF. The shape is copied
+    // per echo with a scaled `dmg` so nothing downstream needs a damage argument.
+    if (heavy) {
+      const echoes = Math.min(p.boons.specialEchoes, SPECIAL_ECHO_FALLOFF.length);
+      for (let i = 0; i < echoes; i++) {
+        const echoShape = { ...a, dmg: a.dmg * SPECIAL_ECHO_FALLOFF[i] };
+        setTimeout(() => {
+          if (!p.dead) this.throwAttack(p, echoShape, true);
+        }, 180 * (i + 1));
+      }
     }
     return this.throwAttack(p, a, heavy);
   }

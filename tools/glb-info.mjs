@@ -65,13 +65,14 @@ const BUDGET = { common: 2000, elite: 4000, boss: 20000, prop: 8000, player: 160
 /**
  * Bytes on the wire. A phone on mobile data pays for every one of them.
  *
- * The boss figure was set against static sculpts. A skinned boss carries a
- * JOINTS_0 + WEIGHTS_0 pair per vertex — roughly 24 bytes each — which the 600k
- * never accounted for: Belial rigged is 667k at 9k triangles, the same
- * silhouette the static version drew at 583k. Raised to 750k so a rigged boss
- * fits without gutting its geometry, still one body loaded once mid-run.
+ * The figures were set against static sculpts. A skinned mesh carries a
+ * JOINTS_0 + WEIGHTS_0 pair per vertex — roughly 24 bytes each — which the old
+ * numbers never accounted for. Belial rigged is 667k at 9k triangles (was 583k
+ * static); the hoplite rigged is 321k at 4k triangles (was 205k). Boss raised to
+ * 750k and elite to 350k so a rig fits without gutting geometry — an elite
+ * arrives one or two at a time, not in a crowd, so the extra weight is bounded.
  */
-const SIZE_BUDGET = { common: 150e3, elite: 300e3, boss: 750e3, prop: 300e3, player: 500e3 };
+const SIZE_BUDGET = { common: 150e3, elite: 350e3, boss: 750e3, prop: 300e3, player: 500e3 };
 
 /**
  * Primitives per file — the budget nobody was keeping, and the one that

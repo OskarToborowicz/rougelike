@@ -216,7 +216,7 @@ const AUTHORED: Partial<Record<EnemyKind, { url: string; height: number; rigged?
   // whatever `fitToHeight` sets, so this lands at 2.98 — half again the player's
   // 2.1 and well under Erinys at 4.4. The heavy has to read as the thing you
   // deal with before it reaches you, without being mistaken for a boss.
-  brute: { url: '/models/tartarus_hoplit.glb', height: 1.75 },
+  brute: { url: '/models/tartarus_hoplit.glb', height: 1.75, rigged: true },
   // Belial, the Legion lord. 2.3 against his archetype scale of 2.0 lands at 4.6
   // — a shade over Erinys at 4.4, so the last guardian reads as the biggest body
   // in the run without dwarfing the room he fights in.

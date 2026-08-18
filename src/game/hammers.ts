@@ -1,4 +1,4 @@
-import type { BoonSet } from './boons';
+import { SPECIAL_ECHO_FALLOFF, type BoonSet } from './boons';
 import type { ClassId } from './classes';
 import { shuffle } from '../core/math';
 import { t, type Key } from '../ui/i18n';
@@ -12,6 +12,8 @@ export interface Hammer {
   /** Classes it makes sense for. Empty means all. */
   classes?: ClassId[];
   apply: (b: BoonSet) => void;
+  /** Already fully held from some source — don't offer it as a dead pick. */
+  redundant?: (b: BoonSet) => boolean;
 }
 
 /**
@@ -60,7 +62,8 @@ export const HAMMERS: Hammer[] = [
   hammer({
     id: 'twin-special',
     slot: 'SPECIAL',
-    apply: (b) => (b.doubleSpecial = true),
+    apply: (b) => (b.specialEchoes += 1),
+    redundant: (b) => b.specialEchoes >= SPECIAL_ECHO_FALLOFF.length,
   }),
   hammer({
     id: 'brutal-special',
@@ -104,7 +107,10 @@ export const hammerSlotLabel = (h: Hammer) => t(`hammer.slot.${h.slot}` as Key);
 /** Three hammers the player does not already hold. */
 export function offerHammers(set: BoonSet, cls: ClassId, count = 3): Hammer[] {
   const pool = HAMMERS.filter(
-    (h) => !set.hammers.includes(h.id) && (!h.classes || h.classes.includes(cls))
+    (h) =>
+      !set.hammers.includes(h.id) &&
+      (!h.classes || h.classes.includes(cls)) &&
+      !h.redundant?.(set)
   );
   return shuffle(pool.slice()).slice(0, count);
 }

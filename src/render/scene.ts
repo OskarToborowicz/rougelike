@@ -24,6 +24,32 @@ export class Stage {
   /** Multiplier on `offset`, eased toward whatever the frame needs to contain. */
   private zoom = 1;
 
+  /*
+   * Steady-mode comfort pack. All three attack the same thing steady mode was
+   * built for — sim sickness — from angles the shake/zoom freeze does not reach:
+   *
+   *  - deadzone: the frame holds perfectly still until the player leaves a box
+   *    at screen centre, then moves only by the overflow. A camera that creeps
+   *    after every footstep slides the whole world under a still image, and that
+   *    world-slide (vection) is the strongest trigger in a top-down game.
+   *  - narrower FOV: less optical flow across the edges of frame, where the eye
+   *    reads motion the inner ear cannot feel. The camera pulls back by the same
+   *    ratio so the arena still fills the frame — flatter, not more zoomed in.
+   *  - motion vignette: darkens the far edges only while the camera is actually
+   *    sliding, cutting the peripheral flow the moment it would start to register.
+   */
+  private steadyFov = 34;
+  private baseFov = 42;
+  private steadyDistMul = 1.26; // tan(21°)/tan(17°): keeps floor coverage constant as FOV narrows.
+  private deadzone = 4.2; // world units; radius of the still box at screen centre.
+  private distMul = 1; // eased toward steadyDistMul in steady mode.
+  private deadFocus = new THREE.Vector3(); // anchored follow point; only the overflow moves it.
+  private deadInit = false;
+  private lastCamPos = new THREE.Vector3();
+  private lastCamInit = false;
+  private vigA = 0; // eased vignette opacity.
+  private vignette!: HTMLElement;
+
   /**
    * The host element, measured for every resize.
    *
@@ -52,7 +78,17 @@ export class Stage {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     host.appendChild(this.renderer.domElement);
 
-    this.camera = new THREE.PerspectiveCamera(42, size.w / size.h, 0.5, 200);
+    /*
+     * The motion vignette lives in #app, next to the canvas and below #ui
+     * (z-index 10), so it darkens the arena's far edges without ever touching
+     * the HUD — health bars and sticks stay at full strength. pointer-events are
+     * off, so it never intercepts a click or a drag.
+     */
+    this.vignette = document.createElement('div');
+    this.vignette.className = 'cam-vignette';
+    host.appendChild(this.vignette);
+
+    this.camera = new THREE.PerspectiveCamera(this.baseFov, size.w / size.h, 0.5, 200);
     this.camPos.copy(this.offset);
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(0, 0, 0);
@@ -208,10 +244,46 @@ export class Stage {
       Math.min(1.85, aspectPad * Math.max(1.3, spreadPad)) * this.zoomScale;
     this.zoom = damp(this.zoom, this.steady ? steadyZoom : wantZoom, 3.5, dt);
 
+    /*
+     * Deadzone (steady only). The camera follows an anchor, not the raw focus.
+     * The anchor holds still while the player stays within `deadzone` of it, and
+     * when the player crosses that edge the anchor is pulled up to the edge —
+     * never nearer — so the interior of the box stays perfectly dead. Small
+     * steps and combat shuffling move nothing; only a real traverse pans.
+     */
+    let followFocus = this.camTarget;
+    if (this.steady) {
+      if (!this.deadInit) {
+        this.deadFocus.copy(this.camTarget);
+        this.deadInit = true;
+      }
+      const dx = this.camTarget.x - this.deadFocus.x;
+      const dz = this.camTarget.z - this.deadFocus.z;
+      const d = Math.hypot(dx, dz);
+      if (d > this.deadzone) {
+        const s = (d - this.deadzone) / d;
+        this.deadFocus.x += dx * s;
+        this.deadFocus.z += dz * s;
+      }
+      followFocus = this.deadFocus;
+    } else {
+      this.deadInit = false;
+    }
+
+    // Ease FOV and the matching pull-back so toggling steady mid-run glides
+    // rather than jumping. Only touch the projection when the FOV actually moves.
+    const wantFov = this.steady ? this.steadyFov : this.baseFov;
+    const nextFov = damp(this.camera.fov, wantFov, 4, dt);
+    if (Math.abs(nextFov - this.camera.fov) > 1e-3) {
+      this.camera.fov = nextFov;
+      this.camera.updateProjectionMatrix();
+    }
+    this.distMul = damp(this.distMul, this.steady ? this.steadyDistMul : 1, 4, dt);
+
     // A tighter spring in steady mode: the camera sits on the player rather
     // than swimming after them, so the world stops sliding under a still frame.
     const k = this.steady ? 14 : 6;
-    const want = this.camTarget.clone().addScaledVector(this.offset, this.zoom);
+    const want = followFocus.clone().addScaledVector(this.offset, this.zoom * this.distMul);
     this.camPos.x = damp(this.camPos.x, want.x, k, dt);
     this.camPos.y = damp(this.camPos.y, want.y, k, dt);
     this.camPos.z = damp(this.camPos.z, want.z, k, dt);
@@ -222,7 +294,23 @@ export class Stage {
     const sy = Math.cos(this.shakeT * 2.3) * this.shakeAmp * 0.3;
 
     this.camera.position.set(this.camPos.x + sx, this.camPos.y + sy, this.camPos.z);
-    this.camera.lookAt(this.camTarget.x + sx * 0.4, 0.6, this.camTarget.z);
+    this.camera.lookAt(followFocus.x + sx * 0.4, 0.6, followFocus.z);
+
+    /*
+     * Motion vignette. Driven by how fast the camera itself is sliding, not by
+     * the player's speed — a player walking inside the deadzone moves across a
+     * still frame (comfortable), and only a panning frame produces the edge flow
+     * we want to mask. Off entirely outside steady mode.
+     */
+    const camSpeed = this.lastCamInit
+      ? Math.hypot(this.camPos.x - this.lastCamPos.x, this.camPos.z - this.lastCamPos.z) /
+        Math.max(dt, 1e-3)
+      : 0;
+    this.lastCamPos.set(this.camPos.x, this.camPos.y, this.camPos.z);
+    this.lastCamInit = true;
+    const wantVig = this.steady ? Math.min(1, Math.max(0, (camSpeed - 1) / 6)) : 0;
+    this.vigA = damp(this.vigA, wantVig, 6, dt);
+    this.vignette.style.opacity = (this.vigA * 0.55).toFixed(3);
   }
 
   /** Project mouse NDC onto the arena floor so keyboard aim tracks the cursor. */

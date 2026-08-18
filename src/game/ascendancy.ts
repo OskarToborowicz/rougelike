@@ -189,7 +189,7 @@ export const ASCENDANCIES: Record<AscendancyId, Ascendancy> = {
     },
     capstone: capstone({
       id: 'elven-volley',
-      apply: (b) => (b.doubleSpecial = true),
+      apply: (b) => (b.specialEchoes += 1),
       shape: { special: { arc: 1.3, dmg: 14 } },
     }),
   }),
@@ -269,7 +269,7 @@ export const ASCENDANCIES: Record<AscendancyId, Ascendancy> = {
     capstone: capstone({
       id: 'elemental-cataclysm',
       apply: (b) => {
-        b.doubleSpecial = true;
+        b.specialEchoes += 1;
         b.statusOnAttack = 'shock';
       },
       shape: { special: { reach: 7.5 } },

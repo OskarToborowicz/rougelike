@@ -85,6 +85,24 @@ body {
   z-index: 10;
 }
 
+/*
+ * Steady-camera motion vignette. Sits in #app, under #ui, so it darkens only
+ * the arena's far edges — never the HUD. Opacity is driven from the renderer
+ * (Stage.follow) and stays 0 unless the steady camera is actually panning.
+ */
+.cam-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  will-change: opacity;
+  background: radial-gradient(
+    ellipse 78% 78% at 50% 50%,
+    transparent 52%,
+    rgba(0, 0, 0, 0.9) 100%
+  );
+}
+
 /* ---------------------------------------------------------------- health */
 
 .seat {
