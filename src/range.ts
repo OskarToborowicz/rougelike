@@ -76,16 +76,33 @@ addEventListener('keydown', (ev) => {
     spin = !spin;
     ev.preventDefault();
   } else if ((ev.key === 't' || ev.key === 'T') && current) {
-    // Fire the boss telegraph so the emissive wind-up can be inspected. A
-    // non-boss just glows its plain 'tell'.
     const c = current;
-    c.pattern = BOSS_PATTERNS[c.kind]?.[0] ?? c.pattern;
-    c.state = 'pattern';
-    c.strikeDone = false;
-    c.stateT = 0;
-    setTimeout(() => {
-      if (current === c) c.state = 'chase';
-    }, 2000);
+    const bossPattern = BOSS_PATTERNS[c.kind];
+    if (bossPattern) {
+      // A boss telegraphs from inside its pattern state; hold it so the emissive
+      // wind-up can be inspected.
+      c.pattern = bossPattern[0];
+      c.state = 'pattern';
+      c.strikeDone = false;
+      c.stateT = 0;
+      setTimeout(() => {
+        if (current === c) c.state = 'chase';
+      }, 2000);
+    } else {
+      // A common foe runs the real melee cycle so the whole attack — wind-up,
+      // strike and recovery — can be watched, not just the tell glow.
+      c.state = 'tell';
+      c.stateT = 0;
+      setTimeout(() => {
+        if (current === c) (c.state = 'strike'), (c.stateT = 0);
+      }, 750);
+      setTimeout(() => {
+        if (current === c) (c.state = 'recover'), (c.stateT = 0);
+      }, 1150);
+      setTimeout(() => {
+        if (current === c) (c.state = 'chase'), (c.stateT = 0);
+      }, 1900);
+    }
   }
 });
 

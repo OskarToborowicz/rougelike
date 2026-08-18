@@ -900,6 +900,14 @@ export class Enemy implements Actor {
     const striking = this.state === 'strike' || (this.state === 'pattern' && this.strikeDone);
     const throwT = striking ? clamp(this.stateT * 3, 0, 1) : 0;
 
+    // The hoplite carries a spear and a shield, so it thrusts rather than throwing
+    // both arms forward like an unarmed foe — see animateThrust. Everything else
+    // rigged uses the generic swing.
+    if (this.kind === 'brute') {
+      this.animateThrust(raise, throwT, phase, legAmp, stride);
+      return;
+    }
+
     // Positive local-X swings a limb forward on this rig (matches the Blender
     // pose test). Arms oppose legs; left opposes right.
     const armX = -raise * 1.3 + throwT * 1.1;
@@ -917,6 +925,47 @@ export class Enemy implements Actor {
     // the body never turns as one board.
     this.setBone('Spine', throwT * 0.25 + Math.sin(this.bob) * 0.02 * (0.4 + stride), phase * 0.06);
     this.setBone('Head', 0, -phase * 0.05);
+  }
+
+  /**
+   * The hoplite's spear thrust — driven from the spine, not the arm.
+   *
+   * The spear is not a rigid prop bound to one hand: the sculpt's pole is spread
+   * across the left arm, the spine and the head by proximity weighting, so
+   * rotating the spear arm on its own *bends* the pole — the lower half swings
+   * with the arm while the tip, weighted to the head, stays put. Every one of
+   * those bones is a descendant of the Spine, though, so pitching the Spine alone
+   * swings the whole pole as one rigid piece.
+   *
+   * The attack is therefore a whole-body lunge: coil the torso back over the
+   * wind-up (the spear rocks up and back), then drive it forward onto a stepping
+   * front leg for the strike (the spear levels and lances out). The arms and head
+   * are left at their rest pose and simply ride the spine, which is exactly what
+   * keeps the spear and shield straight. The legs hang off the Pelvis rather than
+   * the Spine, so they still stride and step without disturbing the spear.
+   *
+   * `raise` and `throwT` are the same wind-up/strike clocks the tell glow reads,
+   * so picture, telegraph and hitbox all land on one frame.
+   */
+  private animateThrust(
+    raise: number,
+    throwT: number,
+    phase: number,
+    legAmp: number,
+    stride: number,
+  ) {
+    // Coil back on the wind-up, drive forward on the strike. Nothing in the
+    // spine's subtree (arms, head, spear, shield) is touched independently, so
+    // the whole upper body — and the spear with it — moves as one rigid mass.
+    const lunge = throwT * 0.55 - raise * 0.3;
+    this.setBone('Spine', lunge + Math.sin(this.bob) * 0.02 * (0.4 + stride), phase * 0.05);
+
+    // Stride swing plus a lunging step that lands with the strike. Legs are the
+    // only thing moved on their own, and they carry no part of the spear.
+    this.setBone('LegR', -phase * legAmp + throwT * 0.4);
+    this.setBone('LegL', phase * legAmp - throwT * 0.2);
+    this.setBone('ShinR', Math.max(0, phase) * legAmp * 0.8);
+    this.setBone('ShinL', Math.max(0, -phase) * legAmp * 0.8 + throwT * 0.3);
   }
 
   /** Rotate one bone off its captured rest pose by an XYZ-Euler delta. */
